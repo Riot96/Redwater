@@ -12,7 +12,7 @@ require_once __DIR__ . '/functions.php';
 initSession();
 
 $siteName  = getSetting('site_name', 'RedWater Entertainment');
-$pageTitle = !empty($pageTitle) ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
+$pageTitle = isset($pageTitle) && $pageTitle !== '' ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
 $bodyClass = $bodyClass ?? '';
 
 $user = currentUser();
