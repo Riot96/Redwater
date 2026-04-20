@@ -15,6 +15,7 @@ $db     = getDb();
 $policy = $db->query('SELECT * FROM policies WHERE id = 1')->fetch();
 $contentHtml = $policy['content_html'] ?? '<p>Policies coming soon.</p>';
 $imagePath   = $policy['image_path'] ?? null;
+$hasPolicyImage = !empty($imagePath) && file_exists($imagePath);
 ?>
 
 <main class="page-wrapper">
@@ -35,13 +36,13 @@ $imagePath   = $policy['image_path'] ?? null;
       <?php endif; ?>
 
       <div class="policies-content">
-        <?php if ($imagePath && file_exists($imagePath)): ?>
+        <?php if ($hasPolicyImage): ?>
           <div>
             <img src="/<?= e(ltrim($imagePath, '/')) ?>" alt="Event Policies" class="policies-image">
           </div>
         <?php endif; ?>
-        <div class="policies-text <?= (!$imagePath || !file_exists($imagePath ?? '')) ? 'w-full' : '' ?>"
-             style="<?= (!$imagePath || !file_exists($imagePath ?? '')) ? 'max-width:800px;margin:0 auto;' : '' ?>">
+        <div class="policies-text <?= !$hasPolicyImage ? 'w-full' : '' ?>"
+             style="<?= !$hasPolicyImage ? 'max-width:800px;margin:0 auto;' : '' ?>">
           <?php
           // NOTE: $contentHtml is admin-only content stored in the database and managed via
           // the admin policies editor. It is intentionally output as raw HTML to allow

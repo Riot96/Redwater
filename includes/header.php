@@ -1,9 +1,6 @@
 <?php
 /**
  * RedWater Entertainment - Site Header
- * @var string $pageTitle      (optional) Page title
- * @var string $pageMeta       (optional) Additional meta tags
- * @var string $bodyClass      (optional) Extra body classes
  */
 
 if (!defined('DB_HOST')) {
@@ -15,7 +12,7 @@ require_once __DIR__ . '/functions.php';
 initSession();
 
 $siteName  = getSetting('site_name', 'RedWater Entertainment');
-$pageTitle = isset($pageTitle) ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
+$pageTitle = !empty($pageTitle) ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
 $bodyClass = $bodyClass ?? '';
 
 $user = currentUser();
