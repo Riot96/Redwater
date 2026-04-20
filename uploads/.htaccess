@@ -1,0 +1,7 @@
+# Deny all direct access to uploaded files execution
+# Allow images and videos to be served, but block PHP execution
+<FilesMatch "\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+Options -Indexes
