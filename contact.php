@@ -38,7 +38,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mailBody    = "New message from: {$name} <{$email}>\n\n";
             $mailBody   .= "Subject: {$subject}\n\n";
             $mailBody   .= "Message:\n{$message}\n";
-            $headers     = "From: {$fromName} <{$from}>\r\nReply-To: {$name} <{$email}>";
+            $replyToName  = str_replace(["\r", "\n"], '', $name);
+            $replyToEmail = str_replace(["\r", "\n"], '', $email);
+            $headers      = "From: {$fromName} <{$from}>\r\nReply-To: {$replyToName} <{$replyToEmail}>";
             @mail($toEmail, $mailSubject, $mailBody, $headers);
         }
 

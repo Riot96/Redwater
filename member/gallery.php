@@ -52,6 +52,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($type === 'video' && $videoType === 'embed') {
+            if ($videoUrl === '') {
+                flashMessage('error', 'Please provide a video URL for embedded videos.');
+                redirect('/member/gallery.php');
+            }
+            if (!isSupportedVideoUrl($videoUrl)) {
+                flashMessage('error', 'Only YouTube and Vimeo URLs are supported for video embeds.');
+                redirect('/member/gallery.php');
+            }
+        }
+
         // Auto-approve if member has bypass
         $autoApprove = $user['bypass_approval'] ? 1 : 0;
 

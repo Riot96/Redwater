@@ -78,7 +78,7 @@ $tiers = getSponsorTiers();
               <?php else: ?>
 
                 <?php foreach ($tier['sponsors'] as $sponsor): ?>
-                  <div class="sponsor-card <?= (!empty($sponsor['link_url']) && $tier['show_link']) ? '' : '' ?>">
+                  <div class="sponsor-card <?= (!empty($sponsor['link_url']) && $tier['show_link']) ? 'sponsor-card--clickable' : '' ?>">
                     <?php if ($tier['show_logo'] && !empty($sponsor['logo_url'])): ?>
                       <img src="<?= e($sponsor['logo_url']) ?>"
                            alt="<?= e($sponsor['name'] ?? 'Sponsor') ?> logo"

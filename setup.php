@@ -15,6 +15,8 @@ require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
+initSession();
+
 $db = getDb();
 
 // Check if admin already exists
@@ -24,8 +26,7 @@ $error   = '';
 $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Basic CSRF (simple token in session for setup page)
-    session_start();
+    verifyCsrf();
     $email       = trim($_POST['email'] ?? '');
     $displayName = trim($_POST['display_name'] ?? '');
     $password    = $_POST['password'] ?? '';
@@ -91,6 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="alert alert-error" style="margin-bottom:1.5rem;"><?= htmlspecialchars($error) ?></div>
       <?php endif; ?>
       <form method="POST">
+        <?= csrfField() ?>
         <div class="form-group">
           <label class="form-label">Setup Key</label>
           <input type="password" name="setup_key" class="form-control" required

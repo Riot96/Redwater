@@ -131,16 +131,63 @@ function isVimeoUrl(string $url): bool {
     return (bool)preg_match('/vimeo\.com/', $url);
 }
 
+function isSupportedVideoUrl(string $url): bool {
+    return getVideoEmbedUrl($url) !== '';
+}
+
 function getVideoEmbedUrl(string $url): string {
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+
+    $parts = parse_url($url);
+    if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
+        return '';
+    }
+
+    $scheme = strtolower($parts['scheme']);
+    if (!in_array($scheme, ['http', 'https'], true)) {
+        return '';
+    }
+
+    $host = strtolower($parts['host']);
+
     // YouTube
-    if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/', $url, $m)) {
-        return 'https://www.youtube.com/embed/' . $m[1];
+    if (in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'], true)) {
+        $videoId = '';
+
+        if ($host === 'youtu.be') {
+            $path = trim($parts['path'] ?? '', '/');
+            if (preg_match('/^[a-zA-Z0-9_-]+$/', $path)) {
+                $videoId = $path;
+            }
+        } else {
+            $query = [];
+            parse_str($parts['query'] ?? '', $query);
+            if (!empty($query['v']) && preg_match('/^[a-zA-Z0-9_-]+$/', $query['v'])) {
+                $videoId = $query['v'];
+            }
+        }
+
+        if ($videoId !== '') {
+            return 'https://www.youtube.com/embed/' . $videoId;
+        }
+
+        return '';
     }
+
     // Vimeo
-    if (preg_match('/vimeo\.com\/(\d+)/', $url, $m)) {
-        return 'https://player.vimeo.com/video/' . $m[1];
+    if (in_array($host, ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'], true)) {
+        $path = trim($parts['path'] ?? '', '/');
+        if (preg_match('/(?:video\/)?(\d+)/', $path, $m)) {
+            return 'https://player.vimeo.com/video/' . $m[1];
+        }
+
+        return '';
     }
-    return $url;
+
+    return '';
 }
 
 // ─── Sponsor Helpers ──────────────────────────────────────────────────────────

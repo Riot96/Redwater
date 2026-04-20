@@ -19,29 +19,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Upload new item (admin)
     if ($act === 'upload') {
-        $type       = $_POST['type'] ?? 'photo';
-        $title      = trim($_POST['title'] ?? '');
-        $desc       = trim($_POST['description'] ?? '');
-        $tags       = trim($_POST['tags'] ?? '');
-        $altText    = trim($_POST['alt_text'] ?? '');
-        $seoTitle   = trim($_POST['seo_title'] ?? '');
-        $seoDesc    = trim($_POST['seo_description'] ?? '');
-        $videoUrl   = trim($_POST['video_url'] ?? '');
-        $videoType  = $_POST['video_type'] ?? 'embed';
-        $filePath   = null;
+        $type          = $_POST['type'] ?? 'photo';
+        $title         = trim($_POST['title'] ?? '');
+        $desc          = trim($_POST['description'] ?? '');
+        $tags          = trim($_POST['tags'] ?? '');
+        $altText       = trim($_POST['alt_text'] ?? '');
+        $seoTitle      = trim($_POST['seo_title'] ?? '');
+        $seoDesc       = trim($_POST['seo_description'] ?? '');
+        $videoUrl      = trim($_POST['video_url'] ?? '');
+        $videoType     = $_POST['video_type'] ?? 'embed';
+        $filePath      = null;
+        $requiresFile  = $type === 'photo' || ($type === 'video' && $videoType === 'upload');
+        $requiresEmbed = $type === 'video' && $videoType === 'embed';
 
-        if ($type === 'photo' || ($type === 'video' && $videoType === 'upload')) {
+        if ($requiresFile) {
+            if (empty($_FILES['media_file']['name'])) {
+                flashMessage('error', $type === 'photo'
+                    ? 'Please select a photo to upload.'
+                    : 'Please select a video file to upload.');
+                redirect('/admin/gallery.php');
+            }
+
             $mimes = $type === 'photo'
                 ? (defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp'])
                 : (defined('ALLOWED_VIDEO_TYPES') ? ALLOWED_VIDEO_TYPES : ['video/mp4','video/webm','video/ogg']);
 
-            if (!empty($_FILES['media_file']['name'])) {
-                $upload = handleFileUpload($_FILES['media_file'], __DIR__ . '/../uploads/gallery', $mimes);
-                if (!$upload['success']) {
-                    flashMessage('error', 'Upload failed: ' . $upload['error']);
-                    redirect('/admin/gallery.php');
-                }
-                $filePath = 'uploads/gallery/' . $upload['filename'];
+            $upload = handleFileUpload($_FILES['media_file'], __DIR__ . '/../uploads/gallery', $mimes);
+            if (!$upload['success']) {
+                flashMessage('error', 'Upload failed: ' . $upload['error']);
+                redirect('/admin/gallery.php');
+            }
+            $filePath = 'uploads/gallery/' . $upload['filename'];
+        }
+
+        if ($requiresEmbed) {
+            if ($videoUrl === '') {
+                flashMessage('error', 'Please provide a video URL for embedded videos.');
+                redirect('/admin/gallery.php');
+            }
+            if (!isSupportedVideoUrl($videoUrl)) {
+                flashMessage('error', 'Only YouTube and Vimeo URLs are supported for video embeds.');
+                redirect('/admin/gallery.php');
             }
         }
 
