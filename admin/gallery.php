@@ -321,7 +321,7 @@ include __DIR__ . '/../includes/header.php';
             <div class="dropzone">
               <div class="dropzone-icon">📷</div>
               <p>Drop image here or click to select</p>
-              <input type="file" name="media_file" accept="image/*">
+              <input type="file" name="media_file" accept="image/*" id="photoMediaFile">
             </div>
           </div>
         </div>
@@ -346,7 +346,7 @@ include __DIR__ . '/../includes/header.php';
               <div class="dropzone">
                 <div class="dropzone-icon">🎬</div>
                 <p>Drop video here or click to select (MP4, WebM)</p>
-                <input type="file" name="media_file" accept="video/*">
+                <input type="file" name="media_file" accept="video/*" id="videoMediaFile" disabled>
               </div>
             </div>
           </div>
@@ -390,14 +390,26 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
+function syncGalleryUploadInputs() {
+  const mediaType = document.getElementById('mediaType')?.value;
+  const videoType = document.getElementById('videoType')?.value;
+  const photoInput = document.getElementById('photoMediaFile');
+  const videoInput = document.getElementById('videoMediaFile');
+
+  if (photoInput) photoInput.disabled = mediaType !== 'photo';
+  if (videoInput) videoInput.disabled = !(mediaType === 'video' && videoType === 'upload');
+}
 function toggleMediaType(type) {
   document.getElementById('photoFields').style.display = type === 'photo' ? '' : 'none';
   document.getElementById('videoFields').style.display = type === 'video' ? '' : 'none';
+  syncGalleryUploadInputs();
 }
 function toggleVideoType(type) {
   document.getElementById('videoEmbedField').style.display  = type === 'embed'  ? '' : 'none';
   document.getElementById('videoUploadField').style.display = type === 'upload' ? '' : 'none';
+  syncGalleryUploadInputs();
 }
+syncGalleryUploadInputs();
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

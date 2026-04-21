@@ -285,7 +285,7 @@ include __DIR__ . '/../includes/header.php';
             <div class="dropzone">
               <div class="dropzone-icon">📷</div>
               <p>Drop image here or click to select</p>
-              <input type="file" name="media_file" accept="image/*">
+              <input type="file" name="media_file" accept="image/*" id="memberPhotoMediaFile">
             </div>
           </div>
         </div>
@@ -308,7 +308,7 @@ include __DIR__ . '/../includes/header.php';
               <div class="dropzone">
                 <div class="dropzone-icon">🎬</div>
                 <p>Drop video file here or click to select</p>
-                <input type="file" name="media_file" accept="video/*">
+                <input type="file" name="media_file" accept="video/*" id="memberVideoMediaFile" disabled>
               </div>
             </div>
           </div>
@@ -351,14 +351,26 @@ include __DIR__ . '/../includes/header.php';
 </div>
 
 <script>
+function memberSyncUploadInputs() {
+  const mediaType = document.getElementById('memberMediaType')?.value;
+  const videoType = document.getElementById('memberVideoType')?.value;
+  const photoInput = document.getElementById('memberPhotoMediaFile');
+  const videoInput = document.getElementById('memberVideoMediaFile');
+
+  if (photoInput) photoInput.disabled = mediaType !== 'photo';
+  if (videoInput) videoInput.disabled = !(mediaType === 'video' && videoType === 'upload');
+}
 function memberToggleType(type) {
   document.getElementById('memberPhotoField').style.display = type === 'photo' ? '' : 'none';
   document.getElementById('memberVideoField').style.display = type === 'video' ? '' : 'none';
+  memberSyncUploadInputs();
 }
 function memberToggleVideoType(type) {
   document.getElementById('memberEmbedField').style.display  = type === 'embed'  ? '' : 'none';
   document.getElementById('memberUploadField').style.display = type === 'upload' ? '' : 'none';
+  memberSyncUploadInputs();
 }
+memberSyncUploadInputs();
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>
