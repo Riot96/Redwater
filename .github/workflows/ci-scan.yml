@@ -1,0 +1,36 @@
+name: CI Scan
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PHPSTAN_VERSION: '2.1.50'
+  PHPSTAN_SHA256: '335dba3aff82ad2d7ddcc7ce5908aaffe0e83b1d7ad0e81683beef24a4696f34'
+
+jobs:
+  phpstan:
+    name: PHPStan Level 9
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: fileinfo, mbstring, pdo_mysql
+          coverage: none
+
+      - name: Download PHPStan
+        run: curl -fLsS https://github.com/phpstan/phpstan/releases/download/${PHPSTAN_VERSION}/phpstan.phar -o /tmp/phpstan.phar
+
+      - name: Verify PHPStan checksum
+        run: echo "${PHPSTAN_SHA256}  /tmp/phpstan.phar" | sha256sum --check
+
+      - name: Run PHPStan level 9
+        run: php /tmp/phpstan.phar analyse --level=9 --no-progress .
