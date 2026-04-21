@@ -157,7 +157,15 @@ function ensureAutomaticMigrationColumn(PDO $db, string $table, string $columnDe
         return;
     }
 
-    $db->exec('ALTER TABLE `' . $table . '` ADD COLUMN ' . $columnDefinition);
+    try {
+        $db->exec('ALTER TABLE `' . $table . '` ADD COLUMN ' . $columnDefinition);
+    } catch (PDOException $e) {
+        $errorCode = $e->errorInfo[1] ?? null;
+        if ($errorCode !== 1060) {
+            throw $e;
+        }
+    }
+
     $tableColumns[$table][] = $columnName;
 }
 
@@ -172,10 +180,31 @@ function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $colum
     /** @var list<array<string, mixed>> $indexes */
     $indexes = $stmt->fetchAll();
 
+    /** @var array<string, array<int, string>> $uniqueIndexes */
+    $uniqueIndexes = [];
+
     foreach ($indexes as $index) {
+        $keyName = $index['Key_name'] ?? null;
         $columnName = $index['Column_name'] ?? null;
         $nonUnique = $index['Non_unique'] ?? null;
-        if ($columnName === $column && is_numeric($nonUnique) && (int)$nonUnique === 0) {
+        $seqInIndex = $index['Seq_in_index'] ?? null;
+
+        if (!is_string($keyName) || $keyName === '' || !is_string($columnName)) {
+            continue;
+        }
+
+        if (!is_numeric($nonUnique) || (int)$nonUnique !== 0) {
+            continue;
+        }
+
+        $position = is_numeric($seqInIndex) ? (int)$seqInIndex : (count($uniqueIndexes[$keyName] ?? []) + 1);
+        $uniqueIndexes[$keyName][$position] = $columnName;
+    }
+
+    foreach ($uniqueIndexes as $indexColumns) {
+        ksort($indexColumns);
+        $indexColumns = array_values($indexColumns);
+        if (count($indexColumns) === 1 && $indexColumns[0] === $column) {
             return true;
         }
     }
@@ -193,11 +222,20 @@ function ensureAutomaticMigrationUniqueColumn(PDO $db, string $table, string $co
         throw new InvalidArgumentException('Invalid migration index name.');
     }
 
-    $db->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `' . $indexName . '` (`' . $column . '`)');
+    try {
+        $db->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `' . $indexName . '` (`' . $column . '`)');
+    } catch (PDOException $e) {
+        $errorCode = $e->errorInfo[1] ?? null;
+        if ($errorCode !== 1061) {
+            throw $e;
+        }
+    }
 }
 
 function runAutomaticDbMigrations(PDO $db): void {
     static $running = false;
+    $lockName = 'redwater_auto_migrations';
+    $lockAcquired = false;
 
     if ($running) {
         return;
@@ -206,6 +244,15 @@ function runAutomaticDbMigrations(PDO $db): void {
     $running = true;
 
     try {
+        $lockStmt = $db->prepare('SELECT GET_LOCK(?, 10)');
+        assert($lockStmt instanceof PDOStatement);
+        $lockStmt->execute([$lockName]);
+        $lockResult = $lockStmt->fetchColumn();
+        $lockAcquired = ((string)$lockResult === '1' || $lockResult === 1);
+        if (!$lockAcquired) {
+            throw new RuntimeException('Failed to acquire automatic migration lock.');
+        }
+
         $createTableStatements = [
             <<<'SQL'
 CREATE TABLE IF NOT EXISTS users (
@@ -381,25 +428,33 @@ SQL,
         ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key', 'site_settings_key_unique');
 
         $db->exec(
-            "INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
-            ('site_name', 'RedWater Entertainment'),
-            ('site_tagline', 'Where Fear Meets Wonder'),
-            ('tickets_embed_code', ''),
-            ('contact_phone', ''),
-            ('contact_email', ''),
-            ('contact_address', ''),
-            ('contact_map_embed', ''),
-            ('home_hero_heading', 'Experience the Fear'),
-            ('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
-            ('home_about_text', 'RedWater Entertainment is Highlands County''s premier entertainment organization. We are best known for our spine-chilling \"Red Water Haunted Homestead\" each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
-            ('social_facebook', ''),
-            ('social_instagram', ''),
-            ('social_twitter', ''),
-            ('social_youtube', '')"
+            <<<'SQL'
+INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
+('site_name', 'RedWater Entertainment'),
+('site_tagline', 'Where Fear Meets Wonder'),
+('tickets_embed_code', ''),
+('contact_phone', ''),
+('contact_email', ''),
+('contact_address', ''),
+('contact_map_embed', ''),
+('home_hero_heading', 'Experience the Fear'),
+('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
+('home_about_text', 'RedWater Entertainment is Highlands County''s premier entertainment organization. We are best known for our spine-chilling "Red Water Haunted Homestead" each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
+('social_facebook', ''),
+('social_instagram', ''),
+('social_twitter', ''),
+('social_youtube', '')
+SQL
         );
 
         $db->exec("INSERT INTO policies (id, content_html, image_path) VALUES (1, '<p>Policies content coming soon. Please check back later.</p>', NULL) ON DUPLICATE KEY UPDATE id = id");
     } finally {
+        if ($lockAcquired) {
+            $releaseStmt = $db->prepare('SELECT RELEASE_LOCK(?)');
+            if ($releaseStmt instanceof PDOStatement) {
+                $releaseStmt->execute([$lockName]);
+            }
+        }
         $running = false;
     }
 }

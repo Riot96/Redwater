@@ -148,8 +148,8 @@ automatically:
 
 - creates missing core tables with `CREATE TABLE IF NOT EXISTS`
 - adds missing columns with guarded `ALTER TABLE ... ADD COLUMN`
-- seeds default site settings and the default policies record with idempotent
-  `INSERT IGNORE` statements
+- seeds default site settings idempotently and inserts or updates the default
+  policies record with `INSERT ... ON DUPLICATE KEY UPDATE`
 
 Trusted contexts are:
 
