@@ -1,5 +1,4 @@
-Options -Indexes
-Options -FollowSymLinks
+Options -Indexes +SymLinksIfOwnerMatch
 
 # Enable mod_rewrite
 <IfModule mod_rewrite.c>

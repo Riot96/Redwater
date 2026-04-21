@@ -86,9 +86,12 @@ Ensure `AllowOverride All` is set in your VirtualHost configuration:
 ```apache
 <Directory /var/www/html/redwater>
     AllowOverride All
+    Options +SymLinksIfOwnerMatch
     Require all granted
 </Directory>
 ```
+
+`mod_rewrite` needs symlink support from either the vhost/server config or the root `.htaccess`. This project uses `Options -Indexes +SymLinksIfOwnerMatch` in the root `.htaccess` to avoid hosts that reject `FollowSymLinks` in per-directory overrides.
 
 ### Nginx (if applicable)
 Add to your Nginx server block:
