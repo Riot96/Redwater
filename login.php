@@ -48,7 +48,7 @@ include __DIR__ . '/includes/header.php';
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-logo">
-        <img src="/assets/images/logo.png" alt="RedWater Entertainment" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+        <img src="<?= e(getLogoAssetUrl()) ?>" alt="RedWater Entertainment" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
         <div style="display:none;font-family:var(--font-head);font-size:1.4rem;text-align:center;">
           <span class="logo-red">Red</span><span class="logo-blue">Water</span>
         </div>

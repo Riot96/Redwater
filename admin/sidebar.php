@@ -10,7 +10,7 @@ $currentDir  = basename(dirname($currentPhpSelf));
 <aside class="admin-sidebar">
   <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border); margin-bottom:0.5rem;">
     <a href="/" style="display:flex;align-items:center;gap:0.5rem;">
-      <img src="/assets/images/logo.png" alt="RedWater" style="height:32px;" onerror="this.style.display='none'">
+      <img src="<?= e(getLogoAssetUrl()) ?>" alt="RedWater" style="height:32px;" onerror="this.style.display='none'">
       <span style="font-family:var(--font-head);font-size:0.85rem;"><span style="color:var(--red);">Red</span><span style="color:var(--blue);">Water</span></span>
     </a>
   </div>

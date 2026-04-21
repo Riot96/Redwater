@@ -15,6 +15,7 @@ $socialYoutube   = getSetting('social_youtube');
 $contactEmail    = getSetting('contact_email');
 $contactPhone    = getSetting('contact_phone');
 $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
+$logoAssetUrl = getLogoAssetUrl();
 ?>
 
 <footer class="site-footer">
@@ -23,7 +24,7 @@ $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
         <!-- Brand -->
         <div class="footer-col footer-brand">
             <a href="/" class="footer-logo">
-                <img src="/assets/images/logo.png" alt="RedWater Entertainment" class="logo-img-sm" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                <img src="<?= e($logoAssetUrl) ?>" alt="RedWater Entertainment" class="logo-img-sm" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
                 <span class="logo-text-fallback-sm" style="display:none;">
                     <span class="logo-red">Red</span><span class="logo-blue">Water</span>
                     <span class="logo-ent">Entertainment</span>

@@ -21,6 +21,21 @@ function e(mixed $s): string {
     return htmlspecialchars(stringValue($s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
 
+function getLogoAssetUrl(): string {
+    $path = '/assets/images/logo.png';
+    $filePath = dirname(__DIR__) . $path;
+    if (!is_file($filePath)) {
+        return $path;
+    }
+
+    $modifiedAt = filemtime($filePath);
+    if ($modifiedAt === false) {
+        return $path;
+    }
+
+    return $path . '?v=' . $modifiedAt;
+}
+
 /**
  * @param array<string, mixed> $source
  */
