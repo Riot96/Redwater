@@ -22,25 +22,26 @@ function e(mixed $s): string {
 }
 
 function getLogoAssetUrl(): string {
-    static $logoAssetUrl = null;
+    $logoAssetUrl = $GLOBALS['redwaterLogoAssetUrl'] ?? null;
     if (is_string($logoAssetUrl)) {
         return $logoAssetUrl;
     }
 
     $path = '/assets/images/logo.png';
-    $filePath = dirname(__DIR__) . $path;
+    $filePath = __DIR__ . '/../assets/images/logo.png';
     if (!is_file($filePath)) {
-        $logoAssetUrl = $path;
-        return $logoAssetUrl;
+        $GLOBALS['redwaterLogoAssetUrl'] = $path;
+        return $path;
     }
 
     $modifiedAt = filemtime($filePath);
     if ($modifiedAt === false) {
-        $logoAssetUrl = $path;
-        return $logoAssetUrl;
+        $GLOBALS['redwaterLogoAssetUrl'] = $path;
+        return $path;
     }
 
     $logoAssetUrl = $path . '?v=' . $modifiedAt;
+    $GLOBALS['redwaterLogoAssetUrl'] = $logoAssetUrl;
     return $logoAssetUrl;
 }
 
