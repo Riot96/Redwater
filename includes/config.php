@@ -253,9 +253,9 @@ function runAutomaticDbMigrations(PDO $db): void {
         assert($lockStmt instanceof PDOStatement);
         $lockStmt->execute([$lockName, AUTOMATIC_MIGRATION_LOCK_TIMEOUT]);
         $lockResult = $lockStmt->fetchColumn();
-        $lockAcquired = ((string)$lockResult === '1' || $lockResult === 1);
+        $lockAcquired = ($lockResult == 1);
         if (!$lockAcquired) {
-            throw new RuntimeException('Failed to acquire automatic migration lock.');
+            throw new RuntimeException('Failed to acquire automatic migration lock after ' . AUTOMATIC_MIGRATION_LOCK_TIMEOUT . ' seconds. Another migration may be in progress.');
         }
 
         $createTableStatements = [
