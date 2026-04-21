@@ -22,18 +22,26 @@ function e(mixed $s): string {
 }
 
 function getLogoAssetUrl(): string {
+    static $logoAssetUrl = null;
+    if (is_string($logoAssetUrl)) {
+        return $logoAssetUrl;
+    }
+
     $path = '/assets/images/logo.png';
     $filePath = dirname(__DIR__) . $path;
     if (!is_file($filePath)) {
-        return $path;
+        $logoAssetUrl = $path;
+        return $logoAssetUrl;
     }
 
     $modifiedAt = filemtime($filePath);
     if ($modifiedAt === false) {
-        return $path;
+        $logoAssetUrl = $path;
+        return $logoAssetUrl;
     }
 
-    return $path . '?v=' . $modifiedAt;
+    $logoAssetUrl = $path . '?v=' . $modifiedAt;
+    return $logoAssetUrl;
 }
 
 /**
