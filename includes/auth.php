@@ -21,7 +21,7 @@ function initSession(): void {
     if (!isset($_SESSION['_last_regen'])) {
         session_regenerate_id(true);
         $_SESSION['_last_regen'] = time();
-    } elseif (time() - $_SESSION['_last_regen'] > 300) {
+    } elseif (time() - intValue($_SESSION['_last_regen']) > 300) {
         session_regenerate_id(true);
         $_SESSION['_last_regen'] = time();
     }
@@ -33,7 +33,7 @@ function csrfToken(): string {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
-    return $_SESSION['csrf_token'];
+    return is_string($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
 }
 
 function csrfField(): string {
@@ -41,7 +41,7 @@ function csrfField(): string {
 }
 
 function verifyCsrf(): void {
-    $token = $_POST['csrf_token'] ?? '';
+    $token = postString('csrf_token');
     if (!hash_equals(csrfToken(), $token)) {
         http_response_code(403);
         die('Invalid security token. Please go back and try again.');
@@ -54,7 +54,23 @@ function verifyCsrf(): void {
  */
 function currentUser(): ?array {
     initSession();
-    return $_SESSION['user'] ?? null;
+    $user = $_SESSION['user'] ?? null;
+    if (!is_array($user)) {
+        return null;
+    }
+
+    if (!isset($user['id'], $user['email'], $user['display_name'], $user['role'], $user['is_active'], $user['bypass_approval'])) {
+        return null;
+    }
+
+    return [
+        'id' => intValue($user['id']),
+        'email' => stringValue($user['email']),
+        'display_name' => stringValue($user['display_name']),
+        'role' => stringValue($user['role']),
+        'is_active' => (bool)$user['is_active'],
+        'bypass_approval' => (bool)$user['bypass_approval'],
+    ];
 }
 
 function isLoggedIn(): bool {
@@ -73,7 +89,7 @@ function isMember(): bool {
 
 function requireLogin(string $redirect = '/login.php'): void {
     if (!isLoggedIn()) {
-        header('Location: ' . $redirect . '?next=' . urlencode($_SERVER['REQUEST_URI']));
+        header('Location: ' . $redirect . '?next=' . urlencode(serverString('REQUEST_URI')));
         exit;
     }
 }
@@ -113,9 +129,10 @@ function loginUser(string $email, string $password): array {
     $db = getDb();
     $stmt = $db->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
     $stmt->execute([strtolower(trim($email))]);
+    /** @var array<string, mixed>|false $user */
     $user = $stmt->fetch();
 
-    if (!$user || !password_verify($password, $user['password_hash'])) {
+    if (!$user || !password_verify($password, stringValue($user['password_hash']))) {
         return ['success' => false, 'error' => 'Invalid email or password.'];
     }
     if (!$user['is_active'] && $user['role'] === 'member') {
@@ -125,10 +142,10 @@ function loginUser(string $email, string $password): array {
     initSession();
     session_regenerate_id(true);
     $_SESSION['user'] = [
-        'id'              => (int)$user['id'],
-        'email'           => $user['email'],
-        'display_name'    => $user['display_name'],
-        'role'            => $user['role'],
+        'id'              => intValue($user['id']),
+        'email'           => stringValue($user['email']),
+        'display_name'    => stringValue($user['display_name']),
+        'role'            => stringValue($user['role']),
         'is_active'       => (bool)$user['is_active'],
         'bypass_approval' => (bool)$user['bypass_approval'],
     ];
@@ -197,6 +214,7 @@ function generatePasswordResetToken(string $email): ?string {
 
     $stmt = $db->prepare('SELECT id FROM users WHERE email = ?');
     $stmt->execute([$email]);
+    /** @var array{id:int}|false $user */
     $user = $stmt->fetch();
     if (!$user) {
         return null; // Don't reveal whether email exists
@@ -221,7 +239,9 @@ function validatePasswordResetToken(string $token): ?array {
         'SELECT id, email, display_name FROM users WHERE reset_token = ? AND reset_token_expires > NOW()'
     );
     $stmt->execute([$token]);
-    return $stmt->fetch() ?: null;
+    /** @var array{id: int, email: string, display_name: string}|false $user */
+    $user = $stmt->fetch();
+    return $user ?: null;
 }
 
 /**
@@ -248,10 +268,11 @@ function resetPassword(string $token, string $newPassword): array {
 
 // ─── Send password reset email ────────────────────────────────────────────────
 function sendPasswordResetEmail(string $email, string $token): bool {
-    $siteUrl = defined('SITE_URL') ? SITE_URL : 'http://' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $host = serverString('HTTP_HOST', 'localhost');
+    $siteUrl = defined('SITE_URL') ? SITE_URL : 'http://' . $host;
     $resetUrl = $siteUrl . '/reset-password.php?token=' . urlencode($token);
     $fromName = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'RedWater Entertainment';
-    $from = defined('MAIL_FROM') ? MAIL_FROM : 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $from = defined('MAIL_FROM') ? MAIL_FROM : 'noreply@' . $host;
 
     $subject = 'Password Reset - ' . $fromName;
     $message = "Hello,\n\nYou requested a password reset for your RedWater Entertainment account.\n\n";
@@ -274,13 +295,14 @@ function refreshSessionUser(): void {
     $db = getDb();
     $stmt = $db->prepare('SELECT * FROM users WHERE id = ?');
     $stmt->execute([$user['id']]);
+    /** @var array<string, mixed>|false $row */
     $row = $stmt->fetch();
     if ($row) {
         $_SESSION['user'] = [
-            'id'              => (int)$row['id'],
-            'email'           => $row['email'],
-            'display_name'    => $row['display_name'],
-            'role'            => $row['role'],
+            'id'              => intValue($row['id']),
+            'email'           => stringValue($row['email']),
+            'display_name'    => stringValue($row['display_name']),
+            'role'            => stringValue($row['role']),
             'is_active'       => (bool)$row['is_active'],
             'bypass_approval' => (bool)$row['bypass_approval'],
         ];

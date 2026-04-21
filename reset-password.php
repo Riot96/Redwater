@@ -9,16 +9,16 @@ require_once __DIR__ . '/includes/functions.php';
 initSession();
 if (isLoggedIn()) redirect('/');
 
-$token  = trim($_GET['token'] ?? '');
+$token  = trim(getString('token'));
 $user   = validatePasswordResetToken($token);
 $error  = '';
 $done   = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $token      = trim($_POST['token'] ?? '');
-    $password   = $_POST['password']  ?? '';
-    $password2  = $_POST['password2'] ?? '';
+    $token      = trim(postString('token'));
+    $password   = postString('password');
+    $password2  = postString('password2');
 
     if ($password !== $password2) {
         $error = 'Passwords do not match.';

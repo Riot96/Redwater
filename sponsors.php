@@ -43,8 +43,10 @@ $tiers = getSponsorTiers();
 
         <?php foreach ($tiers as $tierIndex => $tier): ?>
           <?php
+          /** @var list<array<string, mixed>> $tierSponsors */
+          $tierSponsors = isset($tier['sponsors']) && is_array($tier['sponsors']) ? $tier['sponsors'] : [];
           // Determine cards per row
-          $cols = max(1, min(6, (int)($tier['cards_per_row'] ?? 3)));
+          $cols = max(1, min(6, intValue($tier['cards_per_row'] ?? 3, 3)));
           // Higher tiers (lower sort_order index) get bigger cards
           $tierLevel = $tierIndex + 1; // 1 = top/largest
           $cardClass = $tierIndex === 0 ? 'sponsor-tier-1' : '';
@@ -56,7 +58,7 @@ $tiers = getSponsorTiers();
 
             <div class="sponsor-grid" style="grid-template-columns: repeat(<?= $cols ?>, 1fr);">
 
-              <?php if (empty($tier['sponsors'])): ?>
+              <?php if (empty($tierSponsors)): ?>
                 <!-- Show 2 placeholder cards when no sponsors -->
                 <?php for ($p = 0; $p < $cols; $p++): ?>
                   <div class="sponsor-card placeholder">
@@ -77,7 +79,7 @@ $tiers = getSponsorTiers();
 
               <?php else: ?>
 
-                <?php foreach ($tier['sponsors'] as $sponsor): ?>
+                 <?php foreach ($tierSponsors as $sponsor): ?>
                   <div class="sponsor-card <?= (!empty($sponsor['link_url']) && $tier['show_link']) ? 'sponsor-card--clickable' : '' ?>">
                     <?php if ($tier['show_logo'] && !empty($sponsor['logo_url'])): ?>
                       <img src="<?= e($sponsor['logo_url']) ?>"

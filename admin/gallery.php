@@ -9,31 +9,38 @@ require_once __DIR__ . '/../includes/functions.php';
 requireAdmin();
 
 $db     = getDb();
-$action = $_GET['action'] ?? '';
-$itemId = (int)($_GET['id'] ?? 0);
+$action = getString('action');
+$itemId = getInt('id');
 
 // ── Handle actions ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $act = $_POST['action'] ?? '';
+    $act = postString('action');
 
     // Upload new item (admin)
     if ($act === 'upload') {
-        $type          = $_POST['type'] ?? 'photo';
-        $title         = trim($_POST['title'] ?? '');
-        $desc          = trim($_POST['description'] ?? '');
-        $tags          = trim($_POST['tags'] ?? '');
-        $altText       = trim($_POST['alt_text'] ?? '');
-        $seoTitle      = trim($_POST['seo_title'] ?? '');
-        $seoDesc       = trim($_POST['seo_description'] ?? '');
-        $videoUrl      = trim($_POST['video_url'] ?? '');
-        $videoType     = $_POST['video_type'] ?? 'embed';
+        $type          = postString('type', 'photo');
+        $title         = trim(postString('title'));
+        $desc          = trim(postString('description'));
+        $tags          = trim(postString('tags'));
+        $altText       = trim(postString('alt_text'));
+        $seoTitle      = trim(postString('seo_title'));
+        $seoDesc       = trim(postString('seo_description'));
+        $videoUrl      = trim(postString('video_url'));
+        $videoType     = postString('video_type', 'embed');
         $filePath      = null;
         $requiresFile  = $type === 'photo' || ($type === 'video' && $videoType === 'upload');
         $requiresEmbed = $type === 'video' && $videoType === 'embed';
+        $mediaFile     = uploadedFile('media_file');
 
         if ($requiresFile) {
-            if (empty($_FILES['media_file']['name'])) {
+            if ($mediaFile === null) {
+                flashMessage('error', $type === 'photo'
+                    ? 'Please select a photo to upload.'
+                    : 'Please select a video file to upload.');
+                redirect('/admin/gallery.php');
+            }
+            if (empty($mediaFile['name'])) {
                 flashMessage('error', $type === 'photo'
                     ? 'Please select a photo to upload.'
                     : 'Please select a video file to upload.');
@@ -44,7 +51,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? (defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp'])
                 : (defined('ALLOWED_VIDEO_TYPES') ? ALLOWED_VIDEO_TYPES : ['video/mp4','video/webm','video/ogg']);
 
-            $upload = handleFileUpload($_FILES['media_file'], __DIR__ . '/../uploads/gallery', $mimes);
+            /** @var array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int} $mediaFile */
+            $upload = handleFileUpload($mediaFile, __DIR__ . '/../uploads/gallery', $mimes);
             if (!$upload['success']) {
                 flashMessage('error', 'Upload failed: ' . $upload['error']);
                 redirect('/admin/gallery.php');
@@ -93,6 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'delete' && $itemId) {
         $item = $db->prepare('SELECT * FROM gallery_items WHERE id = ?');
         $item->execute([$itemId]);
+        /** @var array{file_path?: string}|false $row */
         $row = $item->fetch();
         if ($row && $row['file_path']) {
             deleteUploadedFile(__DIR__ . '/../' . ltrim($row['file_path'], '/'));
@@ -104,12 +113,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Edit item
     if ($act === 'edit' && $itemId) {
-        $title     = trim($_POST['title'] ?? '');
-        $desc      = trim($_POST['description'] ?? '');
-        $tags      = trim($_POST['tags'] ?? '');
-        $altText   = trim($_POST['alt_text'] ?? '');
-        $seoTitle  = trim($_POST['seo_title'] ?? '');
-        $seoDesc   = trim($_POST['seo_description'] ?? '');
+        $title     = trim(postString('title'));
+        $desc      = trim(postString('description'));
+        $tags      = trim(postString('tags'));
+        $altText   = trim(postString('alt_text'));
+        $seoTitle  = trim(postString('seo_title'));
+        $seoDesc   = trim(postString('seo_description'));
         $stmt = $db->prepare(
             'UPDATE gallery_items SET title=?, description=?, tags=?, alt_text=?, seo_title=?, seo_description=? WHERE id=?'
         );
@@ -124,12 +133,13 @@ $editItem = null;
 if ($action === 'edit' && $itemId) {
     $stmt = $db->prepare('SELECT * FROM gallery_items WHERE id = ?');
     $stmt->execute([$itemId]);
+    /** @var array<string, mixed>|false $editItem */
     $editItem = $stmt->fetch();
 }
 
 // Load all items (paginated)
 $perPage     = 20;
-$page        = max(1, (int)($_GET['page'] ?? 1));
+$page        = max(1, getInt('page', 1));
 $totalItemsStmt = $db->query('SELECT COUNT(*) FROM gallery_items');
 assert($totalItemsStmt instanceof PDOStatement);
 $totalItems  = (int)$totalItemsStmt->fetchColumn();
@@ -141,7 +151,8 @@ $itemsStmt   = $db->query(
       LIMIT {$perPage} OFFSET {$pagination['offset']}"
 );
 assert($itemsStmt instanceof PDOStatement);
-$items = $itemsStmt->fetchAll();
+/** @var list<array<string, mixed>> $items */
+$items = array_values($itemsStmt->fetchAll());
 
 $pageTitle = 'Manage Gallery';
 include __DIR__ . '/../includes/header.php';
@@ -163,7 +174,7 @@ include __DIR__ . '/../includes/header.php';
         <form method="POST" action="/admin/gallery.php">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="edit">
-          <input type="hidden" name="id" value="<?= $editItem['id'] ?>">
+          <input type="hidden" name="id" value="<?= e($editItem['id']) ?>">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Title</label>
@@ -217,41 +228,48 @@ include __DIR__ . '/../includes/header.php';
         </thead>
         <tbody>
         <?php foreach ($items as $item): ?>
+          <?php
+          $itemFilePath = stringValue($item['file_path'] ?? '');
+          $itemType = stringValue($item['type'] ?? '');
+          $itemCreatedAt = stringValue($item['created_at'] ?? '');
+          $itemCreatedAtRawTs = strtotime($itemCreatedAt);
+          $itemCreatedAtTs = $itemCreatedAtRawTs === false ? null : $itemCreatedAtRawTs;
+          ?>
           <tr>
             <td style="width:60px;">
-              <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
-                <img src="/<?= e(ltrim($item['file_path'], '/')) ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
-              <?php elseif ($item['type'] === 'video'): ?>
+              <?php if ($itemType === 'photo' && $itemFilePath !== ''): ?>
+                <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
+              <?php elseif ($itemType === 'video'): ?>
                 <div style="width:50px;height:50px;background:var(--bg-card2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">▶️</div>
               <?php endif; ?>
             </td>
             <td><?= e($item['title'] ?: '(untitled)') ?></td>
-            <td><?= e(ucfirst($item['type'])) ?></td>
+            <td><?= e(ucfirst($itemType)) ?></td>
             <td><?= e($item['uploader_name'] ?? '—') ?></td>
-            <td><?= date('M j, Y', strtotime($item['created_at'])) ?></td>
+            <td><?= $itemCreatedAtTs !== null ? e(date('M j, Y', $itemCreatedAtTs)) : '—' ?></td>
             <td><span class="status-badge <?= $item['is_approved'] ? 'status-approved' : 'status-pending' ?>"><?= $item['is_approved'] ? 'Approved' : 'Pending' ?></span></td>
             <td>
               <div class="td-actions">
-                <a href="/admin/gallery.php?action=edit&id=<?= $item['id'] ?>" class="btn btn-outline btn-sm">Edit</a>
+                <a href="/admin/gallery.php?action=edit&id=<?= e($item['id']) ?>" class="btn btn-outline btn-sm">Edit</a>
                 <?php if (!$item['is_approved']): ?>
                   <form method="POST" style="display:inline;">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="approve">
-                    <input type="hidden" name="id" value="<?= $item['id'] ?>">
+                    <input type="hidden" name="id" value="<?= e($item['id']) ?>">
                     <button type="submit" class="btn btn-secondary btn-sm">Approve</button>
                   </form>
                 <?php else: ?>
                   <form method="POST" style="display:inline;">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="unapprove">
-                    <input type="hidden" name="id" value="<?= $item['id'] ?>">
+                    <input type="hidden" name="id" value="<?= e($item['id']) ?>">
                     <button type="submit" class="btn btn-outline btn-sm">Unapprove</button>
                   </form>
                 <?php endif; ?>
                 <form method="POST" style="display:inline;">
                   <?= csrfField() ?>
                   <input type="hidden" name="action" value="delete">
-                  <input type="hidden" name="id" value="<?= $item['id'] ?>">
+                  <input type="hidden" name="id" value="<?= e($item['id']) ?>">
                   <button type="submit" class="btn btn-danger btn-sm" data-confirm="Delete this item? This cannot be undone.">Delete</button>
                 </form>
               </div>

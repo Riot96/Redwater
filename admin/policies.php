@@ -11,24 +11,26 @@ requireAdmin();
 $db     = getDb();
 $policyStmt = $db->query('SELECT * FROM policies WHERE id = 1');
 assert($policyStmt instanceof PDOStatement);
+/** @var array<string, mixed>|false $policy */
 $policy = $policyStmt->fetch();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
 
-    $contentHtml = $_POST['content_html'] ?? '';
-    $imagePath   = $policy['image_path'] ?? null;
+    $contentHtml = postString('content_html');
+    $imagePath   = stringValue($policy['image_path'] ?? null);
+    $policyImage = uploadedFile('policy_image');
 
     // Handle image upload
-    if (!empty($_FILES['policy_image']['name'])) {
+    if ($policyImage !== null && !empty($policyImage['name'])) {
         $upload = handleFileUpload(
-            $_FILES['policy_image'],
+            $policyImage,
             __DIR__ . '/../uploads/policies',
             defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp']
         );
         if ($upload['success']) {
             // Delete old image
-            if ($imagePath && file_exists(__DIR__ . '/../' . ltrim($imagePath, '/'))) {
+            if ($imagePath !== '' && file_exists(__DIR__ . '/../' . ltrim($imagePath, '/'))) {
                 @unlink(__DIR__ . '/../' . ltrim($imagePath, '/'));
             }
             $imagePath = 'uploads/policies/' . $upload['filename'];
@@ -39,11 +41,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Handle image removal
-    if (isset($_POST['remove_image']) && $_POST['remove_image'] === '1') {
-        if ($imagePath && file_exists(__DIR__ . '/../' . ltrim($imagePath, '/'))) {
+    if (postString('remove_image') === '1') {
+        if ($imagePath !== '' && file_exists(__DIR__ . '/../' . ltrim($imagePath, '/'))) {
             @unlink(__DIR__ . '/../' . ltrim($imagePath, '/'));
         }
-        $imagePath = null;
+        $imagePath = '';
     }
 
     $stmt = $db->prepare('INSERT INTO policies (id, content_html, image_path) VALUES (1, ?, ?) ON DUPLICATE KEY UPDATE content_html=VALUES(content_html), image_path=VALUES(image_path)');
@@ -54,8 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $pageTitle   = 'Edit Policies';
-$contentHtml = $policy['content_html'] ?? '';
-$imagePath   = $policy['image_path'] ?? null;
+$contentHtml = stringValue($policy['content_html'] ?? '');
+$imagePath   = stringValue($policy['image_path'] ?? '');
 include __DIR__ . '/../includes/header.php';
 ?>
 
@@ -72,7 +74,7 @@ include __DIR__ . '/../includes/header.php';
           <!-- Policy Image -->
           <div class="form-group">
             <label class="form-label">Policy Image</label>
-            <?php if ($imagePath): ?>
+            <?php if ($imagePath !== ''): ?>
               <div style="margin-bottom:1rem;">
                 <img src="/<?= e(ltrim($imagePath, '/')) ?>" alt="Current policy image" style="max-height:200px;border-radius:var(--radius);border:1px solid var(--border);">
                 <div class="mt-1">

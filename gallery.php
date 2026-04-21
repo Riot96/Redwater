@@ -49,19 +49,22 @@ $items = getGalleryItems(true);
         <div class="gallery-grid">
           <?php foreach ($items as $item): ?>
             <?php
+            $filePath = stringValue($item['file_path'] ?? '');
+            $videoUrl = stringValue($item['video_url'] ?? '');
+            $tagsText = stringValue($item['tags'] ?? '');
             $isVideo    = $item['type'] === 'video';
             $isEmbed    = $isVideo && $item['video_type'] === 'embed';
             $isUpload   = $isVideo && $item['video_type'] === 'upload';
             $dataType   = $item['type'] === 'photo' ? 'photo' : ($isEmbed ? 'video-embed' : 'video-upload');
             $dataSrc    = '';
             if ($item['type'] === 'photo') {
-                $dataSrc = '/' . ltrim($item['file_path'] ?? '', '/');
+                $dataSrc = '/' . ltrim($filePath, '/');
             } elseif ($isEmbed) {
-                $dataSrc = getVideoEmbedUrl($item['video_url']);
+                $dataSrc = getVideoEmbedUrl($videoUrl);
             } else {
-                $dataSrc = '/' . ltrim($item['file_path'] ?? '', '/');
+                $dataSrc = '/' . ltrim($filePath, '/');
             }
-            $tags = parseTags($item['tags'] ?? '');
+            $tags = parseTags($tagsText);
             ?>
             <div class="gallery-item"
                  data-lightbox="true"
@@ -72,16 +75,16 @@ $items = getGalleryItems(true);
                  data-uploader="<?= e($item['uploader_name'] ?? '') ?>">
 
               <?php if ($item['type'] === 'photo'): ?>
-                <img src="<?= e('/' . ltrim($item['file_path'] ?? '', '/')) ?>"
+                <img src="<?= e('/' . ltrim($filePath, '/')) ?>"
                      alt="<?= e($item['alt_text'] ?: ($item['title'] ?: 'Gallery photo')) ?>"
                      loading="lazy">
               <?php elseif ($isEmbed): ?>
                 <?php
                 // Show thumbnail for YouTube
                 $thumbUrl = '';
-                if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/', $item['video_url'], $m)) {
+                if (preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]+)/', $videoUrl, $m)) {
                     $thumbUrl = 'https://img.youtube.com/vi/' . $m[1] . '/hqdefault.jpg';
-                } elseif (preg_match('/vimeo\.com\/(\d+)/', $item['video_url'], $m)) {
+                } elseif (preg_match('/vimeo\.com\/(\d+)/', $videoUrl, $m)) {
                     $thumbUrl = 'https://vumbnail.com/' . $m[1] . '.jpg';
                 }
                 ?>
@@ -91,7 +94,7 @@ $items = getGalleryItems(true);
                   <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:3rem;">▶️</div>
                 <?php endif; ?>
               <?php else: ?>
-                <video src="<?= e('/' . ltrim($item['file_path'] ?? '', '/')) ?>" preload="metadata"></video>
+                <video src="<?= e('/' . ltrim($filePath, '/')) ?>" preload="metadata"></video>
               <?php endif; ?>
 
               <div class="gallery-item-overlay">

@@ -14,15 +14,15 @@ assert($currentUser !== null);
 // ── Handle POST actions ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $act = $_POST['action'] ?? '';
+    $act = postString('action');
 
     // Add new member
     if ($act === 'add_member') {
-        $email          = trim($_POST['email'] ?? '');
-        $displayName    = trim($_POST['display_name'] ?? '');
-        $password       = $_POST['password'] ?? '';
-        $bypassApproval = isset($_POST['bypass_approval']);
-        $role           = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
+        $email          = trim(postString('email'));
+        $displayName    = trim(postString('display_name'));
+        $password       = postString('password');
+        $bypassApproval = postBool('bypass_approval');
+        $role           = postString('role', 'member') === 'admin' ? 'admin' : 'member';
 
         $result = registerUser($email, $password, $displayName, $role, $bypassApproval);
         if ($result['success']) {
@@ -35,8 +35,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Toggle active status
     if ($act === 'toggle_active') {
-        $userId    = (int)($_POST['user_id'] ?? 0);
-        $newStatus = (int)($_POST['new_status'] ?? 0);
+        $userId    = postInt('user_id');
+        $newStatus = postInt('new_status');
         // Don't deactivate self
         if ($userId === $currentUser['id']) {
             flashMessage('error', 'You cannot deactivate your own account.');
@@ -49,8 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Toggle bypass approval
     if ($act === 'toggle_bypass') {
-        $userId      = (int)($_POST['user_id'] ?? 0);
-        $newBypass   = (int)($_POST['new_bypass'] ?? 0);
+        $userId      = postInt('user_id');
+        $newBypass   = postInt('new_bypass');
         $db->prepare('UPDATE users SET bypass_approval=? WHERE id=?')->execute([$newBypass, $userId]);
         flashMessage('success', 'Approval setting updated.');
         redirect('/admin/members.php');
@@ -58,10 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Edit member
     if ($act === 'edit_member') {
-        $userId      = (int)($_POST['user_id'] ?? 0);
-        $displayName = trim($_POST['display_name'] ?? '');
-        $role        = ($_POST['role'] ?? 'member') === 'admin' ? 'admin' : 'member';
-        $bypass      = isset($_POST['bypass_approval']) ? 1 : 0;
+        $userId      = postInt('user_id');
+        $displayName = trim(postString('display_name'));
+        $role        = postString('role', 'member') === 'admin' ? 'admin' : 'member';
+        $bypass      = postBool('bypass_approval') ? 1 : 0;
 
         if (!$displayName) {
             flashMessage('error', 'Display name is required.');
@@ -75,8 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Reset password for member
     if ($act === 'reset_member_password') {
-        $userId      = (int)($_POST['user_id'] ?? 0);
-        $newPassword = $_POST['new_password'] ?? '';
+        $userId      = postInt('user_id');
+        $newPassword = postString('new_password');
         if (strlen($newPassword) < 8) {
             flashMessage('error', 'Password must be at least 8 characters.');
         } else {
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Delete member
     if ($act === 'delete_member') {
-        $userId = (int)($_POST['user_id'] ?? 0);
+        $userId = postInt('user_id');
         if ($userId === $currentUser['id']) {
             flashMessage('error', 'You cannot delete your own account.');
         } else {
@@ -110,13 +110,15 @@ $membersStmt = $db->query(
       ORDER BY u.role ASC, u.display_name ASC"
 );
 assert($membersStmt instanceof PDOStatement);
-$members = $membersStmt->fetchAll();
+/** @var list<array<string, mixed>> $members */
+$members = array_values($membersStmt->fetchAll());
 
-$editUserId = (int)($_GET['edit'] ?? 0);
+$editUserId = getInt('edit');
 $editUser   = null;
 if ($editUserId) {
     $stmt = $db->prepare('SELECT * FROM users WHERE id=?');
     $stmt->execute([$editUserId]);
+    /** @var array<string, mixed>|false $editUser */
     $editUser = $stmt->fetch();
 }
 
@@ -140,7 +142,7 @@ include __DIR__ . '/../includes/header.php';
         <form method="POST" action="/admin/members.php">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="edit_member">
-          <input type="hidden" name="user_id" value="<?= $editUser['id'] ?>">
+          <input type="hidden" name="user_id" value="<?= e($editUser['id']) ?>">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Display Name</label>
@@ -173,7 +175,7 @@ include __DIR__ . '/../includes/header.php';
         <form method="POST" action="/admin/members.php">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="reset_member_password">
-          <input type="hidden" name="user_id" value="<?= $editUser['id'] ?>">
+          <input type="hidden" name="user_id" value="<?= e($editUser['id']) ?>">
           <div class="form-row">
             <div class="form-group">
               <input type="password" name="new_password" class="form-control" placeholder="New password (min 8 chars)" minlength="8">
@@ -204,17 +206,23 @@ include __DIR__ . '/../includes/header.php';
         </thead>
         <tbody>
         <?php foreach ($members as $m): ?>
+          <?php
+          $memberRole = stringValue($m['role'] ?? '');
+          $memberCreatedAt = stringValue($m['created_at'] ?? '');
+          $memberCreatedAtRawTs = strtotime($memberCreatedAt);
+          $memberCreatedAtTs = $memberCreatedAtRawTs === false ? null : $memberCreatedAtRawTs;
+          ?>
           <tr>
             <td><?= e($m['display_name']) ?></td>
             <td><?= e($m['email']) ?></td>
-            <td><span class="status-badge <?= $m['role'] === 'admin' ? 'status-blue' : '' ?>" style="<?= $m['role']==='admin' ? 'background:rgba(67,214,251,0.15);color:var(--blue);' : '' ?>"><?= ucfirst($m['role']) ?></span></td>
+            <td><span class="status-badge <?= $memberRole === 'admin' ? 'status-blue' : '' ?>" style="<?= $memberRole==='admin' ? 'background:rgba(67,214,251,0.15);color:var(--blue);' : '' ?>"><?= ucfirst($memberRole) ?></span></td>
             <td><span class="status-badge <?= $m['is_active'] ? 'status-active' : 'status-inactive' ?>"><?= $m['is_active'] ? 'Active' : 'Inactive' ?></span></td>
             <td>
-              <?php if ($m['role'] === 'member'): ?>
+              <?php if ($memberRole === 'member'): ?>
                 <form method="POST" style="display:inline;">
                   <?= csrfField() ?>
                   <input type="hidden" name="action" value="toggle_bypass">
-                  <input type="hidden" name="user_id" value="<?= $m['id'] ?>">
+                  <input type="hidden" name="user_id" value="<?= e($m['id']) ?>">
                   <input type="hidden" name="new_bypass" value="<?= $m['bypass_approval'] ? 0 : 1 ?>">
                   <button type="submit" class="btn btn-outline btn-sm"><?= $m['bypass_approval'] ? '✓ Auto' : 'Manual' ?></button>
                 </form>
@@ -223,27 +231,27 @@ include __DIR__ . '/../includes/header.php';
               <?php endif; ?>
             </td>
             <td>
-              <span title="Approved"><?= (int)$m['approved_items'] ?> ✓</span>
+              <span title="Approved"><?= intValue($m['approved_items']) ?> ✓</span>
               <?php if ($m['pending_items'] > 0): ?>
-                / <span style="color:var(--red);" title="Pending"><?= (int)$m['pending_items'] ?> ⏳</span>
+                / <span style="color:var(--red);" title="Pending"><?= intValue($m['pending_items']) ?> ⏳</span>
               <?php endif; ?>
             </td>
-            <td><?= date('M j, Y', strtotime($m['created_at'])) ?></td>
+            <td><?= $memberCreatedAtTs !== null ? e(date('M j, Y', $memberCreatedAtTs)) : '—' ?></td>
             <td>
               <div class="td-actions">
-                <a href="/admin/members.php?edit=<?= $m['id'] ?>" class="btn btn-outline btn-sm">Edit</a>
+                <a href="/admin/members.php?edit=<?= e($m['id']) ?>" class="btn btn-outline btn-sm">Edit</a>
                 <?php if ($m['id'] !== $currentUser['id']): ?>
                   <form method="POST" style="display:inline;">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="toggle_active">
-                    <input type="hidden" name="user_id" value="<?= $m['id'] ?>">
+                    <input type="hidden" name="user_id" value="<?= e($m['id']) ?>">
                     <input type="hidden" name="new_status" value="<?= $m['is_active'] ? 0 : 1 ?>">
                     <button type="submit" class="btn btn-outline btn-sm"><?= $m['is_active'] ? 'Deactivate' : 'Activate' ?></button>
                   </form>
                   <form method="POST" style="display:inline;">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="delete_member">
-                    <input type="hidden" name="user_id" value="<?= $m['id'] ?>">
+                    <input type="hidden" name="user_id" value="<?= e($m['id']) ?>">
                     <button type="submit" class="btn btn-danger btn-sm" data-confirm="Delete this account? Gallery content will be preserved but disassociated.">Delete</button>
                   </form>
                 <?php endif; ?>

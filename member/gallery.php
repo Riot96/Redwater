@@ -20,28 +20,29 @@ $errors = [];
 // ── Handle POST ───────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $act = $_POST['action'] ?? '';
+    $act = postString('action');
 
     // Upload new item
     if ($act === 'upload') {
-        $type      = $_POST['type'] ?? 'photo';
-        $title     = trim($_POST['title'] ?? '');
-        $desc      = trim($_POST['description'] ?? '');
-        $tags      = trim($_POST['tags'] ?? '');
-        $altText   = trim($_POST['alt_text'] ?? '');
-        $seoTitle  = trim($_POST['seo_title'] ?? '');
-        $seoDesc   = trim($_POST['seo_description'] ?? '');
-        $videoUrl  = trim($_POST['video_url'] ?? '');
-        $videoType = $_POST['video_type'] ?? 'embed';
+        $type      = postString('type', 'photo');
+        $title     = trim(postString('title'));
+        $desc      = trim(postString('description'));
+        $tags      = trim(postString('tags'));
+        $altText   = trim(postString('alt_text'));
+        $seoTitle  = trim(postString('seo_title'));
+        $seoDesc   = trim(postString('seo_description'));
+        $videoUrl  = trim(postString('video_url'));
+        $videoType = postString('video_type', 'embed');
         $filePath  = null;
+        $mediaFile = uploadedFile('media_file');
 
         if ($type === 'photo' || ($type === 'video' && $videoType === 'upload')) {
             $mimes = $type === 'photo'
                 ? (defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp'])
                 : (defined('ALLOWED_VIDEO_TYPES') ? ALLOWED_VIDEO_TYPES : ['video/mp4','video/webm','video/ogg']);
 
-            if (!empty($_FILES['media_file']['name'])) {
-                $upload = handleFileUpload($_FILES['media_file'], __DIR__ . '/../uploads/gallery', $mimes);
+            if ($mediaFile !== null && !empty($mediaFile['name'])) {
+                $upload = handleFileUpload($mediaFile, __DIR__ . '/../uploads/gallery', $mimes);
                 if (!$upload['success']) {
                     flashMessage('error', 'Upload failed: ' . $upload['error']);
                     redirect('/member/gallery.php');
@@ -83,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Edit own item (only if belongs to user AND account active)
     if ($act === 'edit') {
-        $itemId = (int)($_POST['item_id'] ?? 0);
+        $itemId = postInt('item_id');
         // Verify ownership
         $stmt = $db->prepare('SELECT id FROM gallery_items WHERE id=? AND user_id=?');
         $stmt->execute([$itemId, $user['id']]);
@@ -92,12 +93,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect('/member/gallery.php');
         }
 
-        $title    = trim($_POST['title'] ?? '');
-        $desc     = trim($_POST['description'] ?? '');
-        $tags     = trim($_POST['tags'] ?? '');
-        $altText  = trim($_POST['alt_text'] ?? '');
-        $seoTitle = trim($_POST['seo_title'] ?? '');
-        $seoDesc  = trim($_POST['seo_description'] ?? '');
+        $title    = trim(postString('title'));
+        $desc     = trim(postString('description'));
+        $tags     = trim(postString('tags'));
+        $altText  = trim(postString('alt_text'));
+        $seoTitle = trim(postString('seo_title'));
+        $seoDesc  = trim(postString('seo_description'));
 
         $db->prepare(
             'UPDATE gallery_items SET title=?, description=?, tags=?, alt_text=?, seo_title=?, seo_description=? WHERE id=? AND user_id=?'
@@ -109,9 +110,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Delete own item
     if ($act === 'delete') {
-        $itemId = (int)($_POST['item_id'] ?? 0);
+        $itemId = postInt('item_id');
         $stmt   = $db->prepare('SELECT * FROM gallery_items WHERE id=? AND user_id=?');
         $stmt->execute([$itemId, $user['id']]);
+        /** @var array{file_path?: string}|false $row */
         $row = $stmt->fetch();
         if ($row) {
             if ($row['file_path']) deleteUploadedFile(__DIR__ . '/../' . ltrim($row['file_path'], '/'));
@@ -123,11 +125,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Load own items ────────────────────────────────────────────────────────────
-$editItemId = (int)($_GET['edit'] ?? 0);
+$editItemId = getInt('edit');
 $editItem   = null;
 if ($editItemId) {
     $stmt = $db->prepare('SELECT * FROM gallery_items WHERE id=? AND user_id=?');
     $stmt->execute([$editItemId, $user['id']]);
+    /** @var array<string, mixed>|false $editItem */
     $editItem = $stmt->fetch();
 }
 
@@ -162,7 +165,7 @@ include __DIR__ . '/../includes/header.php';
         <form method="POST" action="/member/gallery.php">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="edit">
-          <input type="hidden" name="item_id" value="<?= $editItem['id'] ?>">
+          <input type="hidden" name="item_id" value="<?= e($editItem['id']) ?>">
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Title</label>
@@ -205,15 +208,17 @@ include __DIR__ . '/../includes/header.php';
       <div class="gallery-grid">
         <?php foreach ($myItems as $item): ?>
           <?php
+          $itemFilePath = stringValue($item['file_path'] ?? '');
+          $itemVideoUrl = stringValue($item['video_url'] ?? '');
           $dataType = $item['type'] === 'photo' ? 'photo' : ($item['video_type'] === 'embed' ? 'video-embed' : 'video-upload');
           $dataSrc  = '';
-          if ($item['type'] === 'photo') $dataSrc = '/' . ltrim($item['file_path'] ?? '', '/');
-          elseif ($item['video_type'] === 'embed') $dataSrc = getVideoEmbedUrl($item['video_url']);
-          else $dataSrc = '/' . ltrim($item['file_path'] ?? '', '/');
+          if ($item['type'] === 'photo') $dataSrc = '/' . ltrim($itemFilePath, '/');
+          elseif ($item['video_type'] === 'embed') $dataSrc = getVideoEmbedUrl($itemVideoUrl);
+          else $dataSrc = '/' . ltrim($itemFilePath, '/');
           ?>
           <div class="gallery-item" style="cursor:default;">
             <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
-              <img src="/<?= e(ltrim($item['file_path'], '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
+              <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
             <?php else: ?>
               <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:3rem;">▶️</div>
             <?php endif; ?>
@@ -221,11 +226,11 @@ include __DIR__ . '/../includes/header.php';
             <div class="gallery-item-overlay" style="opacity:1;">
               <div class="gallery-item-title"><?= e($item['title'] ?: '(untitled)') ?></div>
               <div class="d-flex gap-1 mt-1">
-                <a href="/member/gallery.php?edit=<?= $item['id'] ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
+                <a href="/member/gallery.php?edit=<?= e($item['id']) ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
                 <form method="POST" style="display:inline;">
                   <?= csrfField() ?>
                   <input type="hidden" name="action" value="delete">
-                  <input type="hidden" name="item_id" value="<?= $item['id'] ?>">
+                  <input type="hidden" name="item_id" value="<?= e($item['id']) ?>">
                   <button class="btn btn-danger btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;" data-confirm="Delete this item?">Delete</button>
                 </form>
               </div>

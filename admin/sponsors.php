@@ -12,18 +12,18 @@ $db = getDb();
 // ── Handle POST ───────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $act = $_POST['action'] ?? '';
+    $act = postString('action');
 
     // Add/edit tier
     if ($act === 'save_tier') {
-        $tierId       = (int)($_POST['tier_id'] ?? 0);
-        $name         = trim($_POST['name'] ?? '');
-        $sortOrder    = (int)($_POST['sort_order'] ?? 0);
-        $cardsPerRow  = max(1, min(6, (int)($_POST['cards_per_row'] ?? 3)));
-        $showName     = isset($_POST['show_name'])        ? 1 : 0;
-        $showDesc     = isset($_POST['show_description']) ? 1 : 0;
-        $showLogo     = isset($_POST['show_logo'])        ? 1 : 0;
-        $showLink     = isset($_POST['show_link'])        ? 1 : 0;
+        $tierId       = postInt('tier_id');
+        $name         = trim(postString('name'));
+        $sortOrder    = postInt('sort_order');
+        $cardsPerRow  = max(1, min(6, postInt('cards_per_row', 3)));
+        $showName     = postBool('show_name') ? 1 : 0;
+        $showDesc     = postBool('show_description') ? 1 : 0;
+        $showLogo     = postBool('show_logo') ? 1 : 0;
+        $showLink     = postBool('show_link') ? 1 : 0;
 
         if ($tierId) {
             $db->prepare('UPDATE sponsor_tiers SET name=?, sort_order=?, cards_per_row=?, show_name=?, show_description=?, show_logo=?, show_link=? WHERE id=?')
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Delete tier
     if ($act === 'delete_tier') {
-        $tierId = (int)($_POST['tier_id'] ?? 0);
+        $tierId = postInt('tier_id');
         $db->prepare('DELETE FROM sponsor_tiers WHERE id=?')->execute([$tierId]);
         flashMessage('success', 'Tier and its sponsors deleted.');
         redirect('/admin/sponsors.php');
@@ -46,13 +46,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Add/edit sponsor
     if ($act === 'save_sponsor') {
-        $sponsorId  = (int)($_POST['sponsor_id'] ?? 0);
-        $tierId     = (int)($_POST['tier_id'] ?? 0);
-        $name       = trim($_POST['sponsor_name'] ?? '');
-        $description= trim($_POST['description'] ?? '');
-        $logoUrl    = trim($_POST['logo_url'] ?? '');
-        $linkUrl    = trim($_POST['link_url'] ?? '');
-        $sortOrder  = (int)($_POST['sort_order'] ?? 0);
+        $sponsorId  = postInt('sponsor_id');
+        $tierId     = postInt('tier_id');
+        $name       = trim(postString('sponsor_name'));
+        $description= trim(postString('description'));
+        $logoUrl    = trim(postString('logo_url'));
+        $linkUrl    = trim(postString('link_url'));
+        $sortOrder  = postInt('sort_order');
 
         if ($sponsorId) {
             $db->prepare('UPDATE sponsors SET tier_id=?, name=?, description=?, logo_url=?, link_url=?, sort_order=? WHERE id=?')
@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Delete sponsor
     if ($act === 'delete_sponsor') {
-        $sponsorId = (int)($_POST['sponsor_id'] ?? 0);
+        $sponsorId = postInt('sponsor_id');
         $db->prepare('DELETE FROM sponsors WHERE id=?')->execute([$sponsorId]);
         flashMessage('success', 'Sponsor deleted.');
         redirect('/admin/sponsors.php');
@@ -80,7 +80,8 @@ $tiers = getSponsorTiers();
 // Get all tiers (for sponsor dropdown)
 $allTiersStmt = $db->query('SELECT id, name FROM sponsor_tiers ORDER BY sort_order ASC');
 assert($allTiersStmt instanceof PDOStatement);
-$allTiers = $allTiersStmt->fetchAll();
+/** @var list<array<string, mixed>> $allTiers */
+$allTiers = array_values($allTiersStmt->fetchAll());
 
 $pageTitle = 'Manage Sponsors';
 include __DIR__ . '/../includes/header.php';
@@ -107,13 +108,17 @@ include __DIR__ . '/../includes/header.php';
     <?php endif; ?>
 
     <?php foreach ($tiers as $tier): ?>
+      <?php
+      /** @var list<array<string, mixed>> $tierSponsors */
+      $tierSponsors = isset($tier['sponsors']) && is_array($tier['sponsors']) ? $tier['sponsors'] : [];
+      ?>
       <div class="card mb-3">
         <div class="card-body">
           <div class="d-flex justify-between align-center mb-2">
             <div>
               <h3 style="font-size:1rem;margin:0;"><?= e($tier['name']) ?></h3>
               <span class="text-muted" style="font-size:0.8rem;">
-                <?= (int)$tier['cards_per_row'] ?> per row &mdash;
+                <?= intValue($tier['cards_per_row']) ?> per row &mdash;
                 <?= $tier['show_name']        ? '✓ Name ' : '' ?>
                 <?= $tier['show_description'] ? '✓ Desc ' : '' ?>
                 <?= $tier['show_logo']        ? '✓ Logo ' : '' ?>
@@ -126,7 +131,7 @@ include __DIR__ . '/../includes/header.php';
               <form method="POST" style="display:inline;">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="delete_tier">
-                <input type="hidden" name="tier_id" value="<?= $tier['id'] ?>">
+                <input type="hidden" name="tier_id" value="<?= e($tier['id']) ?>">
                 <button type="submit" class="btn btn-danger btn-sm"
                         data-confirm="Delete this tier and all its sponsors?">Delete Tier</button>
               </form>
@@ -134,18 +139,18 @@ include __DIR__ . '/../includes/header.php';
           </div>
 
           <!-- Sponsors in this tier -->
-          <?php if (!empty($tier['sponsors'])): ?>
+          <?php if (!empty($tierSponsors)): ?>
             <div class="table-wrap" style="margin-top:1rem;">
               <table>
                 <thead><tr><th>Name</th><th>Description</th><th>Logo URL</th><th>Link URL</th><th>Order</th><th>Actions</th></tr></thead>
                 <tbody>
-                <?php foreach ($tier['sponsors'] as $sponsor): ?>
+                <?php foreach ($tierSponsors as $sponsor): ?>
                   <tr>
                     <td><?= e($sponsor['name'] ?: '—') ?></td>
                     <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><?= e($sponsor['description'] ?: '—') ?></td>
                     <td><?= $sponsor['logo_url'] ? '<a href="' . e($sponsor['logo_url']) . '" target="_blank" style="font-size:0.8rem;">View</a>' : '—' ?></td>
                     <td><?= $sponsor['link_url'] ? '<a href="' . e($sponsor['link_url']) . '" target="_blank" style="font-size:0.8rem;">Visit</a>' : '—' ?></td>
-                    <td><?= (int)$sponsor['sort_order'] ?></td>
+                    <td><?= intValue($sponsor['sort_order']) ?></td>
                     <td>
                       <div class="td-actions">
                         <button class="btn btn-outline btn-sm"
@@ -153,7 +158,7 @@ include __DIR__ . '/../includes/header.php';
                         <form method="POST" style="display:inline;">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="delete_sponsor">
-                          <input type="hidden" name="sponsor_id" value="<?= $sponsor['id'] ?>">
+                          <input type="hidden" name="sponsor_id" value="<?= e($sponsor['id']) ?>">
                           <button type="submit" class="btn btn-danger btn-sm" data-confirm="Delete this sponsor?">Delete</button>
                         </form>
                       </div>
@@ -239,7 +244,7 @@ include __DIR__ . '/../includes/header.php';
           <label class="form-label">Sponsor Tier</label>
           <select name="tier_id" id="sponsorTier" class="form-control" required>
             <?php foreach ($allTiers as $t): ?>
-              <option value="<?= $t['id'] ?>"><?= e($t['name']) ?></option>
+              <option value="<?= e($t['id']) ?>"><?= e($t['name']) ?></option>
             <?php endforeach; ?>
             <?php if (!$allTiers): ?><option value="">No tiers — add a tier first</option><?php endif; ?>
           </select>

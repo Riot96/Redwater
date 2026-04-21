@@ -4,12 +4,73 @@
  */
 
 // ─── Output Helpers ───────────────────────────────────────────────────────────
-function e(string $s): string {
-    return htmlspecialchars($s, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+function stringValue(mixed $value, string $default = ''): string {
+    return is_scalar($value) ? (string)$value : $default;
+}
+
+function intValue(mixed $value, int $default = 0): int {
+    return is_numeric($value) ? (int)$value : $default;
+}
+
+function e(mixed $s): string {
+    return htmlspecialchars(stringValue($s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+}
+
+/**
+ * @param array<string, mixed> $source
+ */
+function requestString(array $source, string $key, string $default = ''): string {
+    $value = $source[$key] ?? $default;
+    return stringValue($value, $default);
+}
+
+function postString(string $key, string $default = ''): string {
+    return requestString($_POST, $key, $default);
+}
+
+function getString(string $key, string $default = ''): string {
+    return requestString($_GET, $key, $default);
+}
+
+function serverString(string $key, string $default = ''): string {
+    return requestString($_SERVER, $key, $default);
+}
+
+function postInt(string $key, int $default = 0): int {
+    return intValue(postString($key, (string)$default), $default);
+}
+
+function getInt(string $key, int $default = 0): int {
+    return intValue(getString($key, (string)$default), $default);
+}
+
+function postBool(string $key): bool {
+    return array_key_exists($key, $_POST);
+}
+
+/**
+ * @return array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int}|null
+ */
+function uploadedFile(string $key): ?array {
+    $file = $_FILES[$key] ?? null;
+    if (!is_array($file)) {
+        return null;
+    }
+
+    return [
+        'name' => stringValue($file['name'] ?? null),
+        'type' => stringValue($file['type'] ?? null),
+        'tmp_name' => stringValue($file['tmp_name'] ?? null),
+        'error' => intValue($file['error'] ?? null, UPLOAD_ERR_NO_FILE),
+        'size' => intValue($file['size'] ?? null),
+    ];
 }
 
 function flashMessage(string $type, string $message): void {
     initSession();
+    if (!isset($_SESSION['flash']) || !is_array($_SESSION['flash'])) {
+        $_SESSION['flash'] = [];
+    }
     $_SESSION['flash'][] = ['type' => $type, 'message' => $message];
 }
 
@@ -20,7 +81,22 @@ function getFlashMessages(): array {
     initSession();
     $messages = $_SESSION['flash'] ?? [];
     unset($_SESSION['flash']);
-    return $messages;
+    if (!is_array($messages)) {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($messages as $message) {
+        if (!is_array($message)) {
+            continue;
+        }
+        $normalized[] = [
+            'type' => isset($message['type']) && is_string($message['type']) ? $message['type'] : 'info',
+            'message' => isset($message['message']) && is_string($message['message']) ? $message['message'] : '',
+        ];
+    }
+
+    return $normalized;
 }
 
 function renderFlashMessages(): string {
@@ -142,7 +218,9 @@ function getGalleryItem(int $id): ?array {
     );
     assert($stmt instanceof PDOStatement);
     $stmt->execute([$id]);
-    return $stmt->fetch() ?: null;
+    $item = $stmt->fetch();
+    /** @var array<string, mixed>|false $item */
+    return $item ?: null;
 }
 
 function isYoutubeUrl(string $url): bool {
@@ -223,16 +301,17 @@ function getSponsorTiers(): array {
         'SELECT * FROM sponsor_tiers ORDER BY sort_order ASC'
     );
     assert($stmt instanceof PDOStatement);
-    $tiers = $stmt->fetchAll();
+    /** @var list<array<string, mixed>> $tiers */
+    $tiers = array_values($stmt->fetchAll());
 
     foreach ($tiers as &$tier) {
         $stmt = $db->prepare('SELECT * FROM sponsors WHERE tier_id = ? ORDER BY sort_order ASC');
         assert($stmt instanceof PDOStatement);
         $stmt->execute([$tier['id']]);
-        $tier['sponsors'] = $stmt->fetchAll();
+        /** @var list<array<string, mixed>> $sponsors */
+        $sponsors = array_values($stmt->fetchAll());
+        $tier['sponsors'] = $sponsors;
     }
-    /** @var list<array<string, mixed>> $tiers */
-    $tiers = array_values($tiers);
     return $tiers;
 }
 

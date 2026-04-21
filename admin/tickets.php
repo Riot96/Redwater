@@ -10,7 +10,7 @@ requireAdmin();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $embedCode = $_POST['embed_code'] ?? '';
+    $embedCode = postString('embed_code');
     setSetting('tickets_embed_code', $embedCode);
     flashMessage('success', 'Ticket embed code updated successfully.');
     redirect('/admin/tickets.php');

@@ -29,11 +29,11 @@ $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $email       = trim($_POST['email'] ?? '');
-    $displayName = trim($_POST['display_name'] ?? '');
-    $password    = $_POST['password'] ?? '';
-    $confirm     = $_POST['confirm'] ?? '';
-    $setupKey    = trim($_POST['setup_key'] ?? '');
+    $email       = trim(postString('email'));
+    $displayName = trim(postString('display_name'));
+    $password    = postString('password');
+    $confirm     = postString('confirm');
+    $setupKey    = trim(postString('setup_key'));
 
     // Require a setup key (set this in the form or .env)
     $expectedKey = defined('APP_KEY') ? APP_KEY : '';

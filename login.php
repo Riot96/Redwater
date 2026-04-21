@@ -16,7 +16,7 @@ if (isLoggedIn()) {
 }
 
 $error  = '';
-$next   = $_GET['next'] ?? '';
+$next   = getString('next');
 // Validate next URL to prevent open redirect
 if (!empty($next) && (!str_starts_with($next, '/') || str_starts_with($next, '//'))) {
     $next = '';
@@ -24,8 +24,8 @@ if (!empty($next) && (!str_starts_with($next, '/') || str_starts_with($next, '//
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $email    = trim($_POST['email']    ?? '');
-    $password = trim($_POST['password'] ?? '');
+    $email    = trim(postString('email'));
+    $password = trim(postString('password'));
     $result   = loginUser($email, $password);
     if ($result['success']) {
         $user = currentUser();

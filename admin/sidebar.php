@@ -3,8 +3,9 @@
  * Admin Sidebar Navigation
  * Included by all admin pages
  */
-$currentPage = basename($_SERVER['PHP_SELF']);
-$currentDir  = basename(dirname($_SERVER['PHP_SELF']));
+$currentPhpSelf = serverString('PHP_SELF');
+$currentPage = basename($currentPhpSelf);
+$currentDir  = basename(dirname($currentPhpSelf));
 ?>
 <aside class="admin-sidebar">
   <div style="padding:1rem 1.25rem; border-bottom:1px solid var(--border); margin-bottom:0.5rem;">

@@ -19,10 +19,10 @@ $errors = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $act = $_POST['action'] ?? '';
+    $act = postString('action');
 
     if ($act === 'update_name') {
-        $displayName = trim($_POST['display_name'] ?? '');
+        $displayName = trim(postString('display_name'));
         if (empty($displayName)) {
             $errors['display_name'] = 'Display name is required.';
         } else {
@@ -34,15 +34,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($act === 'change_password') {
-        $current = $_POST['current_password'] ?? '';
-        $new     = $_POST['new_password'] ?? '';
-        $confirm = $_POST['confirm_password'] ?? '';
+        $current = postString('current_password');
+        $new     = postString('new_password');
+        $confirm = postString('confirm_password');
 
         $stmt = $db->prepare('SELECT password_hash FROM users WHERE id=?');
         $stmt->execute([$user['id']]);
+        /** @var array{password_hash: string}|false $row */
         $row = $stmt->fetch();
-
-        if (!password_verify($current, $row['password_hash'])) {
+        if ($row === false) {
+            $errors['current_password'] = 'Unable to verify your account right now. Please try again.';
+        } elseif (!password_verify($current, $row['password_hash'])) {
             $errors['current_password'] = 'Current password is incorrect.';
         } elseif (strlen($new) < 8) {
             $errors['new_password'] = 'New password must be at least 8 characters.';

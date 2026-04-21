@@ -70,6 +70,7 @@ function getSetting(string $key, string $default = ''): string {
         $db = getDb();
         $stmt = $db->prepare('SELECT setting_value FROM site_settings WHERE setting_key = ?');
         $stmt->execute([$key]);
+        /** @var array{setting_value: string}|false $row */
         $row = $stmt->fetch();
         $cache[$key] = $row ? (string)$row['setting_value'] : $default;
     } catch (Exception $e) {

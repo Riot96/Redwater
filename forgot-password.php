@@ -14,7 +14,7 @@ $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $email = trim($_POST['email'] ?? '');
+    $email = trim(postString('email'));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
@@ -56,7 +56,7 @@ include __DIR__ . '/includes/header.php';
           <div class="form-group">
             <label class="form-label" for="email">Email Address</label>
             <input type="email" id="email" name="email" class="form-control"
-                   value="<?= e($_POST['email'] ?? '') ?>" autocomplete="email" required autofocus>
+                   value="<?= e(postString('email')) ?>" autocomplete="email" required autofocus>
           </div>
           <button type="submit" class="btn btn-primary w-full">Send Reset Link</button>
         </form>

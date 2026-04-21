@@ -11,7 +11,7 @@ $db = getDb();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $act = $_POST['action'] ?? 'save_settings';
+    $act = postString('action', 'save_settings');
 
     if ($act === 'save_settings') {
         $fields = ['contact_phone','contact_email','contact_address','contact_map_embed',
@@ -19,20 +19,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    'site_name','site_tagline',
                    'home_hero_heading','home_hero_subheading','home_about_text'];
         foreach ($fields as $field) {
-            setSetting($field, trim($_POST[$field] ?? ''));
+            setSetting($field, trim(postString($field)));
         }
         flashMessage('success', 'Settings saved successfully.');
         redirect('/admin/contact.php');
     }
 
     if ($act === 'mark_read') {
-        $msgId = (int)($_POST['msg_id'] ?? 0);
+        $msgId = postInt('msg_id');
         $db->prepare('UPDATE contact_submissions SET is_read=1 WHERE id=?')->execute([$msgId]);
         redirect('/admin/contact.php#messages');
     }
 
     if ($act === 'delete_message') {
-        $msgId = (int)($_POST['msg_id'] ?? 0);
+        $msgId = postInt('msg_id');
         $db->prepare('DELETE FROM contact_submissions WHERE id=?')->execute([$msgId]);
         flashMessage('success', 'Message deleted.');
         redirect('/admin/contact.php#messages');

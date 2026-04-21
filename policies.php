@@ -14,10 +14,11 @@ include __DIR__ . '/includes/header.php';
 $db     = getDb();
 $policyStmt = $db->query('SELECT * FROM policies WHERE id = 1');
 assert($policyStmt instanceof PDOStatement);
+/** @var array<string, mixed>|false $policy */
 $policy = $policyStmt->fetch();
-$contentHtml = $policy['content_html'] ?? '<p>Policies coming soon.</p>';
-$imagePath   = $policy['image_path'] ?? null;
-$hasPolicyImage = !empty($imagePath) && file_exists($imagePath);
+$contentHtml = stringValue($policy['content_html'] ?? '<p>Policies coming soon.</p>');
+$imagePath   = stringValue($policy['image_path'] ?? '');
+$hasPolicyImage = $imagePath !== '' && file_exists($imagePath);
 ?>
 
 <main class="page-wrapper">

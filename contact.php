@@ -15,10 +15,10 @@ $success = false;
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $name    = trim($_POST['name']    ?? '');
-    $email   = trim($_POST['email']   ?? '');
-    $subject = trim($_POST['subject'] ?? '');
-    $message = trim($_POST['message'] ?? '');
+    $name    = trim(postString('name'));
+    $email   = trim(postString('email'));
+    $subject = trim(postString('subject'));
+    $message = trim(postString('message'));
 
     if (empty($name))    $errors['name']    = 'Your name is required.';
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errors['email'] = 'A valid email address is required.';
@@ -32,7 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Try to send email notification
         $toEmail = getSetting('contact_email');
         if ($toEmail) {
-            $from  = defined('MAIL_FROM') ? MAIL_FROM : 'noreply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
+            $host = serverString('HTTP_HOST', 'localhost');
+            $from  = defined('MAIL_FROM') ? MAIL_FROM : 'noreply@' . $host;
             $fromName = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'RedWater Entertainment';
             $mailSubject = 'New Contact Form Submission' . ($subject ? ': ' . $subject : '');
             $mailBody    = "New message from: {$name} <{$email}>\n\n";
@@ -143,22 +144,22 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
               <div class="form-row">
                 <div class="form-group">
                   <label class="form-label" for="name">Your Name</label>
-                  <input type="text" id="name" name="name" class="form-control" value="<?= e($_POST['name'] ?? '') ?>" required>
+                  <input type="text" id="name" name="name" class="form-control" value="<?= e(postString('name')) ?>" required>
                   <?php if (isset($errors['name'])): ?><div class="form-error"><?= e($errors['name']) ?></div><?php endif; ?>
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="email">Email Address</label>
-                  <input type="email" id="email" name="email" class="form-control" value="<?= e($_POST['email'] ?? '') ?>" required>
+                  <input type="email" id="email" name="email" class="form-control" value="<?= e(postString('email')) ?>" required>
                   <?php if (isset($errors['email'])): ?><div class="form-error"><?= e($errors['email']) ?></div><?php endif; ?>
                 </div>
               </div>
               <div class="form-group">
                 <label class="form-label" for="subject">Subject (Optional)</label>
-                <input type="text" id="subject" name="subject" class="form-control" value="<?= e($_POST['subject'] ?? '') ?>">
+                <input type="text" id="subject" name="subject" class="form-control" value="<?= e(postString('subject')) ?>">
               </div>
               <div class="form-group">
                 <label class="form-label" for="message">Message</label>
-                <textarea id="message" name="message" class="form-control" rows="6" required><?= e($_POST['message'] ?? '') ?></textarea>
+                <textarea id="message" name="message" class="form-control" rows="6" required><?= e(postString('message')) ?></textarea>
                 <?php if (isset($errors['message'])): ?><div class="form-error"><?= e($errors['message']) ?></div><?php endif; ?>
               </div>
               <button type="submit" class="btn btn-primary">Send Message</button>

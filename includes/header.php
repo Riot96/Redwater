@@ -16,6 +16,7 @@ $pageTitle = isset($pageTitle) && $pageTitle !== '' ? e($pageTitle) . ' | ' . e(
 $bodyClass = $bodyClass ?? '';
 
 $user = currentUser();
+$currentScript = basename(serverString('PHP_SELF'));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -51,13 +52,13 @@ $user = currentUser();
         </button>
 
         <ul class="nav-menu">
-            <li><a href="/" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'index.php' ? ' active' : '' ?>">Home</a></li>
-            <li><a href="/tickets.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'tickets.php' ? ' active' : '' ?>">Tickets</a></li>
-            <li><a href="/gallery.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'gallery.php' ? ' active' : '' ?>">Gallery</a></li>
-            <li><a href="/sponsors.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'sponsors.php' ? ' active' : '' ?>">Sponsors</a></li>
-            <li><a href="/merch.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'merch.php' ? ' active' : '' ?>">Merch</a></li>
-            <li><a href="/policies.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'policies.php' ? ' active' : '' ?>">Policies</a></li>
-            <li><a href="/contact.php" class="nav-link<?= basename($_SERVER['PHP_SELF']) === 'contact.php' ? ' active' : '' ?>">Contact</a></li>
+            <li><a href="/" class="nav-link<?= $currentScript === 'index.php' ? ' active' : '' ?>">Home</a></li>
+            <li><a href="/tickets.php" class="nav-link<?= $currentScript === 'tickets.php' ? ' active' : '' ?>">Tickets</a></li>
+            <li><a href="/gallery.php" class="nav-link<?= $currentScript === 'gallery.php' ? ' active' : '' ?>">Gallery</a></li>
+            <li><a href="/sponsors.php" class="nav-link<?= $currentScript === 'sponsors.php' ? ' active' : '' ?>">Sponsors</a></li>
+            <li><a href="/merch.php" class="nav-link<?= $currentScript === 'merch.php' ? ' active' : '' ?>">Merch</a></li>
+            <li><a href="/policies.php" class="nav-link<?= $currentScript === 'policies.php' ? ' active' : '' ?>">Policies</a></li>
+            <li><a href="/contact.php" class="nav-link<?= $currentScript === 'contact.php' ? ' active' : '' ?>">Contact</a></li>
             <?php if ($user): ?>
             <li class="nav-dropdown">
                 <button class="nav-link nav-user-btn" aria-expanded="false">
