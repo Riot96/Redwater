@@ -3,7 +3,7 @@ vendor/
 node_modules/
 
 # Config with credentials
-includes/config.local.php
+includes/config.php
 
 # Upload directories (user content - not tracked)
 uploads/gallery/*
@@ -33,3 +33,6 @@ error_log
 
 # Environment
 .env
+
+#Completed Setup
+setup.php
