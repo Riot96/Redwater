@@ -11,6 +11,7 @@ initSession();
 // Redirect if already logged in
 if (isLoggedIn()) {
     $user = currentUser();
+    assert($user !== null);
     redirect($user['role'] === 'admin' ? '/admin/' : '/member/');
 }
 
@@ -28,6 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $result   = loginUser($email, $password);
     if ($result['success']) {
         $user = currentUser();
+        assert($user !== null);
         if (!empty($next)) {
             redirect($next);
         }

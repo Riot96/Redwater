@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/functions.php';
 requireAdmin();
 $db   = getDb();
 $user = currentUser();
+assert($user !== null);
 
 $errors = [];
 $tab    = $_GET['tab'] ?? 'profile';

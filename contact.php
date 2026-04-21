@@ -54,6 +54,7 @@ $phone   = getSetting('contact_phone');
 $cEmail  = getSetting('contact_email');
 $address = getSetting('contact_address');
 $mapEmbed= getSetting('contact_map_embed');
+$phoneHref = preg_replace('/\D/', '', $phone) ?? '';
 ?>
 
 <main class="page-wrapper">
@@ -84,7 +85,7 @@ $mapEmbed= getSetting('contact_map_embed');
               </div>
               <div>
                 <div class="contact-info-label">Phone</div>
-                <div class="contact-info-value"><a href="tel:<?= e(preg_replace('/\D/', '', $phone)) ?>"><?= e($phone) ?></a></div>
+                <div class="contact-info-value"><a href="tel:<?= e($phoneHref) ?>"><?= e($phone) ?></a></div>
               </div>
             </div>
           <?php endif; ?>

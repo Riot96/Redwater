@@ -8,6 +8,8 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 $db = getDb();
+$currentUser = currentUser();
+assert($currentUser !== null);
 
 // ── Handle POST actions ───────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -36,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $userId    = (int)($_POST['user_id'] ?? 0);
         $newStatus = (int)($_POST['new_status'] ?? 0);
         // Don't deactivate self
-        if ($userId === currentUser()['id']) {
+        if ($userId === $currentUser['id']) {
             flashMessage('error', 'You cannot deactivate your own account.');
         } else {
             $db->prepare('UPDATE users SET is_active=? WHERE id=?')->execute([$newStatus, $userId]);
@@ -88,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Delete member
     if ($act === 'delete_member') {
         $userId = (int)($_POST['user_id'] ?? 0);
-        if ($userId === currentUser()['id']) {
+        if ($userId === $currentUser['id']) {
             flashMessage('error', 'You cannot delete your own account.');
         } else {
             // Nullify gallery items (preserve content, remove user ref is handled by FK ON DELETE SET NULL)
@@ -230,7 +232,7 @@ include __DIR__ . '/../includes/header.php';
             <td>
               <div class="td-actions">
                 <a href="/admin/members.php?edit=<?= $m['id'] ?>" class="btn btn-outline btn-sm">Edit</a>
-                <?php if ($m['id'] !== currentUser()['id']): ?>
+                <?php if ($m['id'] !== $currentUser['id']): ?>
                   <form method="POST" style="display:inline;">
                     <?= csrfField() ?>
                     <input type="hidden" name="action" value="toggle_active">

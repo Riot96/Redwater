@@ -69,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
         );
         $user = currentUser();
+        assert($user !== null);
         $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $videoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc]);
         flashMessage('success', 'Gallery item added successfully.');
         redirect('/admin/gallery.php');

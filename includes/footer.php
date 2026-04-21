@@ -14,6 +14,7 @@ $socialTwitter   = getSetting('social_twitter');
 $socialYoutube   = getSetting('social_youtube');
 $contactEmail    = getSetting('contact_email');
 $contactPhone    = getSetting('contact_phone');
+$contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
 ?>
 
 <footer class="site-footer">
@@ -65,7 +66,7 @@ $contactPhone    = getSetting('contact_phone');
         <div class="footer-col">
             <h4 class="footer-heading">Contact</h4>
             <ul class="footer-links">
-                <?php if ($contactPhone): ?><li><a href="tel:<?= e(preg_replace('/\D/', '', $contactPhone)) ?>"><?= e($contactPhone) ?></a></li><?php endif; ?>
+                <?php if ($contactPhone): ?><li><a href="tel:<?= e($contactPhoneHref) ?>"><?= e($contactPhone) ?></a></li><?php endif; ?>
                 <?php if ($contactEmail): ?><li><a href="mailto:<?= e($contactEmail) ?>"><?= e($contactEmail) ?></a></li><?php endif; ?>
                 <li><a href="/contact.php">Send a Message</a></li>
             </ul>

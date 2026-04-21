@@ -9,6 +9,7 @@ require_once __DIR__ . '/../includes/functions.php';
 requireMemberOrAdmin();
 
 $user = currentUser();
+assert($user !== null);
 if ($user['role'] === 'admin') {
     redirect('/admin/profile.php');
 }
