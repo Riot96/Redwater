@@ -23,7 +23,7 @@ jobs:
           coverage: none
 
       - name: Download PHPStan
-        run: curl -LsS https://github.com/phpstan/phpstan/releases/latest/download/phpstan.phar -o /tmp/phpstan.phar
+        run: curl -fLsS https://github.com/phpstan/phpstan/releases/download/2.1.50/phpstan.phar -o /tmp/phpstan.phar
 
       - name: Run PHPStan level 9
         run: php /tmp/phpstan.phar analyse --level=9 --no-progress .
