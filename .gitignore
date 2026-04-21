@@ -1,0 +1,35 @@
+# Dependencies
+vendor/
+node_modules/
+
+# Config with credentials
+includes/config.local.php
+
+# Upload directories (user content - not tracked)
+uploads/gallery/*
+uploads/policies/*
+uploads/sponsors/*
+uploads/temp/*
+
+# Keep directory structure
+!uploads/gallery/.gitkeep
+!uploads/policies/.gitkeep
+!uploads/sponsors/.gitkeep
+!uploads/temp/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+error_log
+
+# Environment
+.env
