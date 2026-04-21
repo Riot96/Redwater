@@ -40,6 +40,7 @@ defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 defined('APP_KEY') || define('APP_KEY', 'CHANGE_ME_RANDOM_32_CHAR_STRING_HERE');
+defined('AUTOMATIC_MIGRATION_LOCK_TIMEOUT') || define('AUTOMATIC_MIGRATION_LOCK_TIMEOUT', 10);
 
 // ─── PDO Connection ───────────────────────────────────────────────────────────
 function getDb(): PDO {
@@ -197,7 +198,11 @@ function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $colum
             continue;
         }
 
-        $position = is_numeric($seqInIndex) ? (int)$seqInIndex : (count($uniqueIndexes[$keyName] ?? []) + 1);
+        if (!is_numeric($seqInIndex)) {
+            continue;
+        }
+
+        $position = (int)$seqInIndex;
         $uniqueIndexes[$keyName][$position] = $columnName;
     }
 
@@ -244,9 +249,9 @@ function runAutomaticDbMigrations(PDO $db): void {
     $running = true;
 
     try {
-        $lockStmt = $db->prepare('SELECT GET_LOCK(?, 10)');
+        $lockStmt = $db->prepare('SELECT GET_LOCK(?, ?)');
         assert($lockStmt instanceof PDOStatement);
-        $lockStmt->execute([$lockName]);
+        $lockStmt->execute([$lockName, AUTOMATIC_MIGRATION_LOCK_TIMEOUT]);
         $lockResult = $lockStmt->fetchColumn();
         $lockAcquired = ((string)$lockResult === '1' || $lockResult === 1);
         if (!$lockAcquired) {
