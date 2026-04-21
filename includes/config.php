@@ -91,22 +91,41 @@ function shouldRunAutomaticDbMigrations(): bool {
 }
 
 function automaticMigrationColumnName(string $columnDefinition): string {
-    $parts = preg_split('/\s+/', trim($columnDefinition), 2);
-    $columnName = trim((string)($parts[0] ?? ''), '`');
-    if ($columnName === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $columnName) !== 1) {
+    if (preg_match('/^`?([A-Za-z_][A-Za-z0-9_]*)`?\s+/', trim($columnDefinition), $matches) !== 1) {
         throw new InvalidArgumentException('Invalid migration column definition.');
     }
 
-    return $columnName;
+    return (string)$matches[1];
+}
+
+function automaticMigrationTableName(string $table): string {
+    $allowedTables = [
+        'users',
+        'site_settings',
+        'gallery_items',
+        'sponsor_tiers',
+        'sponsors',
+        'policies',
+        'contact_submissions',
+    ];
+    if (!in_array($table, $allowedTables, true)) {
+        throw new InvalidArgumentException('Invalid migration table name.');
+    }
+
+    return $table;
+}
+
+function validateAutomaticMigrationColumnDefinition(string $columnDefinition): void {
+    if (preg_match('/^`?[A-Za-z_][A-Za-z0-9_]*`?\s+[A-Za-z]/', trim($columnDefinition)) !== 1) {
+        throw new InvalidArgumentException('Invalid migration column definition.');
+    }
 }
 
 /**
  * @return list<string>
  */
 function automaticMigrationTableColumns(PDO $db, string $table): array {
-    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table) !== 1) {
-        throw new InvalidArgumentException('Invalid migration table name.');
-    }
+    $table = automaticMigrationTableName($table);
 
     $stmt = $db->query('SHOW COLUMNS FROM `' . $table . '`');
     assert($stmt instanceof PDOStatement);
@@ -127,6 +146,8 @@ function ensureAutomaticMigrationColumn(PDO $db, string $table, string $columnDe
     /** @var array<string, list<string>> $tableColumns */
     static $tableColumns = [];
 
+    $table = automaticMigrationTableName($table);
+    validateAutomaticMigrationColumnDefinition($columnDefinition);
     $columnName = automaticMigrationColumnName($columnDefinition);
     if (!isset($tableColumns[$table])) {
         $tableColumns[$table] = automaticMigrationTableColumns($db, $table);
@@ -141,6 +162,7 @@ function ensureAutomaticMigrationColumn(PDO $db, string $table, string $columnDe
 }
 
 function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column): bool {
+    $table = automaticMigrationTableName($table);
     if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column) !== 1) {
         throw new InvalidArgumentException('Invalid migration column name.');
     }
@@ -153,7 +175,7 @@ function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $colum
     foreach ($indexes as $index) {
         $columnName = $index['Column_name'] ?? null;
         $nonUnique = $index['Non_unique'] ?? null;
-        if ($columnName === $column && intValue($nonUnique, 1) === 0) {
+        if ($columnName === $column && is_numeric($nonUnique) && (int)$nonUnique === 0) {
             return true;
         }
     }
@@ -161,12 +183,17 @@ function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $colum
     return false;
 }
 
-function ensureAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column): void {
+function ensureAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column, string $indexName): void {
+    $table = automaticMigrationTableName($table);
     if (hasAutomaticMigrationUniqueColumn($db, $table, $column)) {
         return;
     }
 
-    $db->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `' . $table . '_' . $column . '_unique` (`' . $column . '`)');
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $indexName) !== 1 || strlen($indexName) > 64) {
+        throw new InvalidArgumentException('Invalid migration index name.');
+    }
+
+    $db->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `' . $indexName . '` (`' . $column . '`)');
 }
 
 function runAutomaticDbMigrations(PDO $db): void {
@@ -350,8 +377,8 @@ SQL,
             }
         }
 
-        ensureAutomaticMigrationUniqueColumn($db, 'users', 'email');
-        ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key');
+        ensureAutomaticMigrationUniqueColumn($db, 'users', 'email', 'users_email_unique');
+        ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key', 'site_settings_key_unique');
 
         $db->exec(
             "INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
@@ -364,14 +391,14 @@ SQL,
             ('contact_map_embed', ''),
             ('home_hero_heading', 'Experience the Fear'),
             ('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
-            ('home_about_text', 'RedWater Entertainment is Highlands County&rsquo;s premier entertainment organization. We are best known for our spine-chilling &ldquo;Red Water Haunted Homestead&rdquo; each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
+            ('home_about_text', 'RedWater Entertainment is Highlands County''s premier entertainment organization. We are best known for our spine-chilling \"Red Water Haunted Homestead\" each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
             ('social_facebook', ''),
             ('social_instagram', ''),
             ('social_twitter', ''),
             ('social_youtube', '')"
         );
 
-        $db->exec("INSERT IGNORE INTO policies (id, content_html, image_path) VALUES (1, '<p>Policies content coming soon. Please check back later.</p>', NULL)");
+        $db->exec("INSERT INTO policies (id, content_html, image_path) VALUES (1, '<p>Policies content coming soon. Please check back later.</p>', NULL) ON DUPLICATE KEY UPDATE id = id");
     } finally {
         $running = false;
     }
