@@ -140,6 +140,35 @@ function ensureAutomaticMigrationColumn(PDO $db, string $table, string $columnDe
     $tableColumns[$table][] = $columnName;
 }
 
+function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column): bool {
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column) !== 1) {
+        throw new InvalidArgumentException('Invalid migration column name.');
+    }
+
+    $stmt = $db->query('SHOW INDEX FROM `' . $table . '`');
+    assert($stmt instanceof PDOStatement);
+    /** @var list<array<string, mixed>> $indexes */
+    $indexes = $stmt->fetchAll();
+
+    foreach ($indexes as $index) {
+        $columnName = $index['Column_name'] ?? null;
+        $nonUnique = $index['Non_unique'] ?? null;
+        if ($columnName === $column && intValue($nonUnique, 1) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function ensureAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column): void {
+    if (hasAutomaticMigrationUniqueColumn($db, $table, $column)) {
+        return;
+    }
+
+    $db->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `' . $table . '_' . $column . '_unique` (`' . $column . '`)');
+}
+
 function runAutomaticDbMigrations(PDO $db): void {
     static $running = false;
 
@@ -320,6 +349,9 @@ SQL,
                 ensureAutomaticMigrationColumn($db, $table, $definition);
             }
         }
+
+        ensureAutomaticMigrationUniqueColumn($db, 'users', 'email');
+        ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key');
 
         $db->exec(
             "INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
