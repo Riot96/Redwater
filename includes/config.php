@@ -40,11 +40,14 @@ defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 defined('APP_KEY') || define('APP_KEY', 'CHANGE_ME_RANDOM_32_CHAR_STRING_HERE');
+// Advisory lock wait time in seconds for automatic schema migrations.
+defined('AUTOMATIC_MIGRATION_LOCK_TIMEOUT') || define('AUTOMATIC_MIGRATION_LOCK_TIMEOUT', 10);
 
 // ─── PDO Connection ───────────────────────────────────────────────────────────
 function getDb(): PDO {
     /** @var PDO|null $pdo */
     static $pdo = null;
+    static $migrationsRan = false;
     if ($pdo === null) {
         $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
         $options = [
@@ -60,7 +63,406 @@ function getDb(): PDO {
             die('A database error occurred. Please try again later.');
         }
     }
+    if (!$migrationsRan && shouldRunAutomaticDbMigrations()) {
+        runAutomaticDbMigrations($pdo);
+        $migrationsRan = true;
+    }
     return $pdo;
+}
+
+// ─── Automatic Database Migrations ─────────────────────────────────────────────
+function shouldRunAutomaticDbMigrations(): bool {
+    if (defined('SETUP_MODE')) {
+        return true;
+    }
+
+    if (defined('REDWATER_ALLOW_DB_MIGRATIONS') && constant('REDWATER_ALLOW_DB_MIGRATIONS')) {
+        return true;
+    }
+
+    if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg') {
+        return true;
+    }
+
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        return false;
+    }
+
+    $user = $_SESSION['user'] ?? null;
+    return is_array($user) && (($user['role'] ?? null) === 'admin');
+}
+
+function automaticMigrationColumnName(string $columnDefinition): string {
+    if (preg_match('/^`?([A-Za-z_][A-Za-z0-9_]*)`?\s+/', trim($columnDefinition), $matches) !== 1) {
+        throw new InvalidArgumentException('Invalid migration column definition.');
+    }
+
+    return (string)$matches[1];
+}
+
+function automaticMigrationTableName(string $table): string {
+    $allowedTables = [
+        'users',
+        'site_settings',
+        'gallery_items',
+        'sponsor_tiers',
+        'sponsors',
+        'policies',
+        'contact_submissions',
+    ];
+    if (!in_array($table, $allowedTables, true)) {
+        throw new InvalidArgumentException('Invalid migration table name.');
+    }
+
+    return $table;
+}
+
+function validateAutomaticMigrationColumnDefinition(string $columnDefinition): void {
+    if (preg_match('/^`?[A-Za-z_][A-Za-z0-9_]*`?\s+[A-Za-z]/', trim($columnDefinition)) !== 1) {
+        throw new InvalidArgumentException('Invalid migration column definition.');
+    }
+}
+
+/**
+ * @return list<string>
+ */
+function automaticMigrationTableColumns(PDO $db, string $table): array {
+    $table = automaticMigrationTableName($table);
+
+    $stmt = $db->query('SHOW COLUMNS FROM `' . $table . '`');
+    assert($stmt instanceof PDOStatement);
+    $columns = [];
+    /** @var list<array<string, mixed>> $rows */
+    $rows = $stmt->fetchAll();
+    foreach ($rows as $row) {
+        $field = $row['Field'] ?? null;
+        if (is_string($field) && $field !== '') {
+            $columns[] = $field;
+        }
+    }
+
+    return $columns;
+}
+
+function ensureAutomaticMigrationColumn(PDO $db, string $table, string $columnDefinition): void {
+    /** @var array<string, list<string>> $tableColumns */
+    static $tableColumns = [];
+
+    $table = automaticMigrationTableName($table);
+    validateAutomaticMigrationColumnDefinition($columnDefinition);
+    $columnName = automaticMigrationColumnName($columnDefinition);
+    if (!isset($tableColumns[$table])) {
+        $tableColumns[$table] = automaticMigrationTableColumns($db, $table);
+    }
+
+    if (in_array($columnName, $tableColumns[$table], true)) {
+        return;
+    }
+
+    try {
+        $db->exec('ALTER TABLE `' . $table . '` ADD COLUMN ' . $columnDefinition);
+    } catch (PDOException $e) {
+        $errorCode = $e->errorInfo[1] ?? null;
+        if ($errorCode !== 1060) {
+            throw $e;
+        }
+    }
+
+    $tableColumns[$table][] = $columnName;
+}
+
+function hasAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column): bool {
+    $table = automaticMigrationTableName($table);
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column) !== 1) {
+        throw new InvalidArgumentException('Invalid migration column name.');
+    }
+
+    $stmt = $db->query('SHOW INDEX FROM `' . $table . '`');
+    assert($stmt instanceof PDOStatement);
+    /** @var list<array<string, mixed>> $indexes */
+    $indexes = $stmt->fetchAll();
+
+    /** @var array<string, array<int, string>> $uniqueIndexes */
+    $uniqueIndexes = [];
+
+    foreach ($indexes as $index) {
+        $keyName = $index['Key_name'] ?? null;
+        $columnName = $index['Column_name'] ?? null;
+        $nonUnique = $index['Non_unique'] ?? null;
+        $seqInIndex = $index['Seq_in_index'] ?? null;
+
+        if (!is_string($keyName) || $keyName === '' || !is_string($columnName)) {
+            continue;
+        }
+
+        if (!is_numeric($nonUnique) || (int)$nonUnique !== 0) {
+            continue;
+        }
+
+        if (!is_numeric($seqInIndex)) {
+            continue;
+        }
+
+        $position = (int)$seqInIndex;
+        $uniqueIndexes[$keyName][$position] = $columnName;
+    }
+
+    foreach ($uniqueIndexes as $indexColumns) {
+        ksort($indexColumns);
+        $indexColumns = array_values($indexColumns);
+        if (count($indexColumns) === 1 && $indexColumns[0] === $column) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function ensureAutomaticMigrationUniqueColumn(PDO $db, string $table, string $column, string $indexName): void {
+    $table = automaticMigrationTableName($table);
+    if (hasAutomaticMigrationUniqueColumn($db, $table, $column)) {
+        return;
+    }
+
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $indexName) !== 1 || strlen($indexName) > 64) {
+        throw new InvalidArgumentException('Invalid migration index name.');
+    }
+
+    try {
+        $db->exec('ALTER TABLE `' . $table . '` ADD UNIQUE KEY `' . $indexName . '` (`' . $column . '`)');
+    } catch (PDOException $e) {
+        $errorCode = $e->errorInfo[1] ?? null;
+        if ($errorCode !== 1061) {
+            throw $e;
+        }
+    }
+}
+
+function runAutomaticDbMigrations(PDO $db): void {
+    static $running = false;
+    $lockName = 'redwater_auto_migrations';
+    $lockAcquired = false;
+
+    if ($running) {
+        return;
+    }
+
+    $running = true;
+
+    try {
+        $lockStmt = $db->prepare('SELECT GET_LOCK(?, ?)');
+        assert($lockStmt instanceof PDOStatement);
+        $lockStmt->execute([$lockName, AUTOMATIC_MIGRATION_LOCK_TIMEOUT]);
+        $lockResult = $lockStmt->fetchColumn();
+        $lockAcquired = is_numeric($lockResult) && (int)$lockResult === 1;
+        if (!$lockAcquired) {
+            throw new RuntimeException('Failed to acquire automatic migration lock after ' . AUTOMATIC_MIGRATION_LOCK_TIMEOUT . ' seconds. Another migration may be in progress.');
+        }
+
+        $createTableStatements = [
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    display_name VARCHAR(100) NOT NULL,
+    role ENUM('admin', 'member') NOT NULL DEFAULT 'member',
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    bypass_approval TINYINT(1) NOT NULL DEFAULT 0,
+    reset_token VARCHAR(64) NULL DEFAULT NULL,
+    reset_token_expires DATETIME NULL DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS site_settings (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    setting_key VARCHAR(100) UNIQUE NOT NULL,
+    setting_value LONGTEXT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS gallery_items (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NULL,
+    type ENUM('photo', 'video') NOT NULL DEFAULT 'photo',
+    file_path VARCHAR(500) NULL,
+    video_url VARCHAR(500) NULL,
+    video_type ENUM('upload', 'embed') NOT NULL DEFAULT 'upload',
+    title VARCHAR(255) NULL,
+    description TEXT NULL,
+    tags VARCHAR(500) NULL,
+    alt_text VARCHAR(500) NULL,
+    seo_title VARCHAR(255) NULL,
+    seo_description TEXT NULL,
+    is_approved TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS sponsor_tiers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    show_name TINYINT(1) NOT NULL DEFAULT 1,
+    show_description TINYINT(1) NOT NULL DEFAULT 1,
+    show_logo TINYINT(1) NOT NULL DEFAULT 1,
+    show_link TINYINT(1) NOT NULL DEFAULT 1,
+    cards_per_row INT NOT NULL DEFAULT 3,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS sponsors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tier_id INT NOT NULL,
+    name VARCHAR(255) NULL,
+    description TEXT NULL,
+    logo_url VARCHAR(500) NULL,
+    link_url VARCHAR(500) NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tier_id) REFERENCES sponsor_tiers(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS policies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    content_html LONGTEXT NULL,
+    image_path VARCHAR(500) NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+            <<<'SQL'
+CREATE TABLE IF NOT EXISTS contact_submissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    subject VARCHAR(255) NULL,
+    message TEXT NOT NULL,
+    is_read TINYINT(1) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+SQL,
+        ];
+
+        foreach ($createTableStatements as $statement) {
+            $db->exec($statement);
+        }
+
+        $columnDefinitions = [
+            'users' => [
+                'email VARCHAR(255) NOT NULL',
+                'password_hash VARCHAR(255) NOT NULL',
+                'display_name VARCHAR(100) NOT NULL',
+                "role ENUM('admin', 'member') NOT NULL DEFAULT 'member'",
+                'is_active TINYINT(1) NOT NULL DEFAULT 1',
+                'bypass_approval TINYINT(1) NOT NULL DEFAULT 0',
+                'reset_token VARCHAR(64) NULL DEFAULT NULL',
+                'reset_token_expires DATETIME NULL DEFAULT NULL',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+            ],
+            'site_settings' => [
+                'setting_key VARCHAR(100) NOT NULL',
+                'setting_value LONGTEXT NULL',
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+            ],
+            'gallery_items' => [
+                'user_id INT NULL',
+                "type ENUM('photo', 'video') NOT NULL DEFAULT 'photo'",
+                'file_path VARCHAR(500) NULL',
+                'video_url VARCHAR(500) NULL',
+                "video_type ENUM('upload', 'embed') NOT NULL DEFAULT 'upload'",
+                'title VARCHAR(255) NULL',
+                'description TEXT NULL',
+                'tags VARCHAR(500) NULL',
+                'alt_text VARCHAR(500) NULL',
+                'seo_title VARCHAR(255) NULL',
+                'seo_description TEXT NULL',
+                'is_approved TINYINT(1) NOT NULL DEFAULT 0',
+                'sort_order INT NOT NULL DEFAULT 0',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+            ],
+            'sponsor_tiers' => [
+                'name VARCHAR(100) NOT NULL',
+                'sort_order INT NOT NULL DEFAULT 0',
+                'show_name TINYINT(1) NOT NULL DEFAULT 1',
+                'show_description TINYINT(1) NOT NULL DEFAULT 1',
+                'show_logo TINYINT(1) NOT NULL DEFAULT 1',
+                'show_link TINYINT(1) NOT NULL DEFAULT 1',
+                'cards_per_row INT NOT NULL DEFAULT 3',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ],
+            'sponsors' => [
+                'tier_id INT NOT NULL',
+                'name VARCHAR(255) NULL',
+                'description TEXT NULL',
+                'logo_url VARCHAR(500) NULL',
+                'link_url VARCHAR(500) NULL',
+                'sort_order INT NOT NULL DEFAULT 0',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ],
+            'policies' => [
+                'content_html LONGTEXT NULL',
+                'image_path VARCHAR(500) NULL',
+                'updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+            ],
+            'contact_submissions' => [
+                'name VARCHAR(255) NOT NULL',
+                'email VARCHAR(255) NOT NULL',
+                'subject VARCHAR(255) NULL',
+                'message TEXT NOT NULL',
+                'is_read TINYINT(1) NOT NULL DEFAULT 0',
+                'created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            ],
+        ];
+
+        foreach ($columnDefinitions as $table => $definitions) {
+            foreach ($definitions as $definition) {
+                ensureAutomaticMigrationColumn($db, $table, $definition);
+            }
+        }
+
+        ensureAutomaticMigrationUniqueColumn($db, 'users', 'email', 'users_email_unique');
+        ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key', 'site_settings_key_unique');
+
+        $db->exec(
+            <<<'SQL'
+INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
+('site_name', 'RedWater Entertainment'),
+('site_tagline', 'Where Fear Meets Wonder'),
+('tickets_embed_code', ''),
+('contact_phone', ''),
+('contact_email', ''),
+('contact_address', ''),
+('contact_map_embed', ''),
+('home_hero_heading', 'Experience the Fear'),
+('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
+('home_about_text', 'RedWater Entertainment is Highlands County''s premier entertainment organization. We are best known for our spine-chilling "Red Water Haunted Homestead" each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
+('social_facebook', ''),
+('social_instagram', ''),
+('social_twitter', ''),
+('social_youtube', '')
+SQL
+        );
+
+        $db->exec("INSERT INTO policies (id, content_html, image_path) VALUES (1, '<p>Policies content coming soon. Please check back later.</p>', NULL) ON DUPLICATE KEY UPDATE id = id");
+    } finally {
+        if ($lockAcquired) {
+            $releaseStmt = $db->prepare('SELECT RELEASE_LOCK(?)');
+            if ($releaseStmt instanceof PDOStatement) {
+                $releaseStmt->execute([$lockName]);
+            }
+        }
+        $running = false;
+    }
 }
 
 // ─── Helper: Get site setting ─────────────────────────────────────────────────
