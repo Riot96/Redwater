@@ -40,6 +40,7 @@ defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);
 
 // ─── Security ─────────────────────────────────────────────────────────────────
 defined('APP_KEY') || define('APP_KEY', 'CHANGE_ME_RANDOM_32_CHAR_STRING_HERE');
+// Advisory lock wait time in seconds for automatic schema migrations.
 defined('AUTOMATIC_MIGRATION_LOCK_TIMEOUT') || define('AUTOMATIC_MIGRATION_LOCK_TIMEOUT', 10);
 
 // ─── PDO Connection ───────────────────────────────────────────────────────────
