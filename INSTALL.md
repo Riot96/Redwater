@@ -21,11 +21,10 @@ GRANT ALL PRIVILEGES ON redwater.* TO 'redwater_user'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-Then import the schema:
-
-```bash
-mysql -u redwater_user -p redwater < db/schema.sql
-```
+RedWater now creates and updates its own tables automatically the first time a
+trusted backend entry point touches the database, so you do **not** need to
+manually import `db/schema.sql` during normal setup. Keep `db/schema.sql` as a
+reference snapshot or manual recovery fallback.
 
 ---
 
@@ -132,11 +131,35 @@ For reliable email delivery, consider configuring your server's MTA (Postfix, et
 2. Enter the `APP_KEY` from your config file.
 3. Fill in the admin email, display name, and password.
 4. Click **Create Admin Account**.
-5. **Delete `setup.php` immediately after use:**
+5. The setup page will automatically create/update the schema before it checks
+   for existing admins.
+6. **Delete `setup.php` immediately after use:**
 
    ```bash
    rm setup.php
    ```
+
+---
+
+## Automatic Database Migrations
+
+Whenever `getDb()` opens a connection from a trusted backend context, RedWater
+automatically:
+
+- creates missing core tables with `CREATE TABLE IF NOT EXISTS`
+- adds missing columns with guarded `ALTER TABLE ... ADD COLUMN`
+- seeds default site settings and the default policies record with idempotent
+  `INSERT IGNORE` statements
+
+Trusted contexts are:
+
+- authenticated admin sessions
+- `setup.php`
+- CLI/backend scripts
+- custom trusted scripts that opt in by defining
+  `REDWATER_ALLOW_DB_MIGRATIONS` before loading `includes/config.php`
+
+Public/frontend visitors do not run migrations.
 
 ---
 
