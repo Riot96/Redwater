@@ -13,6 +13,9 @@ function flashMessage(string $type, string $message): void {
     $_SESSION['flash'][] = ['type' => $type, 'message' => $message];
 }
 
+/**
+ * @return list<array{type: string, message: string}>
+ */
 function getFlashMessages(): array {
     initSession();
     $messages = $_SESSION['flash'] ?? [];
@@ -30,10 +33,16 @@ function renderFlashMessages(): string {
 }
 
 // ─── File Upload Helpers ───────────────────────────────────────────────────────
+/**
+ * @param array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int} $file
+ * @param list<string> $allowedMimes
+ * @return array{success: true, path: string, filename: string}|array{success: false, error: string}
+ */
 function handleFileUpload(array $file, string $destDir, array $allowedMimes, int $maxSize = 0): array {
     if ($maxSize <= 0) $maxSize = defined('MAX_UPLOAD_SIZE') ? MAX_UPLOAD_SIZE : 50 * 1024 * 1024;
 
-    if ($file['error'] !== UPLOAD_ERR_OK) {
+    $error = isset($file['error']) ? (int)$file['error'] : UPLOAD_ERR_NO_FILE;
+    if ($error !== UPLOAD_ERR_OK) {
         $errors = [
             UPLOAD_ERR_INI_SIZE   => 'File exceeds server upload limit.',
             UPLOAD_ERR_FORM_SIZE  => 'File exceeds form upload limit.',
@@ -43,22 +52,25 @@ function handleFileUpload(array $file, string $destDir, array $allowedMimes, int
             UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
             UPLOAD_ERR_EXTENSION  => 'Upload blocked by server extension.',
         ];
-        return ['success' => false, 'error' => $errors[$file['error']] ?? 'Unknown upload error.'];
+        return ['success' => false, 'error' => $errors[$error] ?? 'Unknown upload error.'];
     }
 
-    if ($file['size'] > $maxSize) {
+    $size = isset($file['size']) ? (int)$file['size'] : 0;
+    if ($size > $maxSize) {
         return ['success' => false, 'error' => 'File is too large. Maximum size is ' . formatBytes($maxSize) . '.'];
     }
 
     // Validate MIME type using finfo
     $finfo = new finfo(FILEINFO_MIME_TYPE);
-    $mime = $finfo->file($file['tmp_name']);
+    $tmpName = isset($file['tmp_name']) ? (string)$file['tmp_name'] : '';
+    $mime = $finfo->file($tmpName);
     if (!in_array($mime, $allowedMimes, true)) {
         return ['success' => false, 'error' => 'File type not allowed. Allowed types: ' . implode(', ', $allowedMimes)];
     }
 
     // Generate safe filename
-    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $name = isset($file['name']) ? (string)$file['name'] : '';
+    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
     $filename = uniqid('rw_', true) . '.' . $ext;
     $destPath = rtrim($destDir, '/') . '/' . $filename;
 
@@ -66,7 +78,7 @@ function handleFileUpload(array $file, string $destDir, array $allowedMimes, int
         mkdir($destDir, 0755, true);
     }
 
-    if (!move_uploaded_file($file['tmp_name'], $destPath)) {
+    if (!move_uploaded_file($tmpName, $destPath)) {
         return ['success' => false, 'error' => 'Failed to save uploaded file.'];
     }
 
@@ -76,7 +88,7 @@ function handleFileUpload(array $file, string $destDir, array $allowedMimes, int
 function formatBytes(int $bytes, int $precision = 2): string {
     $units = ['B', 'KB', 'MB', 'GB'];
     $bytes = max($bytes, 0);
-    $pow   = floor(($bytes ? log($bytes) : 0) / log(1024));
+    $pow   = (int) floor(($bytes ? log($bytes) : 0) / log(1024));
     $pow   = min($pow, count($units) - 1);
     $bytes /= pow(1024, $pow);
     return round($bytes, $precision) . ' ' . $units[$pow];
@@ -89,6 +101,9 @@ function deleteUploadedFile(string $path): void {
 }
 
 // ─── Gallery Helpers ──────────────────────────────────────────────────────────
+/**
+ * @return list<array<string, mixed>>
+ */
 function getGalleryItems(bool $approvedOnly = true, ?int $userId = null): array {
     $db = getDb();
     $sql = 'SELECT g.*, u.display_name AS uploader_name
@@ -107,10 +122,16 @@ function getGalleryItems(bool $approvedOnly = true, ?int $userId = null): array 
 
     $sql .= ' ORDER BY g.sort_order ASC, g.created_at DESC';
     $stmt = $db->prepare($sql);
+    assert($stmt instanceof PDOStatement);
     $stmt->execute($params);
-    return $stmt->fetchAll();
+    /** @var list<array<string, mixed>> $items */
+    $items = array_values($stmt->fetchAll());
+    return $items;
 }
 
+/**
+ * @return array<string, mixed>|null
+ */
 function getGalleryItem(int $id): ?array {
     $db = getDb();
     $stmt = $db->prepare(
@@ -119,6 +140,7 @@ function getGalleryItem(int $id): ?array {
          LEFT JOIN users u ON g.user_id = u.id
          WHERE g.id = ?'
     );
+    assert($stmt instanceof PDOStatement);
     $stmt->execute([$id]);
     return $stmt->fetch() ?: null;
 }
@@ -146,27 +168,28 @@ function getVideoEmbedUrl(string $url): string {
         return '';
     }
 
-    $scheme = strtolower($parts['scheme']);
+    $scheme = strtolower((string) $parts['scheme']);
     if (!in_array($scheme, ['http', 'https'], true)) {
         return '';
     }
 
-    $host = strtolower($parts['host']);
+    $host = strtolower((string) $parts['host']);
 
     // YouTube
     if (in_array($host, ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'], true)) {
         $videoId = '';
 
         if ($host === 'youtu.be') {
-            $path = trim($parts['path'] ?? '', '/');
+            $path = trim((string) ($parts['path'] ?? ''), '/');
             if (preg_match('/^[a-zA-Z0-9_-]+$/', $path)) {
                 $videoId = $path;
             }
         } else {
             $query = [];
             parse_str($parts['query'] ?? '', $query);
-            if (!empty($query['v']) && preg_match('/^[a-zA-Z0-9_-]+$/', $query['v'])) {
-                $videoId = $query['v'];
+            $videoParam = $query['v'] ?? '';
+            if (is_string($videoParam) && preg_match('/^[a-zA-Z0-9_-]+$/', $videoParam)) {
+                $videoId = $videoParam;
             }
         }
 
@@ -179,7 +202,7 @@ function getVideoEmbedUrl(string $url): string {
 
     // Vimeo
     if (in_array($host, ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'], true)) {
-        $path = trim($parts['path'] ?? '', '/');
+        $path = trim((string) ($parts['path'] ?? ''), '/');
         if (preg_match('/(?:video\/)?(\d+)/', $path, $m)) {
             return 'https://player.vimeo.com/video/' . $m[1];
         }
@@ -191,17 +214,25 @@ function getVideoEmbedUrl(string $url): string {
 }
 
 // ─── Sponsor Helpers ──────────────────────────────────────────────────────────
+/**
+ * @return list<array<string, mixed>>
+ */
 function getSponsorTiers(): array {
     $db = getDb();
-    $tiers = $db->query(
+    $stmt = $db->query(
         'SELECT * FROM sponsor_tiers ORDER BY sort_order ASC'
-    )->fetchAll();
+    );
+    assert($stmt instanceof PDOStatement);
+    $tiers = $stmt->fetchAll();
 
     foreach ($tiers as &$tier) {
         $stmt = $db->prepare('SELECT * FROM sponsors WHERE tier_id = ? ORDER BY sort_order ASC');
+        assert($stmt instanceof PDOStatement);
         $stmt->execute([$tier['id']]);
         $tier['sponsors'] = $stmt->fetchAll();
     }
+    /** @var list<array<string, mixed>> $tiers */
+    $tiers = array_values($tiers);
     return $tiers;
 }
 
@@ -217,6 +248,9 @@ function redirectWithMessage(string $url, string $type, string $message): void {
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
+/**
+ * @return array{total: int, per_page: int, current_page: int, total_pages: int, offset: int}
+ */
 function paginate(int $total, int $perPage, int $currentPage): array {
     $totalPages = max(1, (int)ceil($total / $perPage));
     $currentPage = max(1, min($currentPage, $totalPages));
@@ -231,10 +265,16 @@ function paginate(int $total, int $perPage, int $currentPage): array {
 }
 
 // ─── Tags Helper ─────────────────────────────────────────────────────────────
+/**
+ * @return list<string>
+ */
 function parseTags(string $tags): array {
-    return array_filter(array_map('trim', explode(',', $tags)));
+    return array_values(array_filter(array_map('trim', explode(',', $tags)), static fn (string $tag): bool => $tag !== ''));
 }
 
+/**
+ * @param list<string> $tags
+ */
 function renderTags(array $tags): string {
     $html = '';
     foreach ($tags as $tag) {

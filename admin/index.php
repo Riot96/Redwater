@@ -12,15 +12,29 @@ $pageTitle = 'Admin Dashboard';
 $db = getDb();
 
 // Stats
-$totalMembers    = (int)$db->query("SELECT COUNT(*) FROM users WHERE role='member'")->fetchColumn();
-$activeMembers   = (int)$db->query("SELECT COUNT(*) FROM users WHERE role='member' AND is_active=1")->fetchColumn();
-$pendingItems    = (int)$db->query("SELECT COUNT(*) FROM gallery_items WHERE is_approved=0")->fetchColumn();
-$totalGallery    = (int)$db->query("SELECT COUNT(*) FROM gallery_items WHERE is_approved=1")->fetchColumn();
-$totalSponsors   = (int)$db->query("SELECT COUNT(*) FROM sponsors")->fetchColumn();
-$unreadContacts  = (int)$db->query("SELECT COUNT(*) FROM contact_submissions WHERE is_read=0")->fetchColumn();
+$totalMembersStmt = $db->query("SELECT COUNT(*) FROM users WHERE role='member'");
+assert($totalMembersStmt instanceof PDOStatement);
+$totalMembers    = (int)$totalMembersStmt->fetchColumn();
+$activeMembersStmt = $db->query("SELECT COUNT(*) FROM users WHERE role='member' AND is_active=1");
+assert($activeMembersStmt instanceof PDOStatement);
+$activeMembers   = (int)$activeMembersStmt->fetchColumn();
+$pendingItemsStmt = $db->query("SELECT COUNT(*) FROM gallery_items WHERE is_approved=0");
+assert($pendingItemsStmt instanceof PDOStatement);
+$pendingItems    = (int)$pendingItemsStmt->fetchColumn();
+$totalGalleryStmt = $db->query("SELECT COUNT(*) FROM gallery_items WHERE is_approved=1");
+assert($totalGalleryStmt instanceof PDOStatement);
+$totalGallery    = (int)$totalGalleryStmt->fetchColumn();
+$totalSponsorsStmt = $db->query("SELECT COUNT(*) FROM sponsors");
+assert($totalSponsorsStmt instanceof PDOStatement);
+$totalSponsors   = (int)$totalSponsorsStmt->fetchColumn();
+$unreadContactsStmt = $db->query("SELECT COUNT(*) FROM contact_submissions WHERE is_read=0");
+assert($unreadContactsStmt instanceof PDOStatement);
+$unreadContacts  = (int)$unreadContactsStmt->fetchColumn();
 
 // Recent contact submissions
-$recentContacts = $db->query("SELECT * FROM contact_submissions ORDER BY created_at DESC LIMIT 5")->fetchAll();
+$recentContactsStmt = $db->query("SELECT * FROM contact_submissions ORDER BY created_at DESC LIMIT 5");
+assert($recentContactsStmt instanceof PDOStatement);
+$recentContacts = $recentContactsStmt->fetchAll();
 
 include __DIR__ . '/../includes/header.php';
 ?>

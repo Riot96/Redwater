@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flashMessage('error', 'Upload failed: ' . $upload['error']);
                 redirect('/admin/gallery.php');
             }
+            assert(isset($upload['filename']));
             $filePath = 'uploads/gallery/' . $upload['filename'];
         }
 
@@ -128,14 +129,18 @@ if ($action === 'edit' && $itemId) {
 // Load all items (paginated)
 $perPage     = 20;
 $page        = max(1, (int)($_GET['page'] ?? 1));
-$totalItems  = (int)$db->query('SELECT COUNT(*) FROM gallery_items')->fetchColumn();
+$totalItemsStmt = $db->query('SELECT COUNT(*) FROM gallery_items');
+assert($totalItemsStmt instanceof PDOStatement);
+$totalItems  = (int)$totalItemsStmt->fetchColumn();
 $pagination  = paginate($totalItems, $perPage, $page);
-$items       = $db->query(
+$itemsStmt   = $db->query(
     "SELECT g.*, u.display_name AS uploader_name
      FROM gallery_items g LEFT JOIN users u ON g.user_id = u.id
-     ORDER BY g.is_approved ASC, g.created_at DESC
-     LIMIT {$perPage} OFFSET {$pagination['offset']}"
-)->fetchAll();
+      ORDER BY g.is_approved ASC, g.created_at DESC
+      LIMIT {$perPage} OFFSET {$pagination['offset']}"
+);
+assert($itemsStmt instanceof PDOStatement);
+$items = $itemsStmt->fetchAll();
 
 $pageTitle = 'Manage Gallery';
 include __DIR__ . '/../includes/header.php';

@@ -20,7 +20,9 @@ initSession();
 $db = getDb();
 
 // Check if admin already exists
-$adminCount = (int)$db->query("SELECT COUNT(*) FROM users WHERE role='admin'")->fetchColumn();
+$adminCountStmt = $db->query("SELECT COUNT(*) FROM users WHERE role='admin'");
+assert($adminCountStmt instanceof PDOStatement);
+$adminCount = (int)$adminCountStmt->fetchColumn();
 
 $error   = '';
 $success = false;

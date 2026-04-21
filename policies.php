@@ -12,7 +12,9 @@ $seoDescription = 'RedWater Entertainment event policies, rules, and guidelines 
 include __DIR__ . '/includes/header.php';
 
 $db     = getDb();
-$policy = $db->query('SELECT * FROM policies WHERE id = 1')->fetch();
+$policyStmt = $db->query('SELECT * FROM policies WHERE id = 1');
+assert($policyStmt instanceof PDOStatement);
+$policy = $policyStmt->fetch();
 $contentHtml = $policy['content_html'] ?? '<p>Policies coming soon.</p>';
 $imagePath   = $policy['image_path'] ?? null;
 $hasPolicyImage = !empty($imagePath) && file_exists($imagePath);

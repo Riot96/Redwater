@@ -40,7 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Load messages
-$messages = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC')->fetchAll();
+$messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
+assert($messagesStmt instanceof PDOStatement);
+$messages = $messagesStmt->fetchAll();
 
 $pageTitle = 'Contact Settings';
 include __DIR__ . '/../includes/header.php';

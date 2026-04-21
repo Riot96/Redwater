@@ -100,13 +100,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ── Load members ──────────────────────────────────────────────────────────────
-$members = $db->query(
+$membersStmt = $db->query(
     "SELECT u.*,
             (SELECT COUNT(*) FROM gallery_items g WHERE g.user_id = u.id AND g.is_approved=1) AS approved_items,
             (SELECT COUNT(*) FROM gallery_items g WHERE g.user_id = u.id AND g.is_approved=0) AS pending_items
      FROM users u
-     ORDER BY u.role ASC, u.display_name ASC"
-)->fetchAll();
+      ORDER BY u.role ASC, u.display_name ASC"
+);
+assert($membersStmt instanceof PDOStatement);
+$members = $membersStmt->fetchAll();
 
 $editUserId = (int)($_GET['edit'] ?? 0);
 $editUser   = null;

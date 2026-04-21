@@ -9,7 +9,9 @@ require_once __DIR__ . '/../includes/functions.php';
 requireAdmin();
 
 $db     = getDb();
-$policy = $db->query('SELECT * FROM policies WHERE id = 1')->fetch();
+$policyStmt = $db->query('SELECT * FROM policies WHERE id = 1');
+assert($policyStmt instanceof PDOStatement);
+$policy = $policyStmt->fetch();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();

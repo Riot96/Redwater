@@ -49,6 +49,9 @@ function verifyCsrf(): void {
 }
 
 // ─── Auth Helpers ─────────────────────────────────────────────────────────────
+/**
+ * @return array{id: int, email: string, display_name: string, role: string, is_active: bool, bypass_approval: bool}|null
+ */
 function currentUser(): ?array {
     initSession();
     return $_SESSION['user'] ?? null;
@@ -103,6 +106,9 @@ function requireMemberOrAdmin(): void {
 }
 
 // ─── Login / Logout ───────────────────────────────────────────────────────────
+/**
+ * @return array{success: true}|array{success: false, error: string}
+ */
 function loginUser(string $email, string $password): array {
     $db = getDb();
     $stmt = $db->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
@@ -135,15 +141,21 @@ function logoutUser(): void {
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
         $params = session_get_cookie_params();
-        setcookie(session_name(), '', time() - 42000,
-            $params['path'], $params['domain'],
-            $params['secure'], $params['httponly']
-        );
+        $sessionName = session_name();
+        if (is_string($sessionName)) {
+            setcookie($sessionName, '', time() - 42000,
+                $params['path'], $params['domain'],
+                $params['secure'], $params['httponly']
+            );
+        }
     }
     session_destroy();
 }
 
 // ─── Registration ─────────────────────────────────────────────────────────────
+/**
+ * @return array{success: true, id: int}|array{success: false, error: string}
+ */
 function registerUser(string $email, string $password, string $displayName, string $role = 'member', bool $bypassApproval = false): array {
     $db = getDb();
     $email = strtolower(trim($email));
@@ -199,6 +211,9 @@ function generatePasswordResetToken(string $email): ?string {
     return $token;
 }
 
+/**
+ * @return array{id: int, email: string, display_name: string}|null
+ */
 function validatePasswordResetToken(string $token): ?array {
     if (empty($token)) return null;
     $db = getDb();
@@ -209,6 +224,9 @@ function validatePasswordResetToken(string $token): ?array {
     return $stmt->fetch() ?: null;
 }
 
+/**
+ * @return array{success: true}|array{success: false, error: string}
+ */
 function resetPassword(string $token, string $newPassword): array {
     if (strlen($newPassword) < 8) {
         return ['success' => false, 'error' => 'Password must be at least 8 characters.'];

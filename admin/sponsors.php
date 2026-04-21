@@ -78,7 +78,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $tiers = getSponsorTiers();
 
 // Get all tiers (for sponsor dropdown)
-$allTiers = $db->query('SELECT id, name FROM sponsor_tiers ORDER BY sort_order ASC')->fetchAll();
+$allTiersStmt = $db->query('SELECT id, name FROM sponsor_tiers ORDER BY sort_order ASC');
+assert($allTiersStmt instanceof PDOStatement);
+$allTiers = $allTiersStmt->fetchAll();
 
 $pageTitle = 'Manage Sponsors';
 include __DIR__ . '/../includes/header.php';
@@ -120,7 +122,7 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="d-flex gap-1">
               <button class="btn btn-outline btn-sm"
-                      onclick="openEditTier(<?= htmlspecialchars(json_encode($tier)) ?>)">Edit Tier</button>
+                      onclick="openEditTier(<?= htmlspecialchars(json_encode($tier) ?: '{}', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)">Edit Tier</button>
               <form method="POST" style="display:inline;">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="delete_tier">
@@ -147,7 +149,7 @@ include __DIR__ . '/../includes/header.php';
                     <td>
                       <div class="td-actions">
                         <button class="btn btn-outline btn-sm"
-                                onclick="openEditSponsor(<?= htmlspecialchars(json_encode($sponsor)) ?>)">Edit</button>
+                                onclick="openEditSponsor(<?= htmlspecialchars(json_encode($sponsor) ?: '{}', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)">Edit</button>
                         <form method="POST" style="display:inline;">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="delete_sponsor">
