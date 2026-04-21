@@ -42,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // Load messages
 $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
 assert($messagesStmt instanceof PDOStatement);
+/** @var list<array<string, mixed>> $messages */
 $messages = $messagesStmt->fetchAll();
 
 $pageTitle = 'Contact Settings';
@@ -151,7 +152,7 @@ include __DIR__ . '/../includes/header.php';
                   <td><a href="mailto:<?= e($msg['email']) ?>"><?= e($msg['email']) ?></a></td>
                   <td><?= e($msg['subject'] ?: '—') ?></td>
                   <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($msg['message']) ?>"><?= e($msg['message']) ?></td>
-                  <td><?= date('M j, Y g:ia', strtotime($msg['created_at'])) ?></td>
+                  <td><?= formatDateOrFallback($msg['created_at'] ?? null, 'M j, Y g:ia') ?></td>
                   <td><span class="status-badge <?= $msg['is_read'] ? 'status-approved' : 'status-pending' ?>"><?= $msg['is_read'] ? 'Read' : 'New' ?></span></td>
                   <td>
                     <div class="td-actions">
@@ -159,14 +160,14 @@ include __DIR__ . '/../includes/header.php';
                         <form method="POST" style="display:inline;">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="mark_read">
-                          <input type="hidden" name="msg_id" value="<?= $msg['id'] ?>">
+                          <input type="hidden" name="msg_id" value="<?= intValue($msg['id']) ?>">
                           <button class="btn btn-outline btn-sm">Mark Read</button>
                         </form>
                       <?php endif; ?>
                       <form method="POST" style="display:inline;">
                         <?= csrfField() ?>
                         <input type="hidden" name="action" value="delete_message">
-                        <input type="hidden" name="msg_id" value="<?= $msg['id'] ?>">
+                        <input type="hidden" name="msg_id" value="<?= intValue($msg['id']) ?>">
                         <button class="btn btn-danger btn-sm" data-confirm="Delete this message?">Delete</button>
                       </form>
                     </div>

@@ -12,6 +12,11 @@ function intValue(mixed $value, int $default = 0): int {
     return is_numeric($value) ? (int)$value : $default;
 }
 
+function formatDateOrFallback(mixed $value, string $format, string $fallback = '—'): string {
+    $timestamp = strtotime(stringValue($value));
+    return $timestamp === false ? $fallback : date($format, $timestamp);
+}
+
 function e(mixed $s): string {
     return htmlspecialchars(stringValue($s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
 }
@@ -25,15 +30,21 @@ function requestString(array $source, string $key, string $default = ''): string
 }
 
 function postString(string $key, string $default = ''): string {
-    return requestString($_POST, $key, $default);
+    /** @var array<string, mixed> $post */
+    $post = $_POST;
+    return requestString($post, $key, $default);
 }
 
 function getString(string $key, string $default = ''): string {
-    return requestString($_GET, $key, $default);
+    /** @var array<string, mixed> $get */
+    $get = $_GET;
+    return requestString($get, $key, $default);
 }
 
 function serverString(string $key, string $default = ''): string {
-    return requestString($_SERVER, $key, $default);
+    /** @var array<string, mixed> $server */
+    $server = $_SERVER;
+    return requestString($server, $key, $default);
 }
 
 function postInt(string $key, int $default = 0): int {

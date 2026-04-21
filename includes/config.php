@@ -43,6 +43,7 @@ defined('APP_KEY') || define('APP_KEY', 'CHANGE_ME_RANDOM_32_CHAR_STRING_HERE');
 
 // ─── PDO Connection ───────────────────────────────────────────────────────────
 function getDb(): PDO {
+    /** @var PDO|null $pdo */
     static $pdo = null;
     if ($pdo === null) {
         $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
@@ -64,6 +65,7 @@ function getDb(): PDO {
 
 // ─── Helper: Get site setting ─────────────────────────────────────────────────
 function getSetting(string $key, string $default = ''): string {
+    /** @var array<string, string> $cache */
     static $cache = [];
     if (isset($cache[$key])) return $cache[$key];
     try {

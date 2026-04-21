@@ -14,6 +14,7 @@ initSession();
 $siteName  = getSetting('site_name', 'RedWater Entertainment');
 $pageTitle = isset($pageTitle) && $pageTitle !== '' ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
 $bodyClass = $bodyClass ?? '';
+$pageMeta = stringValue($pageMeta ?? null);
 
 $user = currentUser();
 $currentScript = basename(serverString('PHP_SELF'));
@@ -27,7 +28,7 @@ $currentScript = basename(serverString('PHP_SELF'));
     <?php if (!empty($seoDescription)): ?>
     <meta name="description" content="<?= e($seoDescription) ?>">
     <?php endif; ?>
-    <?php if (!empty($pageMeta)) echo $pageMeta; ?>
+    <?php if ($pageMeta !== '') echo $pageMeta; ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">

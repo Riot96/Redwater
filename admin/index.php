@@ -34,6 +34,7 @@ $unreadContacts  = (int)$unreadContactsStmt->fetchColumn();
 // Recent contact submissions
 $recentContactsStmt = $db->query("SELECT * FROM contact_submissions ORDER BY created_at DESC LIMIT 5");
 assert($recentContactsStmt instanceof PDOStatement);
+/** @var list<array<string, mixed>> $recentContacts */
 $recentContacts = $recentContactsStmt->fetchAll();
 
 include __DIR__ . '/../includes/header.php';
@@ -102,7 +103,7 @@ include __DIR__ . '/../includes/header.php';
                   <td><?= e($msg['name']) ?></td>
                   <td><a href="mailto:<?= e($msg['email']) ?>"><?= e($msg['email']) ?></a></td>
                   <td><?= e($msg['subject'] ?: '—') ?></td>
-                  <td><?= date('M j, Y', strtotime($msg['created_at'])) ?></td>
+                  <td><?= formatDateOrFallback($msg['created_at'] ?? null, 'M j, Y') ?></td>
                   <td><span class="status-badge <?= $msg['is_read'] ? 'status-approved' : 'status-pending' ?>"><?= $msg['is_read'] ? 'Read' : 'New' ?></span></td>
                 </tr>
               <?php endforeach; ?>
