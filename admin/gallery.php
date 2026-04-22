@@ -16,6 +16,7 @@ $itemId = getInt('id');
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $act = postString('action');
+    $itemId = postInt('id');
 
     // Upload new item (admin)
     if ($act === 'upload') {
