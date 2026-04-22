@@ -54,10 +54,10 @@ $items = getGalleryItems(true);
             $linkUrl = stringValue($item['link_url'] ?? '');
             $tagsText = stringValue($item['tags'] ?? '');
             $isVideo    = $item['type'] === 'video';
-            $isLinked   = $linkUrl !== '';
-            $isEmbed    = $isVideo && $item['video_type'] === 'embed';
-            $isUpload   = $isVideo && $item['video_type'] === 'upload';
-            $dataType   = $item['type'] === 'photo' ? 'photo' : ($isLinked ? 'video-link' : ($isEmbed ? 'video-embed' : 'video-upload'));
+            $sourceType = getGalleryItemSourceType($item);
+            $isLinked   = $sourceType === 'link';
+            $isEmbed    = $isVideo && $sourceType === 'embed';
+            $dataType   = $item['type'] === 'photo' ? ($isLinked ? 'photo-link' : 'photo') : ($isLinked ? 'video-link' : ($isEmbed ? 'video-embed' : 'video-upload'));
             $dataSrc    = '';
             if ($isLinked) {
                 $dataSrc = '';

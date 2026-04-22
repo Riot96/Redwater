@@ -87,13 +87,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $stmt = $db->prepare(
-            'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+            'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, source_type, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
         );
         $user = currentUser();
         assert($user !== null);
-        $storedVideoType = $videoType === 'embed' ? 'embed' : 'upload';
-        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc]);
+        $sourceType = $requiresLink ? 'link' : ($requiresEmbed ? 'embed' : 'upload');
+        $storedVideoType = $requiresEmbed ? 'embed' : 'upload';
+        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $sourceType, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc]);
         flashMessage('success', 'Gallery item added successfully.');
         redirect('/admin/gallery.php');
     }

@@ -83,11 +83,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $autoApprove = $user['bypass_approval'] ? 1 : 0;
 
         $stmt = $db->prepare(
-            'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, source_type, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $storedVideoType = $videoType === 'embed' ? 'embed' : 'upload';
-        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc, $autoApprove]);
+        $sourceType = (($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link'))
+            ? 'link'
+            : ($type === 'video' && $videoType === 'embed' ? 'embed' : 'upload');
+        $storedVideoType = $type === 'video' && $videoType === 'embed' ? 'embed' : 'upload';
+        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $sourceType, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc, $autoApprove]);
 
         $msg = $autoApprove
             ? 'Upload successful! Your item is now live in the gallery.'
@@ -225,16 +228,12 @@ include __DIR__ . '/../includes/header.php';
           $itemFilePath = stringValue($item['file_path'] ?? '');
           $itemVideoUrl = stringValue($item['video_url'] ?? '');
           $itemLinkUrl = stringValue($item['link_url'] ?? '');
-          $dataType = $item['type'] === 'photo' ? 'photo' : ($itemLinkUrl !== '' ? 'video-link' : ($item['video_type'] === 'embed' ? 'video-embed' : 'video-upload'));
-          $dataSrc  = '';
-          if ($item['type'] === 'photo') $dataSrc = '/' . ltrim($itemFilePath, '/');
-          elseif ($item['video_type'] === 'embed') $dataSrc = getVideoEmbedUrl($itemVideoUrl);
-          else $dataSrc = '/' . ltrim($itemFilePath, '/');
+          $sourceType = getGalleryItemSourceType($item);
           ?>
           <div class="gallery-item" style="cursor:default;">
             <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
               <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
-            <?php elseif ($itemLinkUrl !== ''): ?>
+            <?php elseif ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
               <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;font-size:1rem;text-align:center;padding:1rem;">
                 <div style="font-size:3rem;line-height:1;">🔗</div>
                 <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
@@ -247,7 +246,7 @@ include __DIR__ . '/../includes/header.php';
               <div class="gallery-item-title"><?= e($item['title'] ?: '(untitled)') ?></div>
               <div class="d-flex gap-1 mt-1">
                 <a href="/member/gallery.php?edit=<?= e($item['id']) ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
-                <?php if ($itemLinkUrl !== ''): ?>
+                <?php if ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
                   <a href="<?= e($itemLinkUrl) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Open Link</a>
                 <?php endif; ?>
                 <form method="POST" style="display:inline;">

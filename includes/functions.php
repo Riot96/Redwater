@@ -248,6 +248,26 @@ function isSupportedGalleryLinkUrl(string $url): bool {
     return in_array(strtolower((string) $parts['scheme']), ['http', 'https'], true);
 }
 
+/**
+ * @param array<string, mixed> $item
+ */
+function getGalleryItemSourceType(array $item): string {
+    $sourceType = stringValue($item['source_type'] ?? '');
+    if (in_array($sourceType, ['upload', 'embed', 'link'], true)) {
+        return $sourceType;
+    }
+
+    if (stringValue($item['link_url'] ?? '') !== '') {
+        return 'link';
+    }
+
+    if (stringValue($item['type'] ?? '') === 'video' && stringValue($item['video_type'] ?? '') === 'embed') {
+        return 'embed';
+    }
+
+    return 'upload';
+}
+
 function isYoutubeUrl(string $url): bool {
     return (bool)preg_match('/(?:youtube\.com|youtu\.be)/', $url);
 }
