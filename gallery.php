@@ -58,6 +58,9 @@ $items = getGalleryItems(true);
             $isLinked   = $sourceType === 'link';
             $isEmbed    = $isVideo && $sourceType === 'embed';
             $dataType   = $item['type'] === 'photo' ? ($isLinked ? 'photo-link' : 'photo') : ($isLinked ? 'video-link' : ($isEmbed ? 'video-embed' : 'video-upload'));
+            $linkLabel = !empty($item['title'])
+                ? 'Open linked ' . ($isVideo ? 'video' : 'photo') . ': ' . stringValue($item['title'])
+                : 'Open external ' . ($isVideo ? 'video' : 'photo') . ' link';
             $dataSrc    = '';
             if ($isLinked) {
                 $dataSrc = '';
@@ -79,11 +82,11 @@ $items = getGalleryItems(true);
                  data-uploader="<?= e($item['uploader_name'] ?? '') ?>">
 
               <?php if ($isLinked): ?>
-                <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;text-align:center;padding:1rem;">
-                  <div style="font-size:3rem;line-height:1;">🔗</div>
+                <div class="gallery-linked-placeholder">
+                  <div class="gallery-linked-placeholder-icon">🔗</div>
                   <div><?= e($isVideo ? 'Linked Video' : 'Linked Photo') ?></div>
                 </div>
-                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Open linked gallery item" style="position:absolute;inset:0;z-index:2;"></a>
+                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= e($linkLabel) ?>" style="position:absolute;inset:0;z-index:2;"></a>
               <?php elseif ($item['type'] === 'photo'): ?>
                 <img src="<?= e('/' . ltrim($filePath, '/')) ?>"
                      alt="<?= e($item['alt_text'] ?: ($item['title'] ?: 'Gallery photo')) ?>"

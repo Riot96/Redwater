@@ -246,8 +246,8 @@ include __DIR__ . '/../includes/header.php';
             <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
               <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
             <?php elseif ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
-              <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;font-size:1rem;text-align:center;padding:1rem;">
-                <div style="font-size:3rem;line-height:1;">🔗</div>
+              <div class="gallery-linked-placeholder" style="font-size:1rem;">
+                <div class="gallery-linked-placeholder-icon">🔗</div>
                 <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
               </div>
             <?php else: ?>
@@ -333,7 +333,7 @@ include __DIR__ . '/../includes/header.php';
           </div>
           <div id="memberPhotoLinkField" style="display:none;">
             <div class="form-group">
-              <label class="form-label">Photo Link</label>
+              <label class="form-label" for="memberGalleryLinkUrl">Photo Link</label>
               <input type="url" name="link_url" class="form-control" id="memberGalleryLinkUrl" placeholder="https://www.pinterest.com/...">
             </div>
           </div>
@@ -364,7 +364,7 @@ include __DIR__ . '/../includes/header.php';
           </div>
           <div id="memberVideoLinkField" style="display:none;">
             <div class="form-group">
-              <label class="form-label">Video Link</label>
+              <label class="form-label" for="memberVideoLinkUrl">Video Link</label>
               <input type="url" name="link_url" class="form-control" id="memberVideoLinkUrl" placeholder="https://www.youtube.com/watch?v=...">
             </div>
           </div>

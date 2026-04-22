@@ -367,7 +367,7 @@ include __DIR__ . '/../includes/header.php';
           </div>
           <div id="photoLinkField" style="display:none;">
             <div class="form-group">
-              <label class="form-label">Photo Link</label>
+              <label class="form-label" for="galleryLinkUrl">Photo Link</label>
               <input type="url" name="link_url" class="form-control" id="galleryLinkUrl" placeholder="https://www.flickr.com/...">
             </div>
           </div>
@@ -400,7 +400,7 @@ include __DIR__ . '/../includes/header.php';
           </div>
           <div id="videoLinkField" style="display:none;">
             <div class="form-group">
-              <label class="form-label">Video Link</label>
+              <label class="form-label" for="galleryVideoLinkUrl">Video Link</label>
               <input type="url" name="link_url" class="form-control" id="galleryVideoLinkUrl" placeholder="https://www.youtube.com/watch?v=...">
             </div>
           </div>
