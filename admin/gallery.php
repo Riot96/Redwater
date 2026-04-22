@@ -453,7 +453,7 @@ function syncGalleryUploadInputs() {
   const photoLinkInput = document.getElementById('galleryLinkUrl');
   const videoLinkInput = document.getElementById('galleryVideoLinkUrl');
 
-  if (photoInput) photoInput.disabled = !(mediaType === 'photo' && photoSource !== 'link');
+  if (photoInput) photoInput.disabled = !(mediaType === 'photo' && photoSource === 'upload');
   if (videoInput) videoInput.disabled = !(mediaType === 'video' && videoType === 'upload');
   if (photoLinkInput) photoLinkInput.disabled = !(mediaType === 'photo' && photoSource === 'link');
   if (videoLinkInput) videoLinkInput.disabled = !(mediaType === 'video' && videoType === 'link');

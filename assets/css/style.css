@@ -678,6 +678,10 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   padding: 1rem;
 }
 .gallery-item:hover .gallery-item-overlay { opacity: 1; }
+.gallery-item-overlay-link {
+  pointer-events: none;
+  z-index: 3;
+}
 .gallery-item-title {
   font-family: var(--font-head);
   font-size: 0.95rem;
@@ -696,6 +700,13 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   color: var(--blue);
   letter-spacing: 0.05em;
   text-transform: uppercase;
+}
+.gallery-item-type-badge-linked { z-index: 3; }
+.gallery-item-type-badge-link {
+  left: 0.5rem;
+  right: auto;
+  background: var(--bg-overlay);
+  z-index: 3;
 }
 .gallery-pending-badge {
   position: absolute;

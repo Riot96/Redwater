@@ -107,17 +107,17 @@ $items = getGalleryItems(true);
                 <video src="<?= e('/' . ltrim($filePath, '/')) ?>" preload="metadata"></video>
               <?php endif; ?>
 
-              <div class="gallery-item-overlay"<?= $isLinked ? ' style="pointer-events:none;z-index:3;"' : '' ?>>
+              <div class="gallery-item-overlay<?= $isLinked ? ' gallery-item-overlay-link' : '' ?>">
                 <?php if (!empty($item['title'])): ?><div class="gallery-item-title"><?= e($item['title']) ?></div><?php endif; ?>
                 <?php if (!empty($item['uploader_name'])): ?><div class="gallery-item-uploader">by <?= e($item['uploader_name']) ?></div><?php endif; ?>
                 <?php if ($isLinked): ?><div class="gallery-item-uploader">opens externally ↗</div><?php endif; ?>
               </div>
 
               <?php if ($isVideo): ?>
-                <div class="gallery-item-type-badge"<?= $isLinked ? ' style="z-index:3;"' : '' ?>>Video</div>
+                <div class="gallery-item-type-badge<?= $isLinked ? ' gallery-item-type-badge-linked' : '' ?>">Video</div>
               <?php endif; ?>
               <?php if ($isLinked): ?>
-                <div class="gallery-item-type-badge" style="right:auto;left:0.5rem;background:var(--bg-overlay);z-index:3;">Link</div>
+                <div class="gallery-item-type-badge gallery-item-type-badge-link">Link</div>
               <?php endif; ?>
             </div>
           <?php endforeach; ?>
