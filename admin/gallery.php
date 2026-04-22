@@ -10,12 +10,13 @@ requireAdmin();
 
 $db     = getDb();
 $action = getString('action');
-$itemId = $_SERVER['REQUEST_METHOD'] === 'POST' ? postInt('id') : getInt('id');
+$itemId = getInt('id');
 
 // ── Handle actions ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $act = postString('action');
+    $itemId = postInt('id');
 
     // Upload new item (admin)
     if ($act === 'upload') {
