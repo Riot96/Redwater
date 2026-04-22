@@ -10,7 +10,7 @@ requireAdmin();
 
 $db     = getDb();
 $action = getString('action');
-$itemId = getInt('id');
+$itemId = $_SERVER['REQUEST_METHOD'] === 'POST' ? postInt('id') : getInt('id');
 
 // ── Handle actions ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
