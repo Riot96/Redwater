@@ -86,7 +86,7 @@ $items = getGalleryItems(true);
                   <div class="gallery-linked-placeholder-icon">🔗</div>
                   <div><?= e($isVideo ? 'Linked Video' : 'Linked Photo') ?></div>
                 </div>
-                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= e($linkLabel) ?>" style="position:absolute;inset:0;z-index:2;"></a>
+                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= e($linkLabel) ?>" class="gallery-item-external-link"></a>
               <?php elseif ($item['type'] === 'photo'): ?>
                 <img src="<?= e('/' . ltrim($filePath, '/')) ?>"
                      alt="<?= e($item['alt_text'] ?: ($item['title'] ?: 'Gallery photo')) ?>"

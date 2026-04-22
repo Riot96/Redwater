@@ -678,9 +678,25 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   text-align: center;
   padding: 1rem;
 }
+.gallery-linked-placeholder-compact { font-size: 1rem; }
 .gallery-linked-placeholder-icon {
   font-size: 3rem;
   line-height: 1;
+}
+.gallery-item-external-link {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+.gallery-admin-preview-placeholder {
+  width: 50px;
+  height: 50px;
+  background: var(--bg-card2);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
 }
 .gallery-item-overlay {
   position: absolute;

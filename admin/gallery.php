@@ -81,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect('/admin/gallery.php');
             }
             if (!isSupportedGalleryLinkUrl($linkUrl)) {
-                flashMessage('error', 'Please provide a valid http or https link for linked gallery items.');
+                flashMessage('error', 'Please provide a valid https link for linked gallery items.');
                 redirect('/admin/gallery.php');
             }
         }
@@ -270,7 +270,7 @@ include __DIR__ . '/../includes/header.php';
               <?php if ($itemType === 'photo' && $itemFilePath !== ''): ?>
                 <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
               <?php elseif ($itemLinkUrl !== ''): ?>
-                <div style="width:50px;height:50px;background:var(--bg-card2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">🔗</div>
+                <div class="gallery-admin-preview-placeholder">🔗</div>
               <?php elseif ($itemType === 'video'): ?>
                 <div style="width:50px;height:50px;background:var(--bg-card2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">▶️</div>
               <?php endif; ?>

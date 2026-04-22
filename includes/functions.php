@@ -245,7 +245,7 @@ function isSupportedGalleryLinkUrl(string $url): bool {
         return false;
     }
 
-    return in_array(strtolower((string) $parts['scheme']), ['http', 'https'], true);
+    return strtolower((string) $parts['scheme']) === 'https';
 }
 
 /**
