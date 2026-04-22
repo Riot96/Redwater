@@ -157,7 +157,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const filter = btn.dataset.filter;
       document.querySelectorAll('.gallery-item').forEach(function (item) {
         if (filter === 'all' || item.dataset.type === filter ||
-            (filter === 'video' && (item.dataset.type === 'video-embed' || item.dataset.type === 'video-upload'))) {
+            (filter === 'photo' && item.dataset.type === 'photo-link') ||
+            (filter === 'video' && (item.dataset.type === 'video-embed' || item.dataset.type === 'video-upload' || item.dataset.type === 'video-link'))) {
           item.style.display = '';
         } else {
           item.style.display = 'none';

@@ -51,13 +51,21 @@ $items = getGalleryItems(true);
             <?php
             $filePath = stringValue($item['file_path'] ?? '');
             $videoUrl = stringValue($item['video_url'] ?? '');
+            $linkUrl = stringValue($item['link_url'] ?? '');
             $tagsText = stringValue($item['tags'] ?? '');
             $isVideo    = $item['type'] === 'video';
-            $isEmbed    = $isVideo && $item['video_type'] === 'embed';
-            $isUpload   = $isVideo && $item['video_type'] === 'upload';
-            $dataType   = $item['type'] === 'photo' ? 'photo' : ($isEmbed ? 'video-embed' : 'video-upload');
+            $sourceType = getGalleryItemSourceType($item);
+            $hasValidLink = isSupportedGalleryLinkUrl($linkUrl);
+            $isLinked   = $sourceType === 'link' && $hasValidLink;
+            $isEmbed    = $isVideo && $sourceType === 'embed';
+            $dataType   = $item['type'] === 'photo' ? ($isLinked ? 'photo-link' : 'photo') : ($isLinked ? 'video-link' : ($isEmbed ? 'video-embed' : 'video-upload'));
+            $linkLabel = !empty($item['title'])
+                ? 'Open linked ' . ($isVideo ? 'video' : 'photo') . ': ' . stringValue($item['title'])
+                : 'Open external ' . ($isVideo ? 'video' : 'photo') . ' link';
             $dataSrc    = '';
-            if ($item['type'] === 'photo') {
+            if ($isLinked) {
+                $dataSrc = '';
+            } elseif ($item['type'] === 'photo') {
                 $dataSrc = '/' . ltrim($filePath, '/');
             } elseif ($isEmbed) {
                 $dataSrc = getVideoEmbedUrl($videoUrl);
@@ -67,14 +75,20 @@ $items = getGalleryItems(true);
             $tags = parseTags($tagsText);
             ?>
             <div class="gallery-item"
-                 data-lightbox="true"
+                 <?php if (!$isLinked): ?>data-lightbox="true"<?php endif; ?>
                  data-type="<?= e($dataType) ?>"
                  data-src="<?= e($dataSrc) ?>"
                  data-title="<?= e($item['title'] ?? '') ?>"
                  data-desc="<?= e($item['description'] ?? '') ?>"
                  data-uploader="<?= e($item['uploader_name'] ?? '') ?>">
 
-              <?php if ($item['type'] === 'photo'): ?>
+              <?php if ($isLinked): ?>
+                <div class="gallery-linked-placeholder">
+                  <div class="gallery-linked-placeholder-icon" aria-hidden="true">🔗</div>
+                  <div><?= e($isVideo ? 'Linked Video' : 'Linked Photo') ?></div>
+                </div>
+                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= e($linkLabel) ?>" class="gallery-item-external-link"></a>
+              <?php elseif ($item['type'] === 'photo'): ?>
                 <img src="<?= e('/' . ltrim($filePath, '/')) ?>"
                      alt="<?= e($item['alt_text'] ?: ($item['title'] ?: 'Gallery photo')) ?>"
                      loading="lazy">
@@ -97,13 +111,17 @@ $items = getGalleryItems(true);
                 <video src="<?= e('/' . ltrim($filePath, '/')) ?>" preload="metadata"></video>
               <?php endif; ?>
 
-              <div class="gallery-item-overlay">
+              <div class="gallery-item-overlay<?= $isLinked ? ' gallery-item-overlay-link' : '' ?>">
                 <?php if (!empty($item['title'])): ?><div class="gallery-item-title"><?= e($item['title']) ?></div><?php endif; ?>
                 <?php if (!empty($item['uploader_name'])): ?><div class="gallery-item-uploader">by <?= e($item['uploader_name']) ?></div><?php endif; ?>
+                <?php if ($isLinked): ?><div class="gallery-item-uploader">opens externally ↗</div><?php endif; ?>
               </div>
 
               <?php if ($isVideo): ?>
-                <div class="gallery-item-type-badge">Video</div>
+                <div class="gallery-item-type-badge<?= $isLinked ? ' gallery-item-type-badge-linked' : '' ?>">Video</div>
+              <?php endif; ?>
+              <?php if ($isLinked): ?>
+                <div class="gallery-item-type-badge gallery-item-type-badge-link">Link</div>
               <?php endif; ?>
             </div>
           <?php endforeach; ?>

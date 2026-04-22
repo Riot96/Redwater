@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS gallery_items (
     type ENUM('photo', 'video') NOT NULL DEFAULT 'photo',
     file_path VARCHAR(500) NULL,
     video_url VARCHAR(500) NULL,
+    link_url VARCHAR(500) NULL,
+    source_type ENUM('upload', 'embed', 'link') NOT NULL DEFAULT 'upload',
     video_type ENUM('upload', 'embed') NOT NULL DEFAULT 'upload',
     title VARCHAR(255) NULL,
     description TEXT NULL,

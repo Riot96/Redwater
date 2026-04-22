@@ -234,6 +234,92 @@ function getGalleryItem(int $id): ?array {
     return $item ?: null;
 }
 
+function isSupportedGalleryLinkUrl(string $url): bool {
+    $url = trim($url);
+    if ($url === '') {
+        return false;
+    }
+
+    $parts = parse_url($url);
+    if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
+        return false;
+    }
+
+    return strtolower((string) $parts['scheme']) === 'https';
+}
+
+/**
+ * @param array<string, mixed> $item
+ */
+function getGalleryItemSourceType(array $item): string {
+    $sourceType = stringValue($item['source_type'] ?? '');
+    $type = stringValue($item['type'] ?? '');
+    $videoType = stringValue($item['video_type'] ?? '');
+    $videoUrl = stringValue($item['video_url'] ?? '');
+    $linkUrl = stringValue($item['link_url'] ?? '');
+
+    if ($sourceType === 'link' && isSupportedGalleryLinkUrl($linkUrl)) {
+        return 'link';
+    }
+
+    if ($sourceType === 'embed' && $type === 'video' && getVideoEmbedUrl($videoUrl) !== '') {
+        return 'embed';
+    }
+
+    if (isSupportedGalleryLinkUrl($linkUrl)) {
+        return 'link';
+    }
+
+    if ($type === 'video' && $videoType === 'embed' && getVideoEmbedUrl($videoUrl) !== '') {
+        return 'embed';
+    }
+
+    return 'upload';
+}
+
+/**
+ * @return array{source_type: string, video_type: string}
+ */
+function getGalleryStoredSourceTypes(string $type, string $photoSource, string $videoType): array {
+    $sourceType = 'upload';
+
+    if ($type === 'photo' && $photoSource === 'link') {
+        $sourceType = 'link';
+    } elseif ($type === 'video' && $videoType === 'link') {
+        $sourceType = 'link';
+    } elseif ($type === 'video' && $videoType === 'embed') {
+        $sourceType = 'embed';
+    }
+
+    return [
+        'source_type' => $sourceType,
+        'video_type' => $sourceType === 'embed' ? 'embed' : 'upload',
+    ];
+}
+
+/**
+ * @return array{type: string, photo_source: string, video_type: string}|null
+ */
+function getValidatedGalleryUploadSelections(string $type, string $photoSource, string $videoType): ?array {
+    if (!in_array($type, ['photo', 'video'], true)) {
+        return null;
+    }
+
+    if (!in_array($photoSource, ['upload', 'link'], true)) {
+        return null;
+    }
+
+    if (!in_array($videoType, ['embed', 'upload', 'link'], true)) {
+        return null;
+    }
+
+    return [
+        'type' => $type,
+        'photo_source' => $photoSource,
+        'video_type' => $videoType,
+    ];
+}
+
 function isYoutubeUrl(string $url): bool {
     return (bool)preg_match('/(?:youtube\.com|youtu\.be)/', $url);
 }
@@ -327,6 +413,9 @@ function getSponsorTiers(): array {
 }
 
 // ─── Redirect ─────────────────────────────────────────────────────────────────
+/**
+ * @return never
+ */
 function redirect(string $url): void {
     header('Location: ' . $url);
     exit;

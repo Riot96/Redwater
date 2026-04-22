@@ -290,6 +290,8 @@ CREATE TABLE IF NOT EXISTS gallery_items (
     type ENUM('photo', 'video') NOT NULL DEFAULT 'photo',
     file_path VARCHAR(500) NULL,
     video_url VARCHAR(500) NULL,
+    link_url VARCHAR(500) NULL,
+    source_type ENUM('upload', 'embed', 'link') NOT NULL DEFAULT 'upload',
     video_type ENUM('upload', 'embed') NOT NULL DEFAULT 'upload',
     title VARCHAR(255) NULL,
     description TEXT NULL,
@@ -378,6 +380,8 @@ SQL,
                 "type ENUM('photo', 'video') NOT NULL DEFAULT 'photo'",
                 'file_path VARCHAR(500) NULL',
                 'video_url VARCHAR(500) NULL',
+                'link_url VARCHAR(500) NULL',
+                "source_type ENUM('upload', 'embed', 'link') NOT NULL DEFAULT 'upload'",
                 "video_type ENUM('upload', 'embed') NOT NULL DEFAULT 'upload'",
                 'title VARCHAR(255) NULL',
                 'description TEXT NULL',
@@ -429,6 +433,21 @@ SQL,
                 ensureAutomaticMigrationColumn($db, $table, $definition);
             }
         }
+
+        $db->exec(
+            "UPDATE gallery_items
+             SET source_type = 'link'
+             WHERE link_url IS NOT NULL
+               AND TRIM(link_url) <> ''
+               AND source_type <> 'link'"
+        );
+        $db->exec(
+            "UPDATE gallery_items
+             SET source_type = 'embed'
+             WHERE type = 'video'
+               AND video_type = 'embed'
+               AND source_type = 'upload'"
+        );
 
         ensureAutomaticMigrationUniqueColumn($db, 'users', 'email', 'users_email_unique');
         ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key', 'site_settings_key_unique');
