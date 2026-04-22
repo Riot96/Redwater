@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $altText,
             $seoTitle,
             $seoDesc,
-            $autoApprove,
+            $autoApprove
         ]);
 
         $msg = $autoApprove

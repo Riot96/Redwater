@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tags,
             $altText,
             $seoTitle,
-            $seoDesc,
+            $seoDesc
         ]);
         flashMessage('success', 'Gallery item added successfully.');
         redirect('/admin/gallery.php');
