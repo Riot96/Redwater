@@ -247,7 +247,7 @@ include __DIR__ . '/../includes/header.php';
               <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
             <?php elseif ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
               <div class="gallery-linked-placeholder gallery-linked-placeholder-compact">
-                <div class="gallery-linked-placeholder-icon">🔗</div>
+                <div class="gallery-linked-placeholder-icon" aria-hidden="true">🔗</div>
                 <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
               </div>
             <?php else: ?>

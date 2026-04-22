@@ -270,7 +270,7 @@ include __DIR__ . '/../includes/header.php';
               <?php if ($itemType === 'photo' && $itemFilePath !== ''): ?>
                 <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
               <?php elseif ($itemLinkUrl !== ''): ?>
-                <div class="gallery-admin-preview-placeholder">🔗</div>
+                <div class="gallery-admin-preview-placeholder" role="img" aria-label="Linked gallery item"><span aria-hidden="true">🔗</span></div>
               <?php elseif ($itemType === 'video'): ?>
                 <div style="width:50px;height:50px;background:var(--bg-card2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">▶️</div>
               <?php endif; ?>

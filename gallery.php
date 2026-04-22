@@ -83,7 +83,7 @@ $items = getGalleryItems(true);
 
               <?php if ($isLinked): ?>
                 <div class="gallery-linked-placeholder">
-                  <div class="gallery-linked-placeholder-icon">🔗</div>
+                  <div class="gallery-linked-placeholder-icon" aria-hidden="true">🔗</div>
                   <div><?= e($isVideo ? 'Linked Video' : 'Linked Photo') ?></div>
                 </div>
                 <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="<?= e($linkLabel) ?>" class="gallery-item-external-link"></a>
