@@ -30,8 +30,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $videoUrl      = trim(postString('video_url'));
         $linkUrl       = trim(postString('link_url'));
         $videoType     = postString('video_type', 'embed');
+        $selections    = getValidatedGalleryUploadSelections($type, $photoSource, $videoType);
+        if ($selections === null) {
+            flashMessage('error', 'Invalid gallery media selection.');
+            redirect('/admin/gallery.php');
+        }
+        assert($selections !== null);
+        $type = $selections['type'];
+        $photoSource = $selections['photo_source'];
+        $videoType = $selections['video_type'];
         $filePath      = null;
-        $requiresFile  = ($type === 'photo' && $photoSource !== 'link') || ($type === 'video' && $videoType === 'upload');
+        $requiresFile  = ($type === 'photo' && $photoSource === 'upload') || ($type === 'video' && $videoType === 'upload');
         $requiresEmbed = $type === 'video' && $videoType === 'embed';
         $requiresLink  = ($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link');
         $mediaFile     = uploadedFile('media_file');

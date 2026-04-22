@@ -35,10 +35,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $videoUrl  = trim(postString('video_url'));
         $linkUrl   = trim(postString('link_url'));
         $videoType = postString('video_type', 'embed');
+        $selections = getValidatedGalleryUploadSelections($type, $photoSource, $videoType);
+        if ($selections === null) {
+            flashMessage('error', 'Invalid gallery media selection.');
+            redirect('/member/gallery.php');
+        }
+        assert($selections !== null);
+        $type = $selections['type'];
+        $photoSource = $selections['photo_source'];
+        $videoType = $selections['video_type'];
         $filePath  = null;
         $mediaFile = uploadedFile('media_file');
 
-        if (($type === 'photo' && $photoSource !== 'link') || ($type === 'video' && $videoType === 'upload')) {
+        if (($type === 'photo' && $photoSource === 'upload') || ($type === 'video' && $videoType === 'upload')) {
             $mimes = $type === 'photo'
                 ? (defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp'])
                 : (defined('ALLOWED_VIDEO_TYPES') ? ALLOWED_VIDEO_TYPES : ['video/mp4','video/webm','video/ogg']);

@@ -434,6 +434,21 @@ SQL,
             }
         }
 
+        $db->exec(
+            "UPDATE gallery_items
+             SET source_type = 'link'
+             WHERE link_url IS NOT NULL
+               AND TRIM(link_url) <> ''
+               AND source_type <> 'link'"
+        );
+        $db->exec(
+            "UPDATE gallery_items
+             SET source_type = 'embed'
+             WHERE type = 'video'
+               AND video_type = 'embed'
+               AND source_type = 'upload'"
+        );
+
         ensureAutomaticMigrationUniqueColumn($db, 'users', 'email', 'users_email_unique');
         ensureAutomaticMigrationUniqueColumn($db, 'site_settings', 'setting_key', 'site_settings_key_unique');
 

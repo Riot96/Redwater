@@ -253,15 +253,24 @@ function isSupportedGalleryLinkUrl(string $url): bool {
  */
 function getGalleryItemSourceType(array $item): string {
     $sourceType = stringValue($item['source_type'] ?? '');
-    if (in_array($sourceType, ['upload', 'embed', 'link'], true)) {
-        return $sourceType;
-    }
+    $type = stringValue($item['type'] ?? '');
+    $videoType = stringValue($item['video_type'] ?? '');
+    $videoUrl = stringValue($item['video_url'] ?? '');
+    $linkUrl = stringValue($item['link_url'] ?? '');
 
-    if (stringValue($item['link_url'] ?? '') !== '') {
+    if ($sourceType === 'link' && isSupportedGalleryLinkUrl($linkUrl)) {
         return 'link';
     }
 
-    if (stringValue($item['type'] ?? '') === 'video' && stringValue($item['video_type'] ?? '') === 'embed') {
+    if ($sourceType === 'embed' && $type === 'video' && getVideoEmbedUrl($videoUrl) !== '') {
+        return 'embed';
+    }
+
+    if (isSupportedGalleryLinkUrl($linkUrl)) {
+        return 'link';
+    }
+
+    if ($type === 'video' && $videoType === 'embed' && getVideoEmbedUrl($videoUrl) !== '') {
         return 'embed';
     }
 
@@ -285,6 +294,29 @@ function getGalleryStoredSourceTypes(string $type, string $photoSource, string $
     return [
         'source_type' => $sourceType,
         'video_type' => $sourceType === 'embed' ? 'embed' : 'upload',
+    ];
+}
+
+/**
+ * @return array{type: string, photo_source: string, video_type: string}|null
+ */
+function getValidatedGalleryUploadSelections(string $type, string $photoSource, string $videoType): ?array {
+    if (!in_array($type, ['photo', 'video'], true)) {
+        return null;
+    }
+
+    if (!in_array($photoSource, ['upload', 'link'], true)) {
+        return null;
+    }
+
+    if (!in_array($videoType, ['embed', 'upload', 'link'], true)) {
+        return null;
+    }
+
+    return [
+        'type' => $type,
+        'photo_source' => $photoSource,
+        'video_type' => $videoType,
     ];
 }
 
