@@ -35,7 +35,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', 'Invalid gallery media selection.');
             redirect('/admin/gallery.php');
         }
-        assert($selections !== null);
         $type = $selections['type'];
         $photoSource = $selections['photo_source'];
         $videoType = $selections['video_type'];
@@ -69,7 +68,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flashMessage('error', 'Upload failed: ' . $upload['error']);
                 redirect('/admin/gallery.php');
             }
-            assert(isset($upload['filename']));
             $filePath = 'uploads/gallery/' . $upload['filename'];
         }
 

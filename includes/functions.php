@@ -413,6 +413,9 @@ function getSponsorTiers(): array {
 }
 
 // ─── Redirect ─────────────────────────────────────────────────────────────────
+/**
+ * @return never
+ */
 function redirect(string $url): void {
     header('Location: ' . $url);
     exit;
