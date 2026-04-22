@@ -86,11 +86,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, source_type, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $sourceType = (($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link'))
-            ? 'link'
-            : ($type === 'video' && $videoType === 'embed' ? 'embed' : 'upload');
-        $storedVideoType = $type === 'video' && $videoType === 'embed' ? 'embed' : 'upload';
-        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $sourceType, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc, $autoApprove]);
+        $storedSourceTypes = getGalleryStoredSourceTypes($type, $photoSource, $videoType);
+        $stmt->execute([
+            $user['id'],
+            $type,
+            $filePath,
+            $videoUrl ?: null,
+            $linkUrl ?: null,
+            $storedSourceTypes['source_type'],
+            $storedSourceTypes['video_type'],
+            $title,
+            $desc,
+            $tags,
+            $altText,
+            $seoTitle,
+            $seoDesc,
+            $autoApprove,
+        ]);
 
         $msg = $autoApprove
             ? 'Upload successful! Your item is now live in the gallery.'

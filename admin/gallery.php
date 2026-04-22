@@ -92,9 +92,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
         $user = currentUser();
         assert($user !== null);
-        $sourceType = $requiresLink ? 'link' : ($requiresEmbed ? 'embed' : 'upload');
-        $storedVideoType = $requiresEmbed ? 'embed' : 'upload';
-        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $sourceType, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc]);
+        $storedSourceTypes = getGalleryStoredSourceTypes($type, $photoSource, $videoType);
+        $stmt->execute([
+            $user['id'],
+            $type,
+            $filePath,
+            $videoUrl ?: null,
+            $linkUrl ?: null,
+            $storedSourceTypes['source_type'],
+            $storedSourceTypes['video_type'],
+            $title,
+            $desc,
+            $tags,
+            $altText,
+            $seoTitle,
+            $seoDesc,
+        ]);
         flashMessage('success', 'Gallery item added successfully.');
         redirect('/admin/gallery.php');
     }

@@ -268,6 +268,26 @@ function getGalleryItemSourceType(array $item): string {
     return 'upload';
 }
 
+/**
+ * @return array{source_type: string, video_type: string}
+ */
+function getGalleryStoredSourceTypes(string $type, string $photoSource, string $videoType): array {
+    $sourceType = 'upload';
+
+    if ($type === 'photo' && $photoSource === 'link') {
+        $sourceType = 'link';
+    } elseif ($type === 'video' && $videoType === 'link') {
+        $sourceType = 'link';
+    } elseif ($type === 'video' && $videoType === 'embed') {
+        $sourceType = 'embed';
+    }
+
+    return [
+        'source_type' => $sourceType,
+        'video_type' => $sourceType === 'embed' ? 'embed' : 'upload',
+    ];
+}
+
 function isYoutubeUrl(string $url): bool {
     return (bool)preg_match('/(?:youtube\.com|youtu\.be)/', $url);
 }
