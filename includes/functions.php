@@ -234,6 +234,20 @@ function getGalleryItem(int $id): ?array {
     return $item ?: null;
 }
 
+function isSupportedGalleryLinkUrl(string $url): bool {
+    $url = trim($url);
+    if ($url === '') {
+        return false;
+    }
+
+    $parts = parse_url($url);
+    if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
+        return false;
+    }
+
+    return in_array(strtolower((string) $parts['scheme']), ['http', 'https'], true);
+}
+
 function isYoutubeUrl(string $url): bool {
     return (bool)preg_match('/(?:youtube\.com|youtu\.be)/', $url);
 }

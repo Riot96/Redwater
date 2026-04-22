@@ -51,13 +51,17 @@ $items = getGalleryItems(true);
             <?php
             $filePath = stringValue($item['file_path'] ?? '');
             $videoUrl = stringValue($item['video_url'] ?? '');
+            $linkUrl = stringValue($item['link_url'] ?? '');
             $tagsText = stringValue($item['tags'] ?? '');
             $isVideo    = $item['type'] === 'video';
+            $isLinked   = $linkUrl !== '';
             $isEmbed    = $isVideo && $item['video_type'] === 'embed';
             $isUpload   = $isVideo && $item['video_type'] === 'upload';
-            $dataType   = $item['type'] === 'photo' ? 'photo' : ($isEmbed ? 'video-embed' : 'video-upload');
+            $dataType   = $item['type'] === 'photo' ? 'photo' : ($isLinked ? 'video-link' : ($isEmbed ? 'video-embed' : 'video-upload'));
             $dataSrc    = '';
-            if ($item['type'] === 'photo') {
+            if ($isLinked) {
+                $dataSrc = '';
+            } elseif ($item['type'] === 'photo') {
                 $dataSrc = '/' . ltrim($filePath, '/');
             } elseif ($isEmbed) {
                 $dataSrc = getVideoEmbedUrl($videoUrl);
@@ -67,14 +71,20 @@ $items = getGalleryItems(true);
             $tags = parseTags($tagsText);
             ?>
             <div class="gallery-item"
-                 data-lightbox="true"
+                 <?php if (!$isLinked): ?>data-lightbox="true"<?php endif; ?>
                  data-type="<?= e($dataType) ?>"
                  data-src="<?= e($dataSrc) ?>"
                  data-title="<?= e($item['title'] ?? '') ?>"
                  data-desc="<?= e($item['description'] ?? '') ?>"
                  data-uploader="<?= e($item['uploader_name'] ?? '') ?>">
 
-              <?php if ($item['type'] === 'photo'): ?>
+              <?php if ($isLinked): ?>
+                <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;text-align:center;padding:1rem;">
+                  <div style="font-size:3rem;line-height:1;">🔗</div>
+                  <div><?= e($isVideo ? 'Linked Video' : 'Linked Photo') ?></div>
+                </div>
+                <a href="<?= e($linkUrl) ?>" target="_blank" rel="noopener noreferrer" aria-label="Open linked gallery item" style="position:absolute;inset:0;z-index:2;"></a>
+              <?php elseif ($item['type'] === 'photo'): ?>
                 <img src="<?= e('/' . ltrim($filePath, '/')) ?>"
                      alt="<?= e($item['alt_text'] ?: ($item['title'] ?: 'Gallery photo')) ?>"
                      loading="lazy">
@@ -97,13 +107,17 @@ $items = getGalleryItems(true);
                 <video src="<?= e('/' . ltrim($filePath, '/')) ?>" preload="metadata"></video>
               <?php endif; ?>
 
-              <div class="gallery-item-overlay">
+              <div class="gallery-item-overlay"<?= $isLinked ? ' style="pointer-events:none;z-index:3;"' : '' ?>>
                 <?php if (!empty($item['title'])): ?><div class="gallery-item-title"><?= e($item['title']) ?></div><?php endif; ?>
                 <?php if (!empty($item['uploader_name'])): ?><div class="gallery-item-uploader">by <?= e($item['uploader_name']) ?></div><?php endif; ?>
+                <?php if ($isLinked): ?><div class="gallery-item-uploader">opens externally ↗</div><?php endif; ?>
               </div>
 
               <?php if ($isVideo): ?>
-                <div class="gallery-item-type-badge">Video</div>
+                <div class="gallery-item-type-badge"<?= $isLinked ? ' style="z-index:3;"' : '' ?>>Video</div>
+              <?php endif; ?>
+              <?php if ($isLinked): ?>
+                <div class="gallery-item-type-badge" style="right:auto;left:0.5rem;background:var(--bg-overlay);z-index:3;">Link</div>
               <?php endif; ?>
             </div>
           <?php endforeach; ?>

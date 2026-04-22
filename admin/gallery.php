@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Upload new item (admin)
     if ($act === 'upload') {
         $type          = postString('type', 'photo');
+        $photoSource   = postString('photo_source', 'upload');
         $title         = trim(postString('title'));
         $desc          = trim(postString('description'));
         $tags          = trim(postString('tags'));
@@ -27,10 +28,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seoTitle      = trim(postString('seo_title'));
         $seoDesc       = trim(postString('seo_description'));
         $videoUrl      = trim(postString('video_url'));
+        $linkUrl       = trim(postString('link_url'));
         $videoType     = postString('video_type', 'embed');
         $filePath      = null;
-        $requiresFile  = $type === 'photo' || ($type === 'video' && $videoType === 'upload');
+        $requiresFile  = ($type === 'photo' && $photoSource !== 'link') || ($type === 'video' && $videoType === 'upload');
         $requiresEmbed = $type === 'video' && $videoType === 'embed';
+        $requiresLink  = ($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link');
         $mediaFile     = uploadedFile('media_file');
 
         if ($requiresFile) {
@@ -72,13 +75,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if ($requiresLink) {
+            if ($linkUrl === '') {
+                flashMessage('error', 'Please provide a link for linked gallery items.');
+                redirect('/admin/gallery.php');
+            }
+            if (!isSupportedGalleryLinkUrl($linkUrl)) {
+                flashMessage('error', 'Please provide a valid http or https link for linked gallery items.');
+                redirect('/admin/gallery.php');
+            }
+        }
+
         $stmt = $db->prepare(
-            'INSERT INTO gallery_items (user_id, type, file_path, video_url, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
+            'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)'
         );
         $user = currentUser();
         assert($user !== null);
-        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $videoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc]);
+        $storedVideoType = $videoType === 'embed' ? 'embed' : 'upload';
+        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc]);
         flashMessage('success', 'Gallery item added successfully.');
         redirect('/admin/gallery.php');
     }
@@ -230,6 +245,7 @@ include __DIR__ . '/../includes/header.php';
         <?php foreach ($items as $item): ?>
           <?php
           $itemFilePath = stringValue($item['file_path'] ?? '');
+          $itemLinkUrl = stringValue($item['link_url'] ?? '');
           $itemType = stringValue($item['type'] ?? '');
           $itemCreatedAt = stringValue($item['created_at'] ?? '');
           $itemCreatedAtRawTs = strtotime($itemCreatedAt);
@@ -239,6 +255,8 @@ include __DIR__ . '/../includes/header.php';
             <td style="width:60px;">
               <?php if ($itemType === 'photo' && $itemFilePath !== ''): ?>
                 <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:4px;">
+              <?php elseif ($itemLinkUrl !== ''): ?>
+                <div style="width:50px;height:50px;background:var(--bg-card2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">🔗</div>
               <?php elseif ($itemType === 'video'): ?>
                 <div style="width:50px;height:50px;background:var(--bg-card2);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;">▶️</div>
               <?php endif; ?>
@@ -317,11 +335,26 @@ include __DIR__ . '/../includes/header.php';
 
         <div id="photoFields">
           <div class="form-group">
+            <label class="form-label">Photo Source</label>
+            <select name="photo_source" class="form-control" id="photoSource" onchange="togglePhotoSource(this.value)">
+              <option value="upload">Upload Photo File</option>
+              <option value="link">Link to Photo Page/Media</option>
+            </select>
+          </div>
+          <div id="photoUploadField">
+          <div class="form-group">
             <label class="form-label">Photo File</label>
             <div class="dropzone">
               <div class="dropzone-icon">📷</div>
               <p>Drop image here or click to select</p>
               <input type="file" name="media_file" accept="image/*" id="photoMediaFile">
+            </div>
+          </div>
+          </div>
+          <div id="photoLinkField" style="display:none;">
+            <div class="form-group">
+              <label class="form-label">Photo Link</label>
+              <input type="url" name="link_url" class="form-control" id="galleryLinkUrl" placeholder="https://www.flickr.com/...">
             </div>
           </div>
         </div>
@@ -332,6 +365,7 @@ include __DIR__ . '/../includes/header.php';
             <select name="video_type" class="form-control" id="videoType" onchange="toggleVideoType(this.value)">
               <option value="embed">Embed URL (YouTube, Vimeo)</option>
               <option value="upload">Upload Video File</option>
+              <option value="link">Link to Video Page</option>
             </select>
           </div>
           <div id="videoEmbedField">
@@ -348,6 +382,12 @@ include __DIR__ . '/../includes/header.php';
                 <p>Drop video here or click to select (MP4, WebM)</p>
                 <input type="file" name="media_file" accept="video/*" id="videoMediaFile" disabled>
               </div>
+            </div>
+          </div>
+          <div id="videoLinkField" style="display:none;">
+            <div class="form-group">
+              <label class="form-label">Video Link</label>
+              <input type="url" name="link_url" class="form-control" id="galleryVideoLinkUrl" placeholder="https://www.youtube.com/watch?v=...">
             </div>
           </div>
         </div>
@@ -392,12 +432,22 @@ include __DIR__ . '/../includes/header.php';
 <script>
 function syncGalleryUploadInputs() {
   const mediaType = document.getElementById('mediaType')?.value;
+  const photoSource = document.getElementById('photoSource')?.value;
   const videoType = document.getElementById('videoType')?.value;
   const photoInput = document.getElementById('photoMediaFile');
   const videoInput = document.getElementById('videoMediaFile');
+  const photoLinkInput = document.getElementById('galleryLinkUrl');
+  const videoLinkInput = document.getElementById('galleryVideoLinkUrl');
 
-  if (photoInput) photoInput.disabled = mediaType !== 'photo';
+  if (photoInput) photoInput.disabled = !(mediaType === 'photo' && photoSource !== 'link');
   if (videoInput) videoInput.disabled = !(mediaType === 'video' && videoType === 'upload');
+  if (photoLinkInput) photoLinkInput.disabled = !(mediaType === 'photo' && photoSource === 'link');
+  if (videoLinkInput) videoLinkInput.disabled = !(mediaType === 'video' && videoType === 'link');
+}
+function togglePhotoSource(source) {
+  document.getElementById('photoUploadField').style.display = source === 'link' ? 'none' : '';
+  document.getElementById('photoLinkField').style.display = source === 'link' ? '' : 'none';
+  syncGalleryUploadInputs();
 }
 function toggleMediaType(type) {
   document.getElementById('photoFields').style.display = type === 'photo' ? '' : 'none';
@@ -407,6 +457,7 @@ function toggleMediaType(type) {
 function toggleVideoType(type) {
   document.getElementById('videoEmbedField').style.display  = type === 'embed'  ? '' : 'none';
   document.getElementById('videoUploadField').style.display = type === 'upload' ? '' : 'none';
+  document.getElementById('videoLinkField').style.display = type === 'link' ? '' : 'none';
   syncGalleryUploadInputs();
 }
 syncGalleryUploadInputs();

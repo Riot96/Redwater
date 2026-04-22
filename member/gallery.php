@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Upload new item
     if ($act === 'upload') {
         $type      = postString('type', 'photo');
+        $photoSource = postString('photo_source', 'upload');
         $title     = trim(postString('title'));
         $desc      = trim(postString('description'));
         $tags      = trim(postString('tags'));
@@ -32,11 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seoTitle  = trim(postString('seo_title'));
         $seoDesc   = trim(postString('seo_description'));
         $videoUrl  = trim(postString('video_url'));
+        $linkUrl   = trim(postString('link_url'));
         $videoType = postString('video_type', 'embed');
         $filePath  = null;
         $mediaFile = uploadedFile('media_file');
 
-        if ($type === 'photo' || ($type === 'video' && $videoType === 'upload')) {
+        if (($type === 'photo' && $photoSource !== 'link') || ($type === 'video' && $videoType === 'upload')) {
             $mimes = $type === 'photo'
                 ? (defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp'])
                 : (defined('ALLOWED_VIDEO_TYPES') ? ALLOWED_VIDEO_TYPES : ['video/mp4','video/webm','video/ogg']);
@@ -66,14 +68,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        if (($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link')) {
+            if ($linkUrl === '') {
+                flashMessage('error', 'Please provide a link for linked gallery items.');
+                redirect('/member/gallery.php');
+            }
+            if (!isSupportedGalleryLinkUrl($linkUrl)) {
+                flashMessage('error', 'Please provide a valid http or https link for linked gallery items.');
+                redirect('/member/gallery.php');
+            }
+        }
+
         // Auto-approve if member has bypass
         $autoApprove = $user['bypass_approval'] ? 1 : 0;
 
         $stmt = $db->prepare(
-            'INSERT INTO gallery_items (user_id, type, file_path, video_url, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO gallery_items (user_id, type, file_path, video_url, link_url, video_type, title, description, tags, alt_text, seo_title, seo_description, is_approved)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $videoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc, $autoApprove]);
+        $storedVideoType = $videoType === 'embed' ? 'embed' : 'upload';
+        $stmt->execute([$user['id'], $type, $filePath, $videoUrl ?: null, $linkUrl ?: null, $storedVideoType, $title, $desc, $tags, $altText, $seoTitle, $seoDesc, $autoApprove]);
 
         $msg = $autoApprove
             ? 'Upload successful! Your item is now live in the gallery.'
@@ -210,7 +224,8 @@ include __DIR__ . '/../includes/header.php';
           <?php
           $itemFilePath = stringValue($item['file_path'] ?? '');
           $itemVideoUrl = stringValue($item['video_url'] ?? '');
-          $dataType = $item['type'] === 'photo' ? 'photo' : ($item['video_type'] === 'embed' ? 'video-embed' : 'video-upload');
+          $itemLinkUrl = stringValue($item['link_url'] ?? '');
+          $dataType = $item['type'] === 'photo' ? 'photo' : ($itemLinkUrl !== '' ? 'video-link' : ($item['video_type'] === 'embed' ? 'video-embed' : 'video-upload'));
           $dataSrc  = '';
           if ($item['type'] === 'photo') $dataSrc = '/' . ltrim($itemFilePath, '/');
           elseif ($item['video_type'] === 'embed') $dataSrc = getVideoEmbedUrl($itemVideoUrl);
@@ -219,6 +234,11 @@ include __DIR__ . '/../includes/header.php';
           <div class="gallery-item" style="cursor:default;">
             <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
               <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
+            <?php elseif ($itemLinkUrl !== ''): ?>
+              <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5rem;font-size:1rem;text-align:center;padding:1rem;">
+                <div style="font-size:3rem;line-height:1;">🔗</div>
+                <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
+              </div>
             <?php else: ?>
               <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:3rem;">▶️</div>
             <?php endif; ?>
@@ -227,6 +247,9 @@ include __DIR__ . '/../includes/header.php';
               <div class="gallery-item-title"><?= e($item['title'] ?: '(untitled)') ?></div>
               <div class="d-flex gap-1 mt-1">
                 <a href="/member/gallery.php?edit=<?= e($item['id']) ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
+                <?php if ($itemLinkUrl !== ''): ?>
+                  <a href="<?= e($itemLinkUrl) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Open Link</a>
+                <?php endif; ?>
                 <form method="POST" style="display:inline;">
                   <?= csrfField() ?>
                   <input type="hidden" name="action" value="delete">
@@ -282,10 +305,25 @@ include __DIR__ . '/../includes/header.php';
         </div>
         <div id="memberPhotoField">
           <div class="form-group">
+            <label class="form-label">Photo Source</label>
+            <select name="photo_source" class="form-control" id="memberPhotoSource" onchange="memberTogglePhotoSource(this.value)">
+              <option value="upload">Upload Photo File</option>
+              <option value="link">Link to Photo Page/Media</option>
+            </select>
+          </div>
+          <div id="memberPhotoUploadField">
+          <div class="form-group">
             <div class="dropzone">
               <div class="dropzone-icon">📷</div>
               <p>Drop image here or click to select</p>
               <input type="file" name="media_file" accept="image/*" id="memberPhotoMediaFile">
+            </div>
+          </div>
+          </div>
+          <div id="memberPhotoLinkField" style="display:none;">
+            <div class="form-group">
+              <label class="form-label">Photo Link</label>
+              <input type="url" name="link_url" class="form-control" id="memberGalleryLinkUrl" placeholder="https://www.pinterest.com/...">
             </div>
           </div>
         </div>
@@ -295,6 +333,7 @@ include __DIR__ . '/../includes/header.php';
             <select name="video_type" class="form-control" id="memberVideoType" onchange="memberToggleVideoType(this.value)">
               <option value="embed">Embed URL (YouTube, Vimeo)</option>
               <option value="upload">Upload Video File</option>
+              <option value="link">Link to Video Page</option>
             </select>
           </div>
           <div id="memberEmbedField">
@@ -310,6 +349,12 @@ include __DIR__ . '/../includes/header.php';
                 <p>Drop video file here or click to select</p>
                 <input type="file" name="media_file" accept="video/*" id="memberVideoMediaFile" disabled>
               </div>
+            </div>
+          </div>
+          <div id="memberVideoLinkField" style="display:none;">
+            <div class="form-group">
+              <label class="form-label">Video Link</label>
+              <input type="url" name="link_url" class="form-control" id="memberVideoLinkUrl" placeholder="https://www.youtube.com/watch?v=...">
             </div>
           </div>
         </div>
@@ -353,12 +398,22 @@ include __DIR__ . '/../includes/header.php';
 <script>
 function memberSyncUploadInputs() {
   const mediaType = document.getElementById('memberMediaType')?.value;
+  const photoSource = document.getElementById('memberPhotoSource')?.value;
   const videoType = document.getElementById('memberVideoType')?.value;
   const photoInput = document.getElementById('memberPhotoMediaFile');
   const videoInput = document.getElementById('memberVideoMediaFile');
+  const photoLinkInput = document.getElementById('memberGalleryLinkUrl');
+  const videoLinkInput = document.getElementById('memberVideoLinkUrl');
 
-  if (photoInput) photoInput.disabled = mediaType !== 'photo';
+  if (photoInput) photoInput.disabled = !(mediaType === 'photo' && photoSource !== 'link');
   if (videoInput) videoInput.disabled = !(mediaType === 'video' && videoType === 'upload');
+  if (photoLinkInput) photoLinkInput.disabled = !(mediaType === 'photo' && photoSource === 'link');
+  if (videoLinkInput) videoLinkInput.disabled = !(mediaType === 'video' && videoType === 'link');
+}
+function memberTogglePhotoSource(source) {
+  document.getElementById('memberPhotoUploadField').style.display = source === 'link' ? 'none' : '';
+  document.getElementById('memberPhotoLinkField').style.display = source === 'link' ? '' : 'none';
+  memberSyncUploadInputs();
 }
 function memberToggleType(type) {
   document.getElementById('memberPhotoField').style.display = type === 'photo' ? '' : 'none';
@@ -368,6 +423,7 @@ function memberToggleType(type) {
 function memberToggleVideoType(type) {
   document.getElementById('memberEmbedField').style.display  = type === 'embed'  ? '' : 'none';
   document.getElementById('memberUploadField').style.display = type === 'upload' ? '' : 'none';
+  document.getElementById('memberVideoLinkField').style.display = type === 'link' ? '' : 'none';
   memberSyncUploadInputs();
 }
 memberSyncUploadInputs();
