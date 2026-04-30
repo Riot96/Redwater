@@ -473,8 +473,8 @@ function renderTags(array $tags): string {
 
 // ─── Merch Helpers ────────────────────────────────────────────────────────────
 function merchNormalizeAmount(string $value): string {
-    $normalized = preg_replace('/[^0-9.]/', '', trim($value));
-    if ($normalized === '' || !is_numeric($normalized)) {
+    $normalized = str_replace([',', '$', ' '], '', trim($value));
+    if ($normalized === '' || preg_match('/^\d+(?:\.\d{1,2})?$/', $normalized) !== 1) {
         return '0.00';
     }
 

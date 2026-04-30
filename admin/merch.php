@@ -382,8 +382,9 @@ include __DIR__ . '/../includes/header.php';
           </div>
 
           <?php if ($itemFormState['image_path'] !== ''): ?>
+            <?php $previewAlt = $itemFormState['name'] !== '' ? $itemFormState['name'] : 'Merch item preview'; ?>
             <div class="merch-admin-image-preview mb-2">
-              <img src="<?= e($itemFormState['image_path']) ?>" alt="<?= e($itemFormState['name'] !== '' ? $itemFormState['name'] : 'Merch item preview') ?>" class="merch-admin-thumb-lg">
+              <img src="<?= e($itemFormState['image_path']) ?>" alt="<?= e($previewAlt) ?>" class="merch-admin-thumb-lg">
               <label class="form-check">
                 <input type="checkbox" name="remove_image" value="1">
                 Remove current image

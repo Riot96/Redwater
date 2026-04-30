@@ -54,6 +54,9 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
     $isShipping = $fulfillmentMode === 'shipping';
     $fulfillmentLabel = $isShipping ? 'Shipping' : 'Local Pickup';
     $shippingCost = $isShipping ? merchNormalizeAmount($item['shipping_cost']) : '0.00';
+    $fieldSuffix = merchSlugify($item['id'] . '-' . $fulfillmentMode);
+    $variantFieldId = 'variant-' . $fieldSuffix;
+    $quantityFieldId = 'quantity-' . $fieldSuffix;
     ?>
     <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" target="_blank" class="merch-checkout-form">
       <input type="hidden" name="cmd" value="_xclick">
@@ -66,8 +69,8 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
       <?php endif; ?>
       <?php if ($item['variants']): ?>
         <input type="hidden" name="on0" value="Variant">
-        <label class="form-label">Variant</label>
-        <select name="os0" class="form-control" required>
+        <label class="form-label" for="<?= e($variantFieldId) ?>">Variant</label>
+        <select id="<?= e($variantFieldId) ?>" name="os0" class="form-control" required>
           <?php foreach ($item['variants'] as $variant): ?>
             <option value="<?= e($variant) ?>"><?= e($variant) ?></option>
           <?php endforeach; ?>
@@ -78,8 +81,8 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
         <input type="hidden" name="on0" value="Fulfillment">
         <input type="hidden" name="os0" value="<?= e($fulfillmentLabel) ?>">
       <?php endif; ?>
-      <label class="form-label">Quantity</label>
-      <input type="number" name="quantity" class="form-control" value="1" min="1" max="<?= MERCH_CHECKOUT_MAX_QUANTITY ?>">
+      <label class="form-label" for="<?= e($quantityFieldId) ?>">Quantity</label>
+      <input id="<?= e($quantityFieldId) ?>" type="number" name="quantity" class="form-control" value="1" min="1" max="<?= MERCH_CHECKOUT_MAX_QUANTITY ?>">
       <button type="submit" class="btn btn-primary w-full">
         <?= $isShipping ? 'Checkout + Shipping' : 'Checkout for Pickup' ?>
       </button>
