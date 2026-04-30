@@ -6,6 +6,8 @@ require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
+$checkoutMaxQuantity = merchCheckoutMaxQuantity();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $action = postString('action');
@@ -24,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $variant = trim(postString('variant'));
         $fulfillment = merchNormalizeFulfillmentMode(postString('fulfillment', 'shipping'));
-        $quantity = max(1, min(MERCH_CHECKOUT_MAX_QUANTITY, postInt('quantity', 1)));
+        $quantity = max(1, min($checkoutMaxQuantity, postInt('quantity', 1)));
 
         if ($item['variants'] && !in_array($variant, $item['variants'], true)) {
             redirectWithMessage(merchItemUrl($item), 'error', 'Select a valid variant before adding this item to your cart.');
@@ -264,7 +266,7 @@ include __DIR__ . '/includes/header.php';
                       </td>
                       <td><?= e(merchFormatFulfillmentLabel($line['fulfillment'])) ?></td>
                       <td>
-                        <input type="number" name="quantity[<?= e((string) $line['entry_index']) ?>]" class="form-control merch-cart-qty" value="<?= e((string) $line['quantity']) ?>" min="1" max="<?= MERCH_CHECKOUT_MAX_QUANTITY ?>">
+                        <input type="number" name="quantity[<?= e((string) $line['entry_index']) ?>]" class="form-control merch-cart-qty" value="<?= e((string) $line['quantity']) ?>" min="1" max="<?= e((string) $checkoutMaxQuantity) ?>">
                       </td>
                       <td>
                         <?php if ($line['item'] !== null): ?>

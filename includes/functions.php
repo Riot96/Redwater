@@ -3,8 +3,6 @@
  * RedWater Entertainment - Utility Functions
  */
 
-defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
-
 // ─── Output Helpers ───────────────────────────────────────────────────────────
 function stringValue(mixed $value, string $default = ''): string {
     return is_scalar($value) ? (string)$value : $default;
@@ -524,6 +522,10 @@ function merchGenerateItemId(): string {
     }
 }
 
+function merchCheckoutMaxQuantity(): int {
+    return max(1, defined('MERCH_CHECKOUT_MAX_QUANTITY') ? (int) MERCH_CHECKOUT_MAX_QUANTITY : 25);
+}
+
 /**
  * @return list<string>
  */
@@ -948,6 +950,7 @@ function getMerchCart(): array {
     }
 
     $cart = [];
+    $maxQuantity = merchCheckoutMaxQuantity();
     foreach ($rawCart as $entry) {
         if (!is_array($entry)) {
             continue;
@@ -962,7 +965,7 @@ function getMerchCart(): array {
             'item_id' => $itemId,
             'variant' => trim(stringValue($entry['variant'] ?? '')),
             'fulfillment' => merchNormalizeFulfillmentMode(stringValue($entry['fulfillment'] ?? 'shipping')),
-            'quantity' => max(1, min(MERCH_CHECKOUT_MAX_QUANTITY, intValue($entry['quantity'] ?? 1, 1))),
+            'quantity' => max(1, min($maxQuantity, intValue($entry['quantity'] ?? 1, 1))),
         ];
     }
 
@@ -989,7 +992,8 @@ function addMerchCartItem(string $itemId, string $variant, string $fulfillmentMo
 
     $normalizedVariant = trim($variant);
     $normalizedFulfillment = merchNormalizeFulfillmentMode($fulfillmentMode);
-    $normalizedQuantity = max(1, min(MERCH_CHECKOUT_MAX_QUANTITY, $quantity));
+    $maxQuantity = merchCheckoutMaxQuantity();
+    $normalizedQuantity = max(1, min($maxQuantity, $quantity));
     $cart = getMerchCart();
 
     foreach ($cart as $index => $entry) {
@@ -998,7 +1002,7 @@ function addMerchCartItem(string $itemId, string $variant, string $fulfillmentMo
             && $entry['variant'] === $normalizedVariant
             && $entry['fulfillment'] === $normalizedFulfillment
         ) {
-            $cart[$index]['quantity'] = min(MERCH_CHECKOUT_MAX_QUANTITY, $entry['quantity'] + $normalizedQuantity);
+            $cart[$index]['quantity'] = min($maxQuantity, $entry['quantity'] + $normalizedQuantity);
             saveMerchCart($cart);
             return;
         }
@@ -1028,12 +1032,13 @@ function removeMerchCartItem(int $index): void {
  */
 function updateMerchCartQuantities(array $quantities): void {
     $cart = getMerchCart();
+    $maxQuantity = merchCheckoutMaxQuantity();
     foreach ($cart as $index => $entry) {
         $rawQuantity = $quantities[(string) $index] ?? null;
         $cart[$index]['quantity'] = max(
             1,
             min(
-                MERCH_CHECKOUT_MAX_QUANTITY,
+                $maxQuantity,
                 intValue($rawQuantity, $entry['quantity'])
             )
         );

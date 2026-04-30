@@ -8,64 +8,12 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 
-/**
- * @param list<array{
- *   id: string,
- *   slug: string,
- *   name: string,
- *   seo_title: string,
- *   seo_description: string,
- *   description: string,
- *   price: string,
- *   category: string,
- *   tags: string,
- *   variants: list<string>,
- *   image_path: string,
- *   shipping_enabled: bool,
- *   shipping_cost: string,
- *   shipping_notes: string,
- *   pickup_enabled: bool,
- *   pickup_notes: string,
- *   sort_order: int,
- *   is_active: bool
- * }> $items
- * @return array{
- *   id: string,
- *   slug: string,
- *   name: string,
- *   seo_title: string,
- *   seo_description: string,
- *   description: string,
- *   price: string,
- *   category: string,
- *   tags: string,
- *   variants: list<string>,
- *   image_path: string,
- *   shipping_enabled: bool,
- *   shipping_cost: string,
- *   shipping_notes: string,
- *   pickup_enabled: bool,
- *   pickup_notes: string,
- *   sort_order: int,
- *   is_active: bool
- * }|null
- */
-function findAdminMerchItemById(array $items, string $id): ?array {
-    foreach ($items as $item) {
-        if ($item['id'] === $id) {
-            return $item;
-        }
-    }
-
-    return null;
-}
-
 $settingsErrors = [];
 $itemErrors = [];
 $storeSettings = getMerchStoreSettings();
 $items = getMerchItems(false);
 $editId = trim(getString('edit'));
-$editItem = $editId !== '' ? findAdminMerchItemById($items, $editId) : null;
+$editItem = $editId !== '' ? findMerchItemById($items, $editId) : null;
 $itemFormState = $editItem ?? normalizeMerchItem([
     'id' => '',
     'name' => '',
@@ -112,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'save_item') {
         $itemId = trim(postString('item_id'));
-        $existingItem = $itemId !== '' ? findAdminMerchItemById($items, $itemId) : null;
+        $existingItem = $itemId !== '' ? findMerchItemById($items, $itemId) : null;
         $name = trim(postString('name'));
         $seoTitle = trim(postString('seo_title'));
         $seoDescription = trim(postString('seo_description'));
