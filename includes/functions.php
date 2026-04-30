@@ -1077,13 +1077,13 @@ function renderMerchAddToCartForm(array $item, string $fulfillmentMode, string $
     $shippingCost = $isShipping ? merchNormalizeAmount($item['shipping_cost']) : '0.00';
     $fieldSuffix = merchSlugify($item['id'] . '-' . $normalizedFulfillment . '-cart');
     $variantFieldId = 'variant-' . $fieldSuffix;
-    $quantityFieldId = 'quantity-' . $fieldSuffix;
     ?>
     <form method="post" action="/merch-cart.php" class="merch-checkout-form">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="add">
       <input type="hidden" name="item_id" value="<?= e($item['id']) ?>">
       <input type="hidden" name="fulfillment" value="<?= e($normalizedFulfillment) ?>">
+      <input type="hidden" name="quantity" value="1">
       <?php if ($item['variants']): ?>
         <label class="form-label" for="<?= e($variantFieldId) ?>">Variant</label>
         <select id="<?= e($variantFieldId) ?>" name="variant" class="form-control" required>
@@ -1092,12 +1092,6 @@ function renderMerchAddToCartForm(array $item, string $fulfillmentMode, string $
           <?php endforeach; ?>
         </select>
       <?php endif; ?>
-      <label class="form-label" for="<?= e($quantityFieldId) ?>">Quantity</label>
-      <select id="<?= e($quantityFieldId) ?>" name="quantity" class="form-control">
-        <?php for ($quantity = 1; $quantity <= MERCH_CHECKOUT_MAX_QUANTITY; $quantity++): ?>
-          <option value="<?= e((string) $quantity) ?>"><?= e((string) $quantity) ?></option>
-        <?php endfor; ?>
-      </select>
       <button type="submit" class="btn btn-primary w-full">
         Add to Cart<?= $isShipping ? ' + Shipping' : ' for Pickup' ?>
       </button>
