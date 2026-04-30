@@ -300,7 +300,7 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-group">
               <label class="form-label">Currency Code</label>
-              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD">
+              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD" oninput="this.value = this.value.toUpperCase()">
               <div class="form-hint">Use a supported three-letter PayPal currency code such as USD. The current checkout flow is limited to PayPal currencies with 2 decimal places.</div>
             </div>
           </div>
@@ -525,7 +525,7 @@ include __DIR__ . '/../includes/header.php';
                     </span>
                   </td>
                   <td>
-                     <div class="td-actions">
+                    <div class="td-actions">
                       <a href="<?= e(merchItemUrl($item)) ?>" class="btn btn-outline btn-sm" target="_blank">View</a>
                       <a href="/admin/merch.php?edit=<?= urlencode($item['id']) ?>#item-form" class="btn btn-outline btn-sm">Edit</a>
                       <form method="POST" action="/admin/merch.php" style="display:inline;">
