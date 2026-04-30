@@ -300,7 +300,7 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-group">
               <label class="form-label">Currency Code</label>
-              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD" oninput="this.value = this.value.toUpperCase()">
+              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Za-z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD" oninput="this.value = this.value.toUpperCase()">
               <div class="form-hint">Use a supported three-letter PayPal currency code such as USD. The current checkout flow is limited to PayPal currencies with 2 decimal places.</div>
             </div>
           </div>
