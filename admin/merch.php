@@ -157,17 +157,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hasUpload = hasUploadedFile($imageUpload);
 
         if (empty($itemErrors) && $hasUpload) {
-            assert($imageUpload !== null);
-            $upload = handleFileUpload(
-                $imageUpload,
-                __DIR__ . '/../uploads/merch',
-                ALLOWED_IMAGE_TYPES
-            );
-            if (!$upload['success']) {
-                $itemErrors[] = $upload['error'];
+            if ($imageUpload === null) {
+                $itemErrors[] = 'Upload data missing.';
             } else {
-                deleteManagedMerchImage($finalImagePath);
-                $finalImagePath = '/uploads/merch/' . $upload['filename'];
+                $upload = handleFileUpload(
+                    $imageUpload,
+                    __DIR__ . '/../uploads/merch',
+                    ALLOWED_IMAGE_TYPES
+                );
+                if (!$upload['success']) {
+                    $itemErrors[] = $upload['error'];
+                } else {
+                    deleteManagedMerchImage($finalImagePath);
+                    $finalImagePath = '/uploads/merch/' . $upload['filename'];
+                }
             }
         }
 
@@ -288,7 +291,7 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-group">
               <label class="form-label">Currency Code</label>
-              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" placeholder="USD">
+              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD">
               <div class="form-hint">Use a three-letter PayPal currency code such as USD.</div>
             </div>
           </div>
@@ -394,7 +397,7 @@ include __DIR__ . '/../includes/header.php';
 
           <div class="form-group">
             <label class="form-label">Variants</label>
-            <textarea name="variants" class="form-control" rows="4" placeholder="One option per line&#10;Small&#10;Medium&#10;Large"><?= e(implode("\n", $itemFormState['variants'])) ?></textarea>
+            <textarea name="variants" class="form-control" rows="4" placeholder="One option per line (for example: Small, Medium, Large)"><?= e(implode("\n", $itemFormState['variants'])) ?></textarea>
             <div class="form-hint">Variants are passed to PayPal as the selected option for the item.</div>
           </div>
 

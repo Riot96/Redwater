@@ -86,6 +86,14 @@ function hasUploadedFile(?array $file): bool {
         && intValue($file['error'] ?? null, UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
 }
 
+function isSupportedPaypalCurrencyCode(string $currency): bool {
+    return in_array($currency, [
+        'AUD', 'BRL', 'CAD', 'CHF', 'CZK', 'DKK', 'EUR', 'GBP',
+        'HKD', 'HUF', 'ILS', 'JPY', 'MXN', 'MYR', 'NOK', 'NZD',
+        'PHP', 'PLN', 'SEK', 'SGD', 'THB', 'TWD', 'USD',
+    ], true);
+}
+
 function flashMessage(string $type, string $message): void {
     initSession();
     if (!isset($_SESSION['flash']) || !is_array($_SESSION['flash'])) {
@@ -474,6 +482,9 @@ function renderTags(array $tags): string {
 // ─── Merch Helpers ────────────────────────────────────────────────────────────
 function merchNormalizeAmount(string $value): string {
     $normalized = str_replace([',', '$', ' '], '', trim($value));
+    if (str_starts_with($normalized, '.')) {
+        $normalized = '0' . $normalized;
+    }
     if ($normalized === '' || preg_match('/^\d+(?:\.\d{1,2})?$/', $normalized) !== 1) {
         return '0.00';
     }
@@ -584,7 +595,7 @@ function normalizeMerchStoreSettings(array $settings): array {
     }
 
     $currency = strtoupper(trim(stringValue($settings['paypal_currency'] ?? 'USD')));
-    if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+    if (preg_match('/^[A-Z]{3}$/', $currency) !== 1 || !isSupportedPaypalCurrencyCode($currency)) {
         $currency = 'USD';
     }
 
