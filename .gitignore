@@ -4,6 +4,7 @@ node_modules/
 
 # Config with credentials
 includes/config.php
+includes/config.local.php
 
 # Upload directories (user content - not tracked)
 uploads/gallery/*
