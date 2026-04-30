@@ -60,7 +60,7 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
         'slug' => $item['slug'],
         'fulfillment' => $fulfillmentMode,
     ], JSON_UNESCAPED_SLASHES);
-    $checkoutReferenceValue = is_string($checkoutReference) ? $checkoutReference : $item['id'] . ':' . $fulfillmentMode;
+    $checkoutReferenceValue = $checkoutReference !== false ? $checkoutReference : $item['id'] . ':' . $fulfillmentMode;
     ?>
     <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" target="_blank" class="merch-checkout-form">
       <input type="hidden" name="cmd" value="_xclick">

@@ -683,13 +683,13 @@ function normalizeMerchItem(array $item): array {
     $name = trim(stringValue($item['name'] ?? ''));
     $slug = merchSlugify(stringValue($item['slug'] ?? $name));
     $imagePath = trim(stringValue($item['image_path'] ?? ''));
-    $normalizedId = trim(stringValue($item['id'] ?? ''));
+    $trimmedId = trim(stringValue($item['id'] ?? ''));
     if ($imagePath !== '' && !isSupportedMerchImageUrl($imagePath)) {
         $imagePath = '';
     }
 
     return [
-        'id' => $normalizedId !== '' ? $normalizedId : merchGenerateItemId(),
+        'id' => $trimmedId !== '' ? $trimmedId : merchGenerateItemId(),
         'slug' => $slug,
         'name' => $name,
         'description' => trim(stringValue($item['description'] ?? '')),
