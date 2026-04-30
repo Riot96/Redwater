@@ -83,7 +83,7 @@ function uploadedFile(string $key): ?array {
 function hasUploadedFile(?array $file): bool {
     return $file !== null
         && !empty($file['name'])
-        && intValue($file['error'] ?? null, UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK;
+        && intValue($file['error'] ?? null, UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
 }
 
 function isSupportedPaypalCurrencyCode(string $currency): bool {
@@ -683,12 +683,13 @@ function normalizeMerchItem(array $item): array {
     $name = trim(stringValue($item['name'] ?? ''));
     $slug = merchSlugify(stringValue($item['slug'] ?? $name));
     $imagePath = trim(stringValue($item['image_path'] ?? ''));
+    $normalizedId = trim(stringValue($item['id'] ?? ''));
     if ($imagePath !== '' && !isSupportedMerchImageUrl($imagePath)) {
         $imagePath = '';
     }
 
     return [
-        'id' => (($normalizedId = trim(stringValue($item['id'] ?? ''))) !== '' ? $normalizedId : merchGenerateItemId()),
+        'id' => $normalizedId !== '' ? $normalizedId : merchGenerateItemId(),
         'slug' => $slug,
         'name' => $name,
         'description' => trim(stringValue($item['description'] ?? '')),

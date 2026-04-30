@@ -60,6 +60,7 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
         'slug' => $item['slug'],
         'fulfillment' => $fulfillmentMode,
     ], JSON_UNESCAPED_SLASHES);
+    $checkoutReferenceValue = is_string($checkoutReference) ? $checkoutReference : $item['id'] . ':' . $fulfillmentMode;
     ?>
     <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" target="_blank" class="merch-checkout-form">
       <input type="hidden" name="cmd" value="_xclick">
@@ -67,7 +68,7 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
       <input type="hidden" name="currency_code" value="<?= e($storeSettings['paypal_currency']) ?>">
       <input type="hidden" name="item_name" value="<?= e($item['name']) ?>">
       <input type="hidden" name="item_number" value="<?= e($item['id'] . ':' . $fulfillmentMode) ?>">
-      <input type="hidden" name="custom" value="<?= e(is_string($checkoutReference) ? $checkoutReference : '') ?>">
+      <input type="hidden" name="custom" value="<?= e($checkoutReferenceValue) ?>">
       <input type="hidden" name="amount" value="<?= e(merchNormalizeAmount($item['price'])) ?>">
       <?php if ($isShipping && (float) $shippingCost > 0): ?>
         <input type="hidden" name="shipping" value="<?= e($shippingCost) ?>">
