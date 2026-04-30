@@ -3,6 +3,8 @@
  * RedWater Entertainment - Utility Functions
  */
 
+defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
+
 // ─── Output Helpers ───────────────────────────────────────────────────────────
 function stringValue(mixed $value, string $default = ''): string {
     return is_scalar($value) ? (string)$value : $default;
