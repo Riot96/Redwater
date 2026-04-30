@@ -7,12 +7,14 @@ includes/config.php
 
 # Upload directories (user content - not tracked)
 uploads/gallery/*
+uploads/merch/*
 uploads/policies/*
 uploads/sponsors/*
 uploads/temp/*
 
 # Keep directory structure
 !uploads/gallery/.gitkeep
+!uploads/merch/.gitkeep
 !uploads/policies/.gitkeep
 !uploads/sponsors/.gitkeep
 !uploads/temp/.gitkeep

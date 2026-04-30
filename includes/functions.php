@@ -461,3 +461,306 @@ function renderTags(array $tags): string {
     }
     return $html;
 }
+
+// ─── Merch Helpers ────────────────────────────────────────────────────────────
+function merchNormalizeAmount(string $value): string {
+    $normalized = preg_replace('/[^0-9.]/', '', trim($value)) ?? '';
+    if ($normalized === '' || !is_numeric($normalized)) {
+        return '0.00';
+    }
+
+    return number_format(max(0, (float) $normalized), 2, '.', '');
+}
+
+function merchFormatAmount(string $amount, string $currency = 'USD'): string {
+    $normalized = merchNormalizeAmount($amount);
+    if ($currency === 'USD') {
+        return '$' . $normalized;
+    }
+
+    return $currency . ' ' . $normalized;
+}
+
+function merchSlugify(string $value): string {
+    $value = strtolower(trim($value));
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+    $value = trim($value, '-');
+    return $value !== '' ? $value : 'item';
+}
+
+function merchGenerateItemId(): string {
+    try {
+        return 'merch_' . bin2hex(random_bytes(8));
+    } catch (Exception $e) {
+        return uniqid('merch_', false);
+    }
+}
+
+/**
+ * @return list<string>
+ */
+function merchParseVariantLines(string $variants): array {
+    $lines = preg_split('/\r\n|\r|\n/', $variants) ?: [];
+    $normalized = [];
+    foreach ($lines as $line) {
+        $variant = trim($line);
+        if ($variant === '' || in_array($variant, $normalized, true)) {
+            continue;
+        }
+        $normalized[] = $variant;
+    }
+
+    return $normalized;
+}
+
+function isSupportedMerchImageUrl(string $url): bool {
+    $url = trim($url);
+    if ($url === '') {
+        return false;
+    }
+
+    if (str_starts_with($url, '/uploads/merch/')) {
+        return true;
+    }
+
+    $parts = parse_url($url);
+    if ($parts === false || empty($parts['scheme']) || empty($parts['host'])) {
+        return false;
+    }
+
+    return strtolower((string) $parts['scheme']) === 'https';
+}
+
+function isManagedMerchImagePath(string $path): bool {
+    return str_starts_with(trim($path), '/uploads/merch/');
+}
+
+function deleteManagedMerchImage(string $path): void {
+    $path = trim($path);
+    if (!isManagedMerchImagePath($path)) {
+        return;
+    }
+
+    $candidate = realpath(dirname(__DIR__) . '/' . ltrim($path, '/'));
+    $uploadsRoot = realpath(dirname(__DIR__) . '/uploads/merch');
+    if ($candidate === false || $uploadsRoot === false) {
+        return;
+    }
+
+    if ($candidate !== $uploadsRoot && str_starts_with($candidate, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+        deleteUploadedFile($candidate);
+    }
+}
+
+/**
+ * @param array<string, mixed> $settings
+ * @return array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * }
+ */
+function normalizeMerchStoreSettings(array $settings): array {
+    $paypalEmail = trim(stringValue($settings['paypal_email'] ?? ''));
+    if ($paypalEmail !== '' && filter_var($paypalEmail, FILTER_VALIDATE_EMAIL) === false) {
+        $paypalEmail = '';
+    }
+
+    $currency = strtoupper(trim(stringValue($settings['paypal_currency'] ?? 'USD')));
+    if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+        $currency = 'USD';
+    }
+
+    return [
+        'paypal_email' => $paypalEmail,
+        'paypal_currency' => $currency,
+        'paypal_use_sandbox' => !empty($settings['paypal_use_sandbox']),
+        'shipping_notice' => trim(stringValue($settings['shipping_notice'] ?? '')),
+        'pickup_notice' => trim(stringValue($settings['pickup_notice'] ?? '')),
+    ];
+}
+
+/**
+ * @return array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * }
+ */
+function getMerchStoreSettings(): array {
+    $raw = trim(getSetting('merch_store_settings', ''));
+    if ($raw === '') {
+        return normalizeMerchStoreSettings([]);
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return normalizeMerchStoreSettings([]);
+    }
+
+    /** @var array<string, mixed> $decoded */
+    return normalizeMerchStoreSettings($decoded);
+}
+
+/**
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $settings
+ */
+function saveMerchStoreSettings(array $settings): void {
+    $json = json_encode(normalizeMerchStoreSettings($settings), JSON_UNESCAPED_SLASHES);
+    setSetting('merch_store_settings', is_string($json) ? $json : '{}');
+}
+
+/**
+ * @param array<string, mixed> $item
+ * @return array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }
+ */
+function normalizeMerchItem(array $item): array {
+    $variants = [];
+    $rawVariants = $item['variants'] ?? [];
+    if (is_array($rawVariants)) {
+        foreach ($rawVariants as $variant) {
+            $variantName = trim(stringValue($variant));
+            if ($variantName === '' || in_array($variantName, $variants, true)) {
+                continue;
+            }
+            $variants[] = $variantName;
+        }
+    }
+
+    $name = trim(stringValue($item['name'] ?? ''));
+    $slug = merchSlugify(stringValue($item['slug'] ?? $name));
+    $imagePath = trim(stringValue($item['image_path'] ?? ''));
+    if ($imagePath !== '' && !isSupportedMerchImageUrl($imagePath)) {
+        $imagePath = '';
+    }
+
+    return [
+        'id' => trim(stringValue($item['id'] ?? merchGenerateItemId())),
+        'slug' => $slug,
+        'name' => $name,
+        'description' => trim(stringValue($item['description'] ?? '')),
+        'price' => merchNormalizeAmount(stringValue($item['price'] ?? '0')),
+        'category' => trim(stringValue($item['category'] ?? '')),
+        'tags' => trim(stringValue($item['tags'] ?? '')),
+        'variants' => $variants,
+        'image_path' => $imagePath,
+        'shipping_enabled' => !empty($item['shipping_enabled']),
+        'shipping_cost' => merchNormalizeAmount(stringValue($item['shipping_cost'] ?? '0')),
+        'shipping_notes' => trim(stringValue($item['shipping_notes'] ?? '')),
+        'pickup_enabled' => !empty($item['pickup_enabled']),
+        'pickup_notes' => trim(stringValue($item['pickup_notes'] ?? '')),
+        'sort_order' => intValue($item['sort_order'] ?? 0),
+        'is_active' => !empty($item['is_active']),
+    ];
+}
+
+/**
+ * @return list<array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }>
+ */
+function getMerchItems(bool $activeOnly = true): array {
+    $raw = trim(getSetting('merch_catalog', '[]'));
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $items = [];
+    foreach ($decoded as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        /** @var array<string, mixed> $item */
+        $normalized = normalizeMerchItem($item);
+        if ($activeOnly && !$normalized['is_active']) {
+            continue;
+        }
+        $items[] = $normalized;
+    }
+
+    usort(
+        $items,
+        static function (array $left, array $right): int {
+            if ($left['sort_order'] !== $right['sort_order']) {
+                return $left['sort_order'] <=> $right['sort_order'];
+            }
+
+            return strcasecmp($left['name'], $right['name']);
+        }
+    );
+
+    return $items;
+}
+
+/**
+ * @param list<array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }> $items
+ */
+function saveMerchItems(array $items): void {
+    $normalized = [];
+    foreach ($items as $item) {
+        $normalized[] = normalizeMerchItem($item);
+    }
+
+    $json = json_encode($normalized, JSON_UNESCAPED_SLASHES);
+    setSetting('merch_catalog', is_string($json) ? $json : '[]');
+}

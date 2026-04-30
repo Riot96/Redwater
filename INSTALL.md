@@ -182,6 +182,7 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 - **Tickets** — Paste your HauntPay embed code
 - **Policies** — Add your policy text and/or image
 - **Sponsors** — Create tiers and add sponsors
+- **Merch** — Configure PayPal-backed merch items with photos, variants, shipping, and local pickup
 - **Members** — Create member accounts for your volunteers/staff
 
 ---
@@ -195,7 +196,7 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 ├── policies.php           Policies page
 ├── gallery.php            Gallery page
 ├── sponsors.php           Sponsors page
-├── merch.php              Merch page (placeholder)
+├── merch.php              Merch storefront
 ├── contact.php            Contact page
 ├── login.php              Login
 ├── forgot-password.php    Forgot password
@@ -210,6 +211,7 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 │   ├── policies.php       Edit policies
 │   ├── gallery.php        Manage gallery & approvals
 │   ├── sponsors.php       Manage sponsors & tiers
+│   ├── merch.php          Manage merch catalog & PayPal settings
 │   ├── contact.php        Contact settings & messages
 │   └── members.php        Manage members
 │
@@ -233,6 +235,7 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 │
 ├── uploads/               User-uploaded files
 │   ├── gallery/           Gallery photos & videos
+│   ├── merch/             Merch product photos
 │   ├── policies/          Policy images
 │   └── sponsors/          Sponsor logos
 │
