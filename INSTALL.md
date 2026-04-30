@@ -185,6 +185,8 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 - **Merch** — Configure PayPal-backed merch items with photos, variants, shipping, and local pickup
 - **Members** — Create member accounts for your volunteers/staff
 
+When using the built-in merch checkout, manually verify each paid order against the merch catalog details (item id/options/fulfillment) before fulfillment. The current PayPal Standard flow does not lock pricing server-side.
+
 ---
 
 ## Directory Structure

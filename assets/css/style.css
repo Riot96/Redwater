@@ -964,7 +964,6 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 .policies-text li { margin-bottom: 0.3rem; }
 
 /* ── Merch ───────────────────────────────────────────────────────────────── */
-.merch-page { padding-top: var(--nav-height); }
 .merch-store-notices {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -1067,6 +1066,11 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 .merch-item-notes p {
   color: var(--text-muted);
   font-size: 0.9rem;
+}
+.merch-order-verification-note {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin-bottom: 1rem;
 }
 .merch-checkout-grid {
   display: grid;

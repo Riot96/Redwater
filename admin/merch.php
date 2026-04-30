@@ -156,21 +156,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $finalImagePath = stringValue($existingItem['image_path'] ?? '');
         $hasUpload = hasUploadedFile($imageUpload);
 
-        if (empty($itemErrors) && $hasUpload) {
-            if ($imageUpload === null) {
-                $itemErrors[] = 'Upload data missing.';
+        if (empty($itemErrors) && $imageUpload !== null && $hasUpload) {
+            $upload = handleFileUpload(
+                $imageUpload,
+                __DIR__ . '/../uploads/merch',
+                ALLOWED_IMAGE_TYPES
+            );
+            if (!$upload['success']) {
+                $itemErrors[] = $upload['error'];
             } else {
-                $upload = handleFileUpload(
-                    $imageUpload,
-                    __DIR__ . '/../uploads/merch',
-                    ALLOWED_IMAGE_TYPES
-                );
-                if (!$upload['success']) {
-                    $itemErrors[] = $upload['error'];
-                } else {
-                    deleteManagedMerchImage($finalImagePath);
-                    $finalImagePath = '/uploads/merch/' . $upload['filename'];
-                }
+                deleteManagedMerchImage($finalImagePath);
+                $finalImagePath = '/uploads/merch/' . $upload['filename'];
             }
         }
 
@@ -291,9 +287,13 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-group">
               <label class="form-label">Currency Code</label>
-              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD">
-              <div class="form-hint">Use a three-letter PayPal currency code such as USD.</div>
+              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Za-z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD">
+              <div class="form-hint">Use a supported three-letter PayPal currency code such as USD. The current checkout flow is limited to PayPal currencies with 2 decimal places.</div>
             </div>
+          </div>
+
+          <div class="alert-inline alert-warning">
+            PayPal Standard checkout posts pricing from the page, so merch orders should be manually verified against the item id, selected options, and current catalog pricing before fulfillment.
           </div>
 
           <div class="form-group">

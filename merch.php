@@ -55,12 +55,19 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
     $fieldSuffix = merchSlugify($item['id'] . '-' . $fulfillmentMode);
     $variantFieldId = 'variant-' . $fieldSuffix;
     $quantityFieldId = 'quantity-' . $fieldSuffix;
+    $checkoutReference = json_encode([
+        'item_id' => $item['id'],
+        'slug' => $item['slug'],
+        'fulfillment' => $fulfillmentMode,
+    ], JSON_UNESCAPED_SLASHES);
     ?>
     <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" target="_blank" class="merch-checkout-form">
       <input type="hidden" name="cmd" value="_xclick">
       <input type="hidden" name="business" value="<?= e($storeSettings['paypal_email']) ?>">
       <input type="hidden" name="currency_code" value="<?= e($storeSettings['paypal_currency']) ?>">
       <input type="hidden" name="item_name" value="<?= e($item['name']) ?>">
+      <input type="hidden" name="item_number" value="<?= e($item['id'] . ':' . $fulfillmentMode) ?>">
+      <input type="hidden" name="custom" value="<?= e(is_string($checkoutReference) ? $checkoutReference : '') ?>">
       <input type="hidden" name="amount" value="<?= e(merchNormalizeAmount($item['price'])) ?>">
       <?php if ($isShipping && (float) $shippingCost > 0): ?>
         <input type="hidden" name="shipping" value="<?= e($shippingCost) ?>">
@@ -98,11 +105,14 @@ $items = getMerchItems(true);
 $selectedCategory = trim(getString('category'));
 $selectedTag = trim(getString('tag'));
 
-$categories = [];
+$categoryMap = [];
 $tags = [];
 foreach ($items as $item) {
-    if ($item['category'] !== '' && !in_array($item['category'], $categories, true)) {
-        $categories[] = $item['category'];
+    if ($item['category'] !== '') {
+        $categoryKey = strtolower($item['category']);
+        if (!isset($categoryMap[$categoryKey])) {
+            $categoryMap[$categoryKey] = $item['category'];
+        }
     }
 
     foreach (parseTags($item['tags']) as $tag) {
@@ -111,7 +121,8 @@ foreach ($items as $item) {
         }
     }
 }
-sort($categories);
+$categories = array_values($categoryMap);
+usort($categories, 'strcasecmp');
 sort($tags);
 
 $filteredItems = [];
@@ -126,7 +137,7 @@ foreach ($items as $item) {
 include __DIR__ . '/includes/header.php';
 ?>
 
-<main class="page-wrapper merch-page">
+<main class="page-wrapper">
   <div class="page-header">
     <div class="container">
       <h1>Merch <span style="color:var(--blue)">Shop</span></h1>
@@ -258,6 +269,7 @@ include __DIR__ . '/includes/header.php';
                     Online checkout is not active yet. Please contact us directly if you want to reserve this item.
                   </div>
                 <?php else: ?>
+                  <p class="merch-order-verification-note">Orders are reviewed against the live catalog details before fulfillment.</p>
                   <div class="merch-checkout-grid">
                     <?php if ($item['shipping_enabled']): ?>
                       <?php renderMerchCheckoutForm($item, $storeSettings, 'shipping'); ?>
