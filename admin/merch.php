@@ -160,7 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upload = handleFileUpload(
                 $imageUpload,
                 __DIR__ . '/../uploads/merch',
-                defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+                ALLOWED_IMAGE_TYPES
             );
             if (!$upload['success']) {
                 $itemErrors[] = $upload['error'];

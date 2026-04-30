@@ -464,7 +464,7 @@ function renderTags(array $tags): string {
 
 // ─── Merch Helpers ────────────────────────────────────────────────────────────
 function merchNormalizeAmount(string $value): string {
-    $normalized = preg_replace('/[^0-9.]/', '', trim($value)) ?? '';
+    $normalized = preg_replace('/[^0-9.]/', '', trim($value));
     if ($normalized === '' || !is_numeric($normalized)) {
         return '0.00';
     }
@@ -483,7 +483,10 @@ function merchFormatAmount(string $amount, string $currency = 'USD'): string {
 
 function merchSlugify(string $value): string {
     $value = strtolower(trim($value));
-    $value = preg_replace('/[^a-z0-9]+/', '-', $value) ?? '';
+    $value = preg_replace('/[^a-z0-9]+/', '-', $value);
+    if (!is_string($value)) {
+        return 'item';
+    }
     $value = trim($value, '-');
     return $value !== '' ? $value : 'item';
 }
@@ -500,7 +503,10 @@ function merchGenerateItemId(): string {
  * @return list<string>
  */
 function merchParseVariantLines(string $variants): array {
-    $lines = preg_split('/\r\n|\r|\n/', $variants) ?: [];
+    $lines = preg_split('/\r\n|\r|\n/', $variants);
+    if ($lines === false) {
+        return [];
+    }
     $normalized = [];
     foreach ($lines as $line) {
         $variant = trim($line);
