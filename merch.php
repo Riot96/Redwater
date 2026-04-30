@@ -6,6 +6,8 @@ require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
+defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
+
 /**
  * @param array{
  *   paypal_email: string,
@@ -77,7 +79,7 @@ function renderMerchCheckoutForm(array $item, array $storeSettings, string $fulf
         <input type="hidden" name="os0" value="<?= e($fulfillmentLabel) ?>">
       <?php endif; ?>
       <label class="form-label">Quantity</label>
-      <input type="number" name="quantity" class="form-control" value="1" min="1" max="25">
+      <input type="number" name="quantity" class="form-control" value="1" min="1" max="<?= MERCH_CHECKOUT_MAX_QUANTITY ?>">
       <button type="submit" class="btn btn-primary w-full">
         <?= $isShipping ? 'Checkout + Shipping' : 'Checkout for Pickup' ?>
       </button>

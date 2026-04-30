@@ -154,9 +154,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $finalImagePath = stringValue($existingItem['image_path'] ?? '');
-        $hasUpload = $imageUpload !== null && !empty($imageUpload['name']) && intValue($imageUpload['error'] ?? null, UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+        $hasUpload = hasUploadedFile($imageUpload);
 
         if (empty($itemErrors) && $hasUpload) {
+            assert($imageUpload !== null);
             $upload = handleFileUpload(
                 $imageUpload,
                 __DIR__ . '/../uploads/merch',

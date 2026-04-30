@@ -77,6 +77,15 @@ function uploadedFile(string $key): ?array {
     ];
 }
 
+/**
+ * @param array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int}|null $file
+ */
+function hasUploadedFile(?array $file): bool {
+    return $file !== null
+        && !empty($file['name'])
+        && intValue($file['error'] ?? null, UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE;
+}
+
 function flashMessage(string $type, string $message): void {
     initSession();
     if (!isset($_SESSION['flash']) || !is_array($_SESSION['flash'])) {
@@ -484,7 +493,7 @@ function merchFormatAmount(string $amount, string $currency = 'USD'): string {
 function merchSlugify(string $value): string {
     $value = strtolower(trim($value));
     $value = preg_replace('/[^a-z0-9]+/', '-', $value);
-    if (!is_string($value)) {
+    if ($value === null) {
         return 'item';
     }
     $value = trim($value, '-');
@@ -503,7 +512,7 @@ function merchGenerateItemId(): string {
  * @return list<string>
  */
 function merchParseVariantLines(string $variants): array {
-    $lines = preg_split('/\r\n|\r|\n/', $variants);
+    $lines = preg_split('/\r?\n|\r/', $variants);
     if ($lines === false) {
         return [];
     }
