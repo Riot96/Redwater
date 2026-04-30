@@ -1005,11 +1005,14 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 }
 .merch-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 360px));
+  justify-content: center;
   gap: 1.5rem;
 }
 .merch-card {
+  width: 100%;
   height: 100%;
+  max-width: 360px;
 }
 .merch-card:hover {
   transform: translateY(-6px);

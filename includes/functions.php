@@ -1093,7 +1093,11 @@ function renderMerchAddToCartForm(array $item, string $fulfillmentMode, string $
         </select>
       <?php endif; ?>
       <label class="form-label" for="<?= e($quantityFieldId) ?>">Quantity</label>
-      <input id="<?= e($quantityFieldId) ?>" type="number" name="quantity" class="form-control" value="1" min="1" max="<?= MERCH_CHECKOUT_MAX_QUANTITY ?>">
+      <select id="<?= e($quantityFieldId) ?>" name="quantity" class="form-control">
+        <?php for ($quantity = 1; $quantity <= MERCH_CHECKOUT_MAX_QUANTITY; $quantity++): ?>
+          <option value="<?= e((string) $quantity) ?>"><?= e((string) $quantity) ?></option>
+        <?php endfor; ?>
+      </select>
       <button type="submit" class="btn btn-primary w-full">
         Add to Cart<?= $isShipping ? ' + Shipping' : ' for Pickup' ?>
       </button>
