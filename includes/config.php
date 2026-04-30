@@ -34,6 +34,7 @@ defined('MAIL_FROM_NAME') || define('MAIL_FROM_NAME', 'RedWater Entertainment');
 defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
 defined('ALLOWED_IMAGE_TYPES')|| define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 defined('ALLOWED_VIDEO_TYPES')|| define('ALLOWED_VIDEO_TYPES', ['video/mp4', 'video/webm', 'video/ogg']);
+defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
 
 // ─── Session Settings ─────────────────────────────────────────────────────────
 defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);
