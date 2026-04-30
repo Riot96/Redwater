@@ -438,6 +438,9 @@ function redirect(string $url): void {
     exit;
 }
 
+/**
+ * @return never
+ */
 function redirectWithMessage(string $url, string $type, string $message): void {
     flashMessage($type, $message);
     redirect($url);
@@ -609,6 +612,21 @@ function normalizeMerchStoreSettings(array $settings): array {
 }
 
 /**
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $storeSettings
+ */
+function merchPaypalCheckoutUrl(array $storeSettings): string {
+    return $storeSettings['paypal_use_sandbox']
+        ? 'https://www.sandbox.paypal.com/cgi-bin/webscr'
+        : 'https://www.paypal.com/cgi-bin/webscr';
+}
+
+/**
  * @return array{
  *   paypal_email: string,
  *   paypal_currency: string,
@@ -652,6 +670,8 @@ function saveMerchStoreSettings(array $settings): void {
  *   id: string,
  *   slug: string,
  *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
  *   description: string,
  *   price: string,
  *   category: string,
@@ -692,6 +712,8 @@ function normalizeMerchItem(array $item): array {
         'id' => $trimmedId !== '' ? $trimmedId : merchGenerateItemId(),
         'slug' => $slug,
         'name' => $name,
+        'seo_title' => trim(stringValue($item['seo_title'] ?? '')),
+        'seo_description' => trim(stringValue($item['seo_description'] ?? '')),
         'description' => trim(stringValue($item['description'] ?? '')),
         'price' => merchNormalizeAmount(stringValue($item['price'] ?? '0')),
         'category' => trim(stringValue($item['category'] ?? '')),
@@ -713,6 +735,8 @@ function normalizeMerchItem(array $item): array {
  *   id: string,
  *   slug: string,
  *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
  *   description: string,
  *   price: string,
  *   category: string,
@@ -767,6 +791,8 @@ function getMerchItems(bool $activeOnly = true): array {
  *   id: string,
  *   slug: string,
  *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
  *   description: string,
  *   price: string,
  *   category: string,
@@ -790,4 +816,291 @@ function saveMerchItems(array $items): void {
 
     $json = json_encode($normalized, JSON_UNESCAPED_SLASHES);
     setSetting('merch_catalog', is_string($json) ? $json : '[]');
+}
+
+/**
+ * @param array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * } $item
+ */
+function merchItemUrl(array $item): string {
+    return '/merch-item.php?item=' . urlencode($item['id']);
+}
+
+/**
+ * @param list<array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }> $items
+ * @return array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }|null
+ */
+function findMerchItemById(array $items, string $id): ?array {
+    foreach ($items as $item) {
+        if ($item['id'] === $id) {
+            return $item;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * @return array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }|null
+ */
+function getMerchItemById(string $id, bool $activeOnly = true): ?array {
+    $trimmedId = trim($id);
+    if ($trimmedId === '') {
+        return null;
+    }
+
+    return findMerchItemById(getMerchItems($activeOnly), $trimmedId);
+}
+
+function merchFormatFulfillmentLabel(string $fulfillmentMode): string {
+    return merchNormalizeFulfillmentMode($fulfillmentMode) === 'pickup' ? 'Local Pickup' : 'Shipping';
+}
+
+function merchNormalizeFulfillmentMode(string $fulfillmentMode): string {
+    return strtolower(trim($fulfillmentMode)) === 'pickup' ? 'pickup' : 'shipping';
+}
+
+/**
+ * @return list<array{item_id: string, variant: string, fulfillment: string, quantity: int}>
+ */
+function getMerchCart(): array {
+    initSession();
+    $rawCart = $_SESSION['merch_cart'] ?? [];
+    if (!is_array($rawCart)) {
+        return [];
+    }
+
+    $cart = [];
+    foreach ($rawCart as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $itemId = trim(stringValue($entry['item_id'] ?? ''));
+        if ($itemId === '') {
+            continue;
+        }
+
+        $cart[] = [
+            'item_id' => $itemId,
+            'variant' => trim(stringValue($entry['variant'] ?? '')),
+            'fulfillment' => merchNormalizeFulfillmentMode(stringValue($entry['fulfillment'] ?? 'shipping')),
+            'quantity' => max(1, min(MERCH_CHECKOUT_MAX_QUANTITY, intValue($entry['quantity'] ?? 1, 1))),
+        ];
+    }
+
+    return $cart;
+}
+
+/**
+ * @param list<array{item_id: string, variant: string, fulfillment: string, quantity: int}> $cart
+ */
+function saveMerchCart(array $cart): void {
+    initSession();
+    $_SESSION['merch_cart'] = $cart;
+}
+
+function clearMerchCart(): void {
+    saveMerchCart([]);
+}
+
+function addMerchCartItem(string $itemId, string $variant, string $fulfillmentMode, int $quantity): void {
+    $normalizedItemId = trim($itemId);
+    if ($normalizedItemId === '') {
+        return;
+    }
+
+    $normalizedVariant = trim($variant);
+    $normalizedFulfillment = merchNormalizeFulfillmentMode($fulfillmentMode);
+    $normalizedQuantity = max(1, min(MERCH_CHECKOUT_MAX_QUANTITY, $quantity));
+    $cart = getMerchCart();
+
+    foreach ($cart as $index => $entry) {
+        if (
+            $entry['item_id'] === $normalizedItemId
+            && $entry['variant'] === $normalizedVariant
+            && $entry['fulfillment'] === $normalizedFulfillment
+        ) {
+            $cart[$index]['quantity'] = min(MERCH_CHECKOUT_MAX_QUANTITY, $entry['quantity'] + $normalizedQuantity);
+            saveMerchCart($cart);
+            return;
+        }
+    }
+
+    $cart[] = [
+        'item_id' => $normalizedItemId,
+        'variant' => $normalizedVariant,
+        'fulfillment' => $normalizedFulfillment,
+        'quantity' => $normalizedQuantity,
+    ];
+    saveMerchCart($cart);
+}
+
+function removeMerchCartItem(int $index): void {
+    $cart = getMerchCart();
+    if (!isset($cart[$index])) {
+        return;
+    }
+
+    unset($cart[$index]);
+    saveMerchCart(array_values($cart));
+}
+
+/**
+ * @param array<string, mixed> $quantities
+ */
+function updateMerchCartQuantities(array $quantities): void {
+    $cart = getMerchCart();
+    foreach ($cart as $index => $entry) {
+        $rawQuantity = $quantities[(string) $index] ?? null;
+        $cart[$index]['quantity'] = max(
+            1,
+            min(
+                MERCH_CHECKOUT_MAX_QUANTITY,
+                intValue($rawQuantity, $entry['quantity'])
+            )
+        );
+    }
+
+    saveMerchCart($cart);
+}
+
+function getMerchCartItemCount(): int {
+    $count = 0;
+    foreach (getMerchCart() as $entry) {
+        $count += $entry['quantity'];
+    }
+
+    return $count;
+}
+
+/**
+ * @param array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * } $item
+ */
+function renderMerchAddToCartForm(array $item, string $fulfillmentMode, string $currency = 'USD'): void {
+    $normalizedFulfillment = merchNormalizeFulfillmentMode($fulfillmentMode);
+    $isShipping = $normalizedFulfillment === 'shipping';
+    $shippingCost = $isShipping ? merchNormalizeAmount($item['shipping_cost']) : '0.00';
+    $fieldSuffix = merchSlugify($item['id'] . '-' . $normalizedFulfillment . '-cart');
+    $variantFieldId = 'variant-' . $fieldSuffix;
+    $quantityFieldId = 'quantity-' . $fieldSuffix;
+    ?>
+    <form method="post" action="/merch-cart.php" class="merch-checkout-form">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="add">
+      <input type="hidden" name="item_id" value="<?= e($item['id']) ?>">
+      <input type="hidden" name="fulfillment" value="<?= e($normalizedFulfillment) ?>">
+      <?php if ($item['variants']): ?>
+        <label class="form-label" for="<?= e($variantFieldId) ?>">Variant</label>
+        <select id="<?= e($variantFieldId) ?>" name="variant" class="form-control" required>
+          <?php foreach ($item['variants'] as $variant): ?>
+            <option value="<?= e($variant) ?>"><?= e($variant) ?></option>
+          <?php endforeach; ?>
+        </select>
+      <?php endif; ?>
+      <label class="form-label" for="<?= e($quantityFieldId) ?>">Quantity</label>
+      <input id="<?= e($quantityFieldId) ?>" type="number" name="quantity" class="form-control" value="1" min="1" max="<?= MERCH_CHECKOUT_MAX_QUANTITY ?>">
+      <button type="submit" class="btn btn-primary w-full">
+        Add to Cart<?= $isShipping ? ' + Shipping' : ' for Pickup' ?>
+      </button>
+      <?php if ($isShipping && (float) $shippingCost > 0): ?>
+        <p class="merch-checkout-note">Flat shipping fee: <?= e(merchFormatAmount($shippingCost, $currency)) ?></p>
+      <?php endif; ?>
+      <p class="merch-checkout-note">Checkout is completed from your cart with PayPal Standard.</p>
+    </form>
+    <?php
 }

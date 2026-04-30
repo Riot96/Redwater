@@ -13,6 +13,8 @@ requireAdmin();
  *   id: string,
  *   slug: string,
  *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
  *   description: string,
  *   price: string,
  *   category: string,
@@ -31,6 +33,8 @@ requireAdmin();
  *   id: string,
  *   slug: string,
  *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
  *   description: string,
  *   price: string,
  *   category: string,
@@ -65,6 +69,8 @@ $editItem = $editId !== '' ? findAdminMerchItemById($items, $editId) : null;
 $itemFormState = $editItem ?? normalizeMerchItem([
     'id' => '',
     'name' => '',
+    'seo_title' => '',
+    'seo_description' => '',
     'description' => '',
     'price' => '0.00',
     'category' => '',
@@ -108,6 +114,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $itemId = trim(postString('item_id'));
         $existingItem = $itemId !== '' ? findAdminMerchItemById($items, $itemId) : null;
         $name = trim(postString('name'));
+        $seoTitle = trim(postString('seo_title'));
+        $seoDescription = trim(postString('seo_description'));
         $description = trim(postString('description'));
         $price = merchNormalizeAmount(postString('price'));
         $category = trim(postString('category'));
@@ -128,6 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $itemFormState = normalizeMerchItem([
             'id' => $itemId,
             'name' => $name,
+            'seo_title' => $seoTitle,
+            'seo_description' => $seoDescription,
             'description' => $description,
             'price' => $price,
             'category' => $category,
@@ -188,6 +198,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $savedItem = normalizeMerchItem([
                 'id' => $itemId !== '' ? $itemId : merchGenerateItemId(),
                 'name' => $name,
+                'seo_title' => $seoTitle,
+                'seo_description' => $seoDescription,
                 'description' => $description,
                 'price' => $price,
                 'category' => $category,
@@ -261,7 +273,7 @@ include __DIR__ . '/../includes/header.php';
         <div class="d-flex justify-between align-center mb-2" style="gap:1rem;flex-wrap:wrap;">
           <div>
             <h3 style="font-size:1rem;margin-bottom:0.35rem;">Store Checkout Settings</h3>
-            <p class="text-muted">Configure the PayPal destination and the store-wide shipping or pickup notes shown on the public merch page.</p>
+            <p class="text-muted">Configure the PayPal Standard destination email and the store-wide shipping or pickup notes shown on the public merch pages.</p>
           </div>
           <span class="status-badge <?= $storeSettings['paypal_email'] !== '' ? 'status-approved' : 'status-pending' ?>">
             <?= $storeSettings['paypal_email'] !== '' ? 'PayPal Ready' : 'PayPal Not Configured' ?>
@@ -284,10 +296,11 @@ include __DIR__ . '/../includes/header.php';
             <div class="form-group">
               <label class="form-label">PayPal Email</label>
               <input type="email" name="paypal_email" class="form-control" value="<?= e($storeSettings['paypal_email']) ?>" placeholder="payments@example.com">
+              <div class="form-hint">This merch checkout uses PayPal Standard form posts, so only the receiving PayPal email is required here. API keys are not used by this integration.</div>
             </div>
             <div class="form-group">
               <label class="form-label">Currency Code</label>
-              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Za-z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD">
+              <input type="text" name="paypal_currency" class="form-control" value="<?= e($storeSettings['paypal_currency']) ?>" maxlength="3" pattern="[A-Z]{3}" title="Use a supported three-letter PayPal currency code such as USD." autocomplete="off" placeholder="USD">
               <div class="form-hint">Use a supported three-letter PayPal currency code such as USD. The current checkout flow is limited to PayPal currencies with 2 decimal places.</div>
             </div>
           </div>
@@ -358,6 +371,17 @@ include __DIR__ . '/../includes/header.php';
           <div class="form-group">
             <label class="form-label">Description</label>
             <textarea name="description" class="form-control" rows="4" placeholder="Describe the item, fit, materials, and anything buyers should know."><?= e($itemFormState['description']) ?></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">SEO Title</label>
+              <input type="text" name="seo_title" class="form-control" value="<?= e($itemFormState['seo_title']) ?>" maxlength="255" placeholder="Optional page title override for this product">
+            </div>
+            <div class="form-group">
+              <label class="form-label">SEO Description</label>
+              <textarea name="seo_description" class="form-control" rows="3" maxlength="320" placeholder="Optional meta description for this product page."><?= e($itemFormState['seo_description']) ?></textarea>
+            </div>
           </div>
 
           <div class="form-row">
@@ -501,7 +525,8 @@ include __DIR__ . '/../includes/header.php';
                     </span>
                   </td>
                   <td>
-                    <div class="td-actions">
+                     <div class="td-actions">
+                      <a href="<?= e(merchItemUrl($item)) ?>" class="btn btn-outline btn-sm" target="_blank">View</a>
                       <a href="/admin/merch.php?edit=<?= urlencode($item['id']) ?>#item-form" class="btn btn-outline btn-sm">Edit</a>
                       <form method="POST" action="/admin/merch.php" style="display:inline;">
                         <?= csrfField() ?>

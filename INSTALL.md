@@ -182,10 +182,10 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 - **Tickets** — Paste your HauntPay embed code
 - **Policies** — Add your policy text and/or image
 - **Sponsors** — Create tiers and add sponsors
-- **Merch** — Configure PayPal-backed merch items with photos, variants, shipping, and local pickup
+- **Merch** — Configure PayPal-backed merch items with photos, per-product SEO fields, variants, shipping, local pickup, and cart checkout
 - **Members** — Create member accounts for your volunteers/staff
 
-When using the built-in merch checkout, manually verify each paid order against the merch catalog details (item id/options/fulfillment) before fulfillment. The current PayPal Standard flow does not lock pricing server-side.
+When using the built-in merch checkout, manually verify each paid order against the merch catalog details (item id/options/fulfillment) before fulfillment. The current PayPal Standard flow does not lock pricing server-side, and it uses the store PayPal email instead of API keys.
 
 ---
 
@@ -199,6 +199,8 @@ When using the built-in merch checkout, manually verify each paid order against 
 ├── gallery.php            Gallery page
 ├── sponsors.php           Sponsors page
 ├── merch.php              Merch storefront
+├── merch-item.php         Individual merch product page
+├── merch-cart.php         Merch cart & PayPal checkout
 ├── contact.php            Contact page
 ├── login.php              Login
 ├── forgot-password.php    Forgot password
