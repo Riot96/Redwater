@@ -36,7 +36,10 @@ $storeSettings = getMerchStoreSettings();
 $itemTags = parseTags($item['tags']);
 $cartItemCount = getMerchCartItemCount();
 $pageTitle = $item['seo_title'] !== '' ? $item['seo_title'] : $item['name'];
-$seoDescription = $item['seo_description'] !== '' ? $item['seo_description'] : ($item['description'] !== '' ? $item['description'] : 'Shop ' . $item['name'] . ' from RedWater Entertainment.');
+$seoDescription = $item['seo_description'];
+if ($seoDescription === '') {
+    $seoDescription = $item['description'] !== '' ? $item['description'] : 'Shop ' . $item['name'] . ' from RedWater Entertainment.';
+}
 
 include __DIR__ . '/includes/header.php';
 ?>

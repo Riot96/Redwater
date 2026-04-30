@@ -122,6 +122,10 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
     <?php
 }
 
+function merchCartDisplayAmount(float $amount, string $currency): string {
+    return merchFormatAmount(number_format($amount, 2, '.', ''), $currency);
+}
+
 $storeSettings = getMerchStoreSettings();
 $cartEntries = getMerchCart();
 $catalogItems = getMerchItems(true);
@@ -264,7 +268,7 @@ include __DIR__ . '/includes/header.php';
                       </td>
                       <td>
                         <?php if ($line['item'] !== null): ?>
-                          <div><?= e(merchFormatAmount(number_format($line['line_subtotal'], 2, '.', ''), $storeSettings['paypal_currency'])) ?></div>
+                          <div><?= e(merchCartDisplayAmount($line['line_subtotal'], $storeSettings['paypal_currency'])) ?></div>
                           <?php if ((float) $line['shipping_cost'] > 0): ?>
                             <div class="text-muted" style="font-size:0.85rem;">+ <?= e(merchFormatAmount($line['shipping_cost'], $storeSettings['paypal_currency'])) ?> shipping</div>
                           <?php endif; ?>
@@ -304,9 +308,9 @@ include __DIR__ . '/includes/header.php';
                   <div class="alert-inline alert-warning">Remove unavailable items before checking out.</div>
                 <?php else: ?>
                   <div class="merch-cart-totals">
-                    <div><span>Subtotal</span><strong><?= e(merchFormatAmount(number_format($subtotal, 2, '.', ''), $storeSettings['paypal_currency'])) ?></strong></div>
-                    <div><span>Shipping</span><strong><?= e(merchFormatAmount(number_format($shippingTotal, 2, '.', ''), $storeSettings['paypal_currency'])) ?></strong></div>
-                    <div><span>Estimated Total</span><strong><?= e(merchFormatAmount(number_format($subtotal + $shippingTotal, 2, '.', ''), $storeSettings['paypal_currency'])) ?></strong></div>
+                    <div><span>Subtotal</span><strong><?= e(merchCartDisplayAmount($subtotal, $storeSettings['paypal_currency'])) ?></strong></div>
+                    <div><span>Shipping</span><strong><?= e(merchCartDisplayAmount($shippingTotal, $storeSettings['paypal_currency'])) ?></strong></div>
+                    <div><span>Estimated Total</span><strong><?= e(merchCartDisplayAmount($subtotal + $shippingTotal, $storeSettings['paypal_currency'])) ?></strong></div>
                   </div>
                   <?php renderMerchCartCheckoutForm($checkoutItems, $storeSettings); ?>
                 <?php endif; ?>
