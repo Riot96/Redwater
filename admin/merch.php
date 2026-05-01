@@ -245,6 +245,7 @@ include __DIR__ . '/../includes/header.php';
               <label class="form-label">PayPal Email</label>
               <input type="email" name="paypal_email" class="form-control" value="<?= e($storeSettings['paypal_email']) ?>" placeholder="payments@example.com">
               <div class="form-hint">This merch checkout uses PayPal Standard form posts, so only the receiving PayPal email is required here. API keys are not used by this integration.</div>
+              <div class="form-hint">When sandbox checkout is enabled, use the email for your PayPal Developer sandbox business seller account here.</div>
             </div>
             <div class="form-group">
               <label class="form-label">Currency Code</label>
@@ -262,6 +263,10 @@ include __DIR__ . '/../includes/header.php';
               <input type="checkbox" name="paypal_use_sandbox" value="1" <?= $storeSettings['paypal_use_sandbox'] ? 'checked' : '' ?>>
               Use PayPal sandbox checkout links for testing
             </label>
+            <div class="form-hint"><?= e(merchPaypalSandboxTestingHint()) ?></div>
+            <?php if ($storeSettings['paypal_email'] !== ''): ?>
+              <div class="form-hint">Current checkout target: <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?> → <?= e($storeSettings['paypal_email']) ?></div>
+            <?php endif; ?>
           </div>
 
           <div class="form-row">

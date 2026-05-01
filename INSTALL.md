@@ -187,6 +187,8 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 
 When using the built-in merch checkout, manually verify each paid order against the merch catalog details (item id/options/fulfillment) before fulfillment. The current PayPal Standard flow does not lock pricing server-side, and it uses the store PayPal email instead of API keys.
 
+For PayPal sandbox testing, use the email for a PayPal Developer sandbox business seller account in the merch settings and complete checkout with a separate sandbox personal buyer account. Using the seller login or a live PayPal account against sandbox checkout will trigger PayPal's generic "payment can't be completed" message.
+
 ---
 
 ## Directory Structure

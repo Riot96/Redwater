@@ -304,6 +304,14 @@ include __DIR__ . '/includes/header.php';
               <div>
                 <h2 style="font-size:1.1rem;">Checkout Summary</h2>
                 <p class="text-muted">PayPal Standard checkout is configured with the store email only, so no API keys are required for this flow.</p>
+                <?php if ($storeSettings['paypal_use_sandbox']): ?>
+                  <div class="alert-inline alert-warning">
+                    <div><strong>Sandbox checkout is enabled.</strong> <?= e(merchPaypalSandboxTestingHint()) ?></div>
+                    <?php if ($storeSettings['paypal_email'] !== ''): ?>
+                      <div class="mt-1">Current checkout target: <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?> → <?= e($storeSettings['paypal_email']) ?></div>
+                    <?php endif; ?>
+                  </div>
+                <?php endif; ?>
                 <?php if ($storeSettings['paypal_email'] === ''): ?>
                   <div class="alert-inline alert-warning">Checkout is not configured yet. Please contact us if you would like to reserve these items.</div>
                 <?php elseif (!$checkoutItems): ?>

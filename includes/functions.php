@@ -631,6 +631,23 @@ function merchPaypalCheckoutUrl(array $storeSettings): string {
 }
 
 /**
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $storeSettings
+ */
+function merchPaypalEnvironmentLabel(array $storeSettings): string {
+    return $storeSettings['paypal_use_sandbox'] ? 'PayPal Sandbox' : 'Live PayPal';
+}
+
+function merchPaypalSandboxTestingHint(): string {
+    return 'Sandbox testing requires the email for a PayPal Developer sandbox business seller account, and checkout must be completed with a different sandbox personal buyer account. Using the seller login or a live PayPal account will trigger PayPal\'s generic payment error.';
+}
+
+/**
  * @return array{
  *   paypal_email: string,
  *   paypal_currency: string,
