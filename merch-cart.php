@@ -312,10 +312,16 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     $defaultLogPath = trim((string) ini_get('error_log'));
     $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
         ? (string) MERCH_PAYPAL_LOG_PATH
-        : ($defaultLogPath !== '' ? $defaultLogPath : dirname(__DIR__) . '/error_log');
+        : ($defaultLogPath !== '' ? $defaultLogPath : rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'redwater_merch_paypal.log');
     if (error_log($line, 3, $logPath) === false) {
         $lastError = error_get_last();
-        $reason = is_array($lastError) && isset($lastError['message']) ? ' Reason: ' . $lastError['message'] : '';
+        $reason = '';
+        if (is_array($lastError) && isset($lastError['message'])) {
+            $sanitizedReason = trim(str_replace(["\r", "\n"], ' ', (string) $lastError['message']));
+            if ($sanitizedReason !== '') {
+                $reason = ' Reason: ' . substr($sanitizedReason, 0, 300);
+            }
+        }
         error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . '. Falling back to the default PHP error log.' . $reason);
         if (error_log($line) === false) {
             trigger_error('[Merch PayPal Checkout] Fallback log write also failed for attempt ' . $attemptId . '.', E_USER_WARNING);
@@ -365,10 +371,10 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
         var form = document.getElementById('paypal-redirect-form');
         if (form) {
           // Short delay gives assistive tech time to announce the attempt ID before redirecting.
-          var autoSubmitDelayMs = 1200;
+          var PAYPAL_REDIRECT_DELAY_MS = 1200;
           window.setTimeout(function () {
             form.submit();
-          }, autoSubmitDelayMs);
+          }, PAYPAL_REDIRECT_DELAY_MS);
         }
       });
     </script>
