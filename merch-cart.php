@@ -106,7 +106,7 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
         <input type="hidden" name="amount_<?= $paypalIndex ?>" value="<?= e(merchNormalizeAmount($entry['item']['price'])) ?>">
         <input type="hidden" name="quantity_<?= $paypalIndex ?>" value="<?= e((string) $entry['quantity']) ?>">
         <?php if (merchAmountToMinorUnits($entry['shipping_cost']) > 0): ?>
-          <input type="hidden" name="shipping_<?= $paypalIndex ?>" value="<?= e($entry['shipping_cost']) ?>">
+          <input type="hidden" name="shipping_<?= $paypalIndex ?>" value="<?= e(merchNormalizeAmount($entry['shipping_cost'])) ?>">
         <?php endif; ?>
         <?php if ($entry['variant'] !== ''): ?>
           <input type="hidden" name="on0_<?= $paypalIndex ?>" value="Variant">
@@ -134,6 +134,10 @@ function merchPaypalItemName(array $entry): string {
 
 function merchAmountToMinorUnits(string $amount): int {
     $normalized = merchNormalizeAmount($amount);
+    $sign = str_starts_with($normalized, '-') ? -1 : 1;
+    if ($sign < 0) {
+        $normalized = substr($normalized, 1);
+    }
     $parts = explode('.', $normalized, 2);
     $wholeUnits = $parts[0];
     $fractionalUnits = $parts[1] ?? '';
@@ -144,7 +148,7 @@ function merchAmountToMinorUnits(string $amount): int {
     } else {
         $fractionalMinorUnits = (int) substr($fractionalUnits, 0, 2);
     }
-    return ((int) $wholeUnits * 100) + $fractionalMinorUnits;
+    return $sign * (((int) $wholeUnits * 100) + $fractionalMinorUnits);
 }
 
 function merchMinorUnitsToAmountString(int $minorUnits): string {
@@ -301,7 +305,7 @@ include __DIR__ . '/includes/header.php';
                         <?php if ($line['item'] !== null): ?>
                           <div><?= e(merchCartDisplayAmount($line['line_subtotal'], $storeSettings['paypal_currency'])) ?></div>
                           <?php if (merchAmountToMinorUnits($line['shipping_cost']) > 0): ?>
-                            <div class="text-muted" style="font-size:0.85rem;">+ <?= e(merchFormatAmount($line['shipping_cost'], $storeSettings['paypal_currency'])) ?> shipping</div>
+                            <div class="text-muted" style="font-size:0.85rem;">+ <?= e(merchCartDisplayAmount(merchAmountToMinorUnits($line['shipping_cost']), $storeSettings['paypal_currency'])) ?> shipping</div>
                           <?php endif; ?>
                         <?php else: ?>
                           —
