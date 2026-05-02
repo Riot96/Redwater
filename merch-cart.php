@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
  */
 function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings): void {
     ?>
-    <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" target="_blank" class="merch-cart-checkout-form">
+    <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" class="merch-cart-checkout-form">
       <input type="hidden" name="cmd" value="_cart">
       <input type="hidden" name="upload" value="1">
       <input type="hidden" name="business" value="<?= e($storeSettings['paypal_email']) ?>">
@@ -102,10 +102,10 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
         $paypalIndex = $index + 1;
         ?>
         <input type="hidden" name="item_name_<?= $paypalIndex ?>" value="<?= e($entry['item']['name']) ?>">
-        <input type="hidden" name="item_number_<?= $paypalIndex ?>" value="<?= e($entry['item']['id'] . ':' . $entry['fulfillment'] . ':' . $entry['variant']) ?>">
+        <input type="hidden" name="item_number_<?= $paypalIndex ?>" value="<?= e($entry['item']['id']) ?>">
         <input type="hidden" name="amount_<?= $paypalIndex ?>" value="<?= e(merchNormalizeAmount($entry['item']['price'])) ?>">
         <input type="hidden" name="quantity_<?= $paypalIndex ?>" value="<?= e((string) $entry['quantity']) ?>">
-        <?php if ((float) $entry['shipping_cost'] > 0): ?>
+        <?php if (merchAmountToMinorUnits($entry['shipping_cost']) > 0): ?>
           <input type="hidden" name="shipping_<?= $paypalIndex ?>" value="<?= e($entry['shipping_cost']) ?>">
         <?php endif; ?>
         <?php if ($entry['variant'] !== ''): ?>
@@ -124,8 +124,16 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
     <?php
 }
 
-function merchCartDisplayAmount(float $amount, string $currency): string {
-    return merchFormatAmount(number_format($amount, 2, '.', ''), $currency);
+function merchAmountToMinorUnits(string $amount): int {
+    return (int) str_replace('.', '', merchNormalizeAmount($amount));
+}
+
+function merchMinorUnitsToAmountString(int $minorUnits): string {
+    return number_format($minorUnits / 100, 2, '.', '');
+}
+
+function merchCartDisplayAmount(int $minorUnits, string $currency): string {
+    return merchFormatAmount(merchMinorUnitsToAmountString($minorUnits), $currency);
 }
 
 $storeSettings = getMerchStoreSettings();
@@ -137,8 +145,8 @@ $seoDescription = 'Review your RedWater Entertainment merch cart and continue to
 
 $cartLines = [];
 $checkoutItems = [];
-$subtotal = 0.0;
-$shippingTotal = 0.0;
+$subtotal = 0;
+$shippingTotal = 0;
 
 foreach ($cartEntries as $index => $entry) {
     $item = findMerchItemById($catalogItems, $entry['item_id']);
@@ -161,16 +169,16 @@ foreach ($cartEntries as $index => $entry) {
             'variant' => $entry['variant'],
             'fulfillment' => $entry['fulfillment'],
             'shipping_cost' => '0.00',
-            'line_subtotal' => 0.0,
-            'line_total' => 0.0,
+            'line_subtotal' => 0,
+            'line_total' => 0,
             'reason' => $reason,
         ];
         continue;
     }
 
     $shippingCost = $entry['fulfillment'] === 'shipping' ? merchNormalizeAmount($item['shipping_cost']) : '0.00';
-    $lineSubtotal = (float) $item['price'] * $entry['quantity'];
-    $lineTotal = $lineSubtotal + (float) $shippingCost;
+    $lineSubtotal = merchAmountToMinorUnits($item['price']) * $entry['quantity'];
+    $lineTotal = $lineSubtotal + merchAmountToMinorUnits($shippingCost);
     $cartLines[] = [
         'entry_index' => $index,
         'item' => $item,
@@ -188,7 +196,7 @@ foreach ($cartEntries as $index => $entry) {
     }
 
     $subtotal += $lineSubtotal;
-    $shippingTotal += (float) $shippingCost;
+    $shippingTotal += merchAmountToMinorUnits($shippingCost);
     $checkoutItems[] = [
         'entry_index' => $index,
         'quantity' => $entry['quantity'],
@@ -271,7 +279,7 @@ include __DIR__ . '/includes/header.php';
                       <td>
                         <?php if ($line['item'] !== null): ?>
                           <div><?= e(merchCartDisplayAmount($line['line_subtotal'], $storeSettings['paypal_currency'])) ?></div>
-                          <?php if ((float) $line['shipping_cost'] > 0): ?>
+                          <?php if (merchAmountToMinorUnits($line['shipping_cost']) > 0): ?>
                             <div class="text-muted" style="font-size:0.85rem;">+ <?= e(merchFormatAmount($line['shipping_cost'], $storeSettings['paypal_currency'])) ?> shipping</div>
                           <?php endif; ?>
                         <?php else: ?>
