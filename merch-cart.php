@@ -315,7 +315,9 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
         $lastError = error_get_last();
         $reason = is_array($lastError) && isset($lastError['message']) ? ' Reason: ' . $lastError['message'] : '';
         error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . ' at ' . $logPath . '. Falling back to the default PHP error log.' . $reason);
-        error_log($line);
+        if (error_log($line) === false) {
+            trigger_error('[Merch PayPal Checkout] Fallback log write also failed for attempt ' . $attemptId . '.', E_USER_WARNING);
+        }
     }
 }
 
@@ -359,10 +361,11 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
     <script>
       window.addEventListener('load', function () {
         var form = document.getElementById('paypal-redirect-form');
+        var autoSubmitDelayMs = 1200;
         if (form) {
           window.setTimeout(function () {
             form.submit();
-          }, 1200);
+          }, autoSubmitDelayMs);
         }
       });
     </script>
