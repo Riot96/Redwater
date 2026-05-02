@@ -312,7 +312,9 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
         ? (string) MERCH_PAYPAL_LOG_PATH
         : __DIR__ . '/error_log';
     if (error_log($line, 3, $logPath) === false) {
-        error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . ' at ' . $logPath);
+        $lastError = error_get_last();
+        $reason = is_array($lastError) && isset($lastError['message']) ? ' Reason: ' . $lastError['message'] : '';
+        error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . ' at ' . $logPath . '.' . $reason);
         error_log($line);
     }
 }
@@ -342,7 +344,7 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
                 Attempt ID: <strong><?= e($attemptId) ?></strong><br>
                 The outgoing checkout payload was logged on the server before redirecting.
               </div>
-              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log.</p>
+              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log. By default this is the site-root <code>error_log</code> file, unless <code>MERCH_PAYPAL_LOG_PATH</code> is configured.</p>
               <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" id="paypal-redirect-form" class="merch-cart-checkout-form">
                 <?php foreach ($payload as $name => $value): ?>
                   <input type="hidden" name="<?= e($name) ?>" value="<?= e($value) ?>">
