@@ -130,21 +130,14 @@ function merchPaypalItemName(array $entry): string {
         $details[] = $entry['variant'];
     }
     $details[] = merchFormatFulfillmentLabel($entry['fulfillment']);
-    if ($details === []) {
-        return $entry['item']['name'];
-    }
     return $entry['item']['name'] . ' (' . implode(' / ', $details) . ')';
 }
 
 function merchAmountToMinorUnits(string $amount): int {
     $normalized = merchNormalizeAmount($amount);
-    $wholeUnits = $normalized;
-    $fractionalUnits = '';
-    $separatorPosition = strpos($normalized, '.');
-    if ($separatorPosition !== false) {
-        $wholeUnits = substr($normalized, 0, $separatorPosition);
-        $fractionalUnits = substr($normalized, $separatorPosition + 1);
-    }
+    $parts = explode('.', $normalized, 2);
+    $wholeUnits = $parts[0];
+    $fractionalUnits = $parts[1] ?? '';
     if ($fractionalUnits === '') {
         $fractionalMinorUnits = 0;
     } elseif (strlen($fractionalUnits) === 1) {
