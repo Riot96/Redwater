@@ -52,6 +52,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         clearMerchCart();
         redirectWithMessage('/merch-cart.php', 'success', 'Cart cleared.');
     }
+
+    if ($action === 'checkout') {
+        $storeSettings = getMerchStoreSettings();
+        if ($storeSettings['paypal_email'] === '') {
+            redirectWithMessage('/merch-cart.php', 'error', 'Checkout is not configured yet.');
+        }
+
+        $cartState = buildMerchCartState(getMerchCart(), getMerchItems(true));
+        if ($cartState['checkoutItems'] === []) {
+            redirectWithMessage('/merch-cart.php', 'error', 'Remove unavailable items before checking out.');
+        }
+
+        $attemptId = merchGenerateCheckoutAttemptId();
+        $payload = buildMerchPaypalCheckoutPayload($cartState['checkoutItems'], $storeSettings, $attemptId);
+        logMerchPaypalCheckoutAttempt($attemptId, $payload, $storeSettings);
+        renderMerchPaypalRedirectPage($payload, $storeSettings, $attemptId);
+        exit;
+    }
 }
 
 /**
@@ -92,38 +110,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
  */
 function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings): void {
     ?>
-    <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" class="merch-cart-checkout-form">
-      <input type="hidden" name="cmd" value="_cart">
-      <input type="hidden" name="upload" value="1">
-      <input type="hidden" name="business" value="<?= e($storeSettings['paypal_email']) ?>">
-      <input type="hidden" name="currency_code" value="<?= e($storeSettings['paypal_currency']) ?>">
-      <?php foreach ($checkoutItems as $index => $entry): ?>
-        <?php
-        $paypalIndex = $index + 1;
-        ?>
-        <input type="hidden" name="item_name_<?= $paypalIndex ?>" value="<?= e(merchPaypalItemName($entry)) ?>">
-        <input type="hidden" name="item_number_<?= $paypalIndex ?>" value="<?= e($entry['item']['id']) ?>">
-        <input type="hidden" name="amount_<?= $paypalIndex ?>" value="<?= e(merchNormalizeAmount($entry['item']['price'])) ?>">
-        <input type="hidden" name="quantity_<?= $paypalIndex ?>" value="<?= e((string) $entry['quantity']) ?>">
-        <?php if (merchAmountToMinorUnits($entry['shipping_cost']) > 0): ?>
-          <input type="hidden" name="shipping_<?= $paypalIndex ?>" value="<?= e(merchNormalizeAmount($entry['shipping_cost'])) ?>">
-        <?php endif; ?>
-        <?php if ($entry['variant'] !== ''): ?>
-          <input type="hidden" name="on0_<?= $paypalIndex ?>" value="Variant">
-          <input type="hidden" name="os0_<?= $paypalIndex ?>" value="<?= e($entry['variant']) ?>">
-          <input type="hidden" name="on1_<?= $paypalIndex ?>" value="Fulfillment">
-          <input type="hidden" name="os1_<?= $paypalIndex ?>" value="<?= e(merchFormatFulfillmentLabel($entry['fulfillment'])) ?>">
-        <?php else: ?>
-          <input type="hidden" name="on0_<?= $paypalIndex ?>" value="Fulfillment">
-          <input type="hidden" name="os0_<?= $paypalIndex ?>" value="<?= e(merchFormatFulfillmentLabel($entry['fulfillment'])) ?>">
-        <?php endif; ?>
-      <?php endforeach; ?>
+    <form method="post" action="/merch-cart.php" class="merch-cart-checkout-form">
+      <?= csrfField() ?>
+      <input type="hidden" name="action" value="checkout">
       <button type="submit" class="btn btn-primary w-full">Checkout with PayPal</button>
-      <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. Orders are still reviewed against the live catalog before fulfillment.</p>
+      <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. We log each checkout attempt to the server <code>error_log</code> file before redirecting to PayPal so sandbox issues can be traced.</p>
     </form>
     <?php
 }
 
+/**
+ * @param array{
+ *   entry_index: int,
+ *   quantity: int,
+ *   variant: string,
+ *   fulfillment: string,
+ *   item: array{
+ *     id: string,
+ *     slug: string,
+ *     name: string,
+ *     seo_title: string,
+ *     seo_description: string,
+ *     description: string,
+ *     price: string,
+ *     category: string,
+ *     tags: string,
+ *     variants: list<string>,
+ *     image_path: string,
+ *     shipping_enabled: bool,
+ *     shipping_cost: string,
+ *     shipping_notes: string,
+ *     pickup_enabled: bool,
+ *     pickup_notes: string,
+ *     sort_order: int,
+ *     is_active: bool
+ *   },
+ *   shipping_cost: string
+ * } $entry
+ */
 function merchPaypalItemName(array $entry): string {
     $fulfillmentLabel = merchFormatFulfillmentLabel($entry['fulfillment']);
     if ($entry['variant'] === '') {
@@ -161,6 +185,335 @@ function merchCartDisplayAmount(int $minorUnits, string $currency): string {
     return merchFormatAmount(merchMinorUnitsToAmountString($minorUnits), $currency);
 }
 
+function merchGenerateCheckoutAttemptId(): string {
+    try {
+        return 'merch_checkout_' . bin2hex(random_bytes(6));
+    } catch (Exception $e) {
+        return uniqid('merch_checkout_', false);
+    }
+}
+
+function merchSiteUrl(): string {
+    if (defined('SITE_URL') && trim((string) SITE_URL) !== '') {
+        return rtrim((string) SITE_URL, '/');
+    }
+
+    $scheme = 'http';
+    $https = strtolower(serverString('HTTPS'));
+    if ($https !== '' && $https !== 'off') {
+        $scheme = 'https';
+    }
+
+    return $scheme . '://' . serverString('HTTP_HOST', 'localhost');
+}
+
+/**
+ * @param list<array{
+ *   entry_index: int,
+ *   quantity: int,
+ *   variant: string,
+ *   fulfillment: string,
+ *   item: array{
+ *     id: string,
+ *     slug: string,
+ *     name: string,
+ *     seo_title: string,
+ *     seo_description: string,
+ *     description: string,
+ *     price: string,
+ *     category: string,
+ *     tags: string,
+ *     variants: list<string>,
+ *     image_path: string,
+ *     shipping_enabled: bool,
+ *     shipping_cost: string,
+ *     shipping_notes: string,
+ *     pickup_enabled: bool,
+ *     pickup_notes: string,
+ *     sort_order: int,
+ *     is_active: bool
+ *   },
+ *   shipping_cost: string
+ * }> $checkoutItems
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $storeSettings
+ * @return array<string, string>
+ */
+function buildMerchPaypalCheckoutPayload(array $checkoutItems, array $storeSettings, string $attemptId): array {
+    $payload = [
+        'cmd' => '_cart',
+        'upload' => '1',
+        'business' => $storeSettings['paypal_email'],
+        'currency_code' => $storeSettings['paypal_currency'],
+        'charset' => 'utf-8',
+        'return' => merchSiteUrl() . '/merch-cart.php?paypal=returned&attempt=' . urlencode($attemptId),
+        'cancel_return' => merchSiteUrl() . '/merch-cart.php?paypal=cancelled&attempt=' . urlencode($attemptId),
+        'custom' => $attemptId,
+    ];
+
+    foreach ($checkoutItems as $index => $entry) {
+        $paypalIndex = $index + 1;
+        $payload['item_name_' . $paypalIndex] = merchPaypalItemName($entry);
+        $payload['item_number_' . $paypalIndex] = $entry['item']['id'];
+        $payload['amount_' . $paypalIndex] = merchNormalizeAmount($entry['item']['price']);
+        $payload['quantity_' . $paypalIndex] = (string) $entry['quantity'];
+        if (merchAmountToMinorUnits($entry['shipping_cost']) > 0) {
+            $payload['shipping_' . $paypalIndex] = merchNormalizeAmount($entry['shipping_cost']);
+        }
+        if ($entry['variant'] !== '') {
+            $payload['on0_' . $paypalIndex] = 'Variant';
+            $payload['os0_' . $paypalIndex] = $entry['variant'];
+            $payload['on1_' . $paypalIndex] = 'Fulfillment';
+            $payload['os1_' . $paypalIndex] = merchFormatFulfillmentLabel($entry['fulfillment']);
+        } else {
+            $payload['on0_' . $paypalIndex] = 'Fulfillment';
+            $payload['os0_' . $paypalIndex] = merchFormatFulfillmentLabel($entry['fulfillment']);
+        }
+    }
+
+    return $payload;
+}
+
+/**
+ * @param array<string, string> $payload
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $storeSettings
+ */
+function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array $storeSettings): void {
+    $entry = [
+        'timestamp' => gmdate('c'),
+        'attempt_id' => $attemptId,
+        'environment' => merchPaypalEnvironmentLabel($storeSettings),
+        'target_url' => merchPaypalCheckoutUrl($storeSettings),
+        'receiver_email' => $storeSettings['paypal_email'],
+        'payload' => $payload,
+    ];
+    $json = json_encode($entry, JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) {
+        $json = '{"attempt_id":"' . $attemptId . '"}';
+    }
+    $line = '[Merch PayPal Checkout] ' . $json . PHP_EOL;
+    if (@error_log($line, 3, __DIR__ . '/error_log') === false) {
+        error_log($line);
+    }
+}
+
+/**
+ * @param array<string, string> $payload
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $storeSettings
+ */
+function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, string $attemptId): void {
+    $pageTitle = 'Redirecting to PayPal';
+    $seoDescription = 'Redirecting to PayPal checkout.';
+    include __DIR__ . '/includes/header.php';
+    ?>
+    <main class="page-wrapper">
+      <section class="section-sm">
+        <div class="container" style="max-width:760px;">
+          <div class="card">
+            <div class="card-body">
+              <h1 style="font-size:1.6rem;">Redirecting to <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?></h1>
+              <div class="alert-inline alert-info" style="margin:1rem 0;">
+                Attempt ID: <strong><?= e($attemptId) ?></strong><br>
+                The outgoing checkout payload was logged to the server <code>error_log</code> file before redirecting.
+              </div>
+              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log.</p>
+              <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" id="paypal-redirect-form" class="merch-cart-checkout-form">
+                <?php foreach ($payload as $name => $value): ?>
+                  <input type="hidden" name="<?= e($name) ?>" value="<?= e($value) ?>">
+                <?php endforeach; ?>
+                <button type="submit" class="btn btn-primary">Continue to PayPal</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script>
+      window.addEventListener('load', function () {
+        var form = document.getElementById('paypal-redirect-form');
+        if (form) {
+          form.submit();
+        }
+      });
+    </script>
+    <?php
+    include __DIR__ . '/includes/footer.php';
+}
+
+/**
+ * @param list<array{item_id: string, variant: string, fulfillment: string, quantity: int}> $cartEntries
+ * @param list<array{
+ *   id: string,
+ *   slug: string,
+ *   name: string,
+ *   seo_title: string,
+ *   seo_description: string,
+ *   description: string,
+ *   price: string,
+ *   category: string,
+ *   tags: string,
+ *   variants: list<string>,
+ *   image_path: string,
+ *   shipping_enabled: bool,
+ *   shipping_cost: string,
+ *   shipping_notes: string,
+ *   pickup_enabled: bool,
+ *   pickup_notes: string,
+ *   sort_order: int,
+ *   is_active: bool
+ * }> $catalogItems
+ * @return array{
+ *   cartLines: list<array{
+ *     entry_index: int,
+ *     item: array{
+ *       id: string,
+ *       slug: string,
+ *       name: string,
+ *       seo_title: string,
+ *       seo_description: string,
+ *       description: string,
+ *       price: string,
+ *       category: string,
+ *       tags: string,
+ *       variants: list<string>,
+ *       image_path: string,
+ *       shipping_enabled: bool,
+ *       shipping_cost: string,
+ *       shipping_notes: string,
+ *       pickup_enabled: bool,
+ *       pickup_notes: string,
+ *       sort_order: int,
+ *       is_active: bool
+ *     }|null,
+ *     quantity: int,
+ *     variant: string,
+ *     fulfillment: string,
+ *     shipping_cost: string,
+ *     line_subtotal: int,
+ *     line_total: int,
+ *     reason: string
+ *   }>,
+ *   checkoutItems: list<array{
+ *     entry_index: int,
+ *     quantity: int,
+ *     variant: string,
+ *     fulfillment: string,
+ *     item: array{
+ *       id: string,
+ *       slug: string,
+ *       name: string,
+ *       seo_title: string,
+ *       seo_description: string,
+ *       description: string,
+ *       price: string,
+ *       category: string,
+ *       tags: string,
+ *       variants: list<string>,
+ *       image_path: string,
+ *       shipping_enabled: bool,
+ *       shipping_cost: string,
+ *       shipping_notes: string,
+ *       pickup_enabled: bool,
+ *       pickup_notes: string,
+ *       sort_order: int,
+ *       is_active: bool
+ *     },
+ *     shipping_cost: string
+ *   }>,
+ *   subtotal: int,
+ *   shippingTotal: int
+ * }
+ */
+function buildMerchCartState(array $cartEntries, array $catalogItems): array {
+    $cartLines = [];
+    $checkoutItems = [];
+    $subtotal = 0;
+    $shippingTotal = 0;
+
+    foreach ($cartEntries as $index => $entry) {
+        $item = findMerchItemById($catalogItems, $entry['item_id']);
+        $reason = '';
+        if ($item === null) {
+            $reason = 'This item is no longer available.';
+        } elseif ($entry['variant'] !== '' && !in_array($entry['variant'], $item['variants'], true)) {
+            $reason = 'The selected variant is no longer available.';
+        } elseif ($entry['fulfillment'] === 'shipping' && !$item['shipping_enabled']) {
+            $reason = 'Shipping is no longer available for this item.';
+        } elseif ($entry['fulfillment'] === 'pickup' && !$item['pickup_enabled']) {
+            $reason = 'Pickup is no longer available for this item.';
+        }
+
+        if ($item === null) {
+            $cartLines[] = [
+                'entry_index' => $index,
+                'item' => null,
+                'quantity' => $entry['quantity'],
+                'variant' => $entry['variant'],
+                'fulfillment' => $entry['fulfillment'],
+                'shipping_cost' => '0.00',
+                'line_subtotal' => 0,
+                'line_total' => 0,
+                'reason' => $reason,
+            ];
+            continue;
+        }
+
+        $shippingCost = $entry['fulfillment'] === 'shipping' ? merchNormalizeAmount($item['shipping_cost']) : '0.00';
+        $lineSubtotal = merchAmountToMinorUnits($item['price']) * $entry['quantity'];
+        $lineTotal = $lineSubtotal + merchAmountToMinorUnits($shippingCost);
+        $cartLines[] = [
+            'entry_index' => $index,
+            'item' => $item,
+            'quantity' => $entry['quantity'],
+            'variant' => $entry['variant'],
+            'fulfillment' => $entry['fulfillment'],
+            'shipping_cost' => $shippingCost,
+            'line_subtotal' => $lineSubtotal,
+            'line_total' => $lineTotal,
+            'reason' => $reason,
+        ];
+
+        if ($reason !== '') {
+            continue;
+        }
+
+        $subtotal += $lineSubtotal;
+        $shippingTotal += merchAmountToMinorUnits($shippingCost);
+        $checkoutItems[] = [
+            'entry_index' => $index,
+            'quantity' => $entry['quantity'],
+            'variant' => $entry['variant'],
+            'fulfillment' => $entry['fulfillment'],
+            'item' => $item,
+            'shipping_cost' => $shippingCost,
+        ];
+    }
+
+    return [
+        'cartLines' => $cartLines,
+        'checkoutItems' => $checkoutItems,
+        'subtotal' => $subtotal,
+        'shippingTotal' => $shippingTotal,
+    ];
+}
+
 $storeSettings = getMerchStoreSettings();
 $cartEntries = getMerchCart();
 $catalogItems = getMerchItems(true);
@@ -168,69 +521,13 @@ $cartItemCount = getMerchCartItemCount();
 $pageTitle = 'Merch Cart';
 $seoDescription = 'Review your RedWater Entertainment merch cart and continue to PayPal checkout.';
 
-$cartLines = [];
-$checkoutItems = [];
-$subtotal = 0;
-$shippingTotal = 0;
-
-foreach ($cartEntries as $index => $entry) {
-    $item = findMerchItemById($catalogItems, $entry['item_id']);
-    $reason = '';
-    if ($item === null) {
-        $reason = 'This item is no longer available.';
-    } elseif ($entry['variant'] !== '' && !in_array($entry['variant'], $item['variants'], true)) {
-        $reason = 'The selected variant is no longer available.';
-    } elseif ($entry['fulfillment'] === 'shipping' && !$item['shipping_enabled']) {
-        $reason = 'Shipping is no longer available for this item.';
-    } elseif ($entry['fulfillment'] === 'pickup' && !$item['pickup_enabled']) {
-        $reason = 'Pickup is no longer available for this item.';
-    }
-
-    if ($item === null) {
-        $cartLines[] = [
-            'entry_index' => $index,
-            'item' => null,
-            'quantity' => $entry['quantity'],
-            'variant' => $entry['variant'],
-            'fulfillment' => $entry['fulfillment'],
-            'shipping_cost' => '0.00',
-            'line_subtotal' => 0,
-            'line_total' => 0,
-            'reason' => $reason,
-        ];
-        continue;
-    }
-
-    $shippingCost = $entry['fulfillment'] === 'shipping' ? merchNormalizeAmount($item['shipping_cost']) : '0.00';
-    $lineSubtotal = merchAmountToMinorUnits($item['price']) * $entry['quantity'];
-    $lineTotal = $lineSubtotal + merchAmountToMinorUnits($shippingCost);
-    $cartLines[] = [
-        'entry_index' => $index,
-        'item' => $item,
-        'quantity' => $entry['quantity'],
-        'variant' => $entry['variant'],
-        'fulfillment' => $entry['fulfillment'],
-        'shipping_cost' => $shippingCost,
-        'line_subtotal' => $lineSubtotal,
-        'line_total' => $lineTotal,
-        'reason' => $reason,
-    ];
-
-    if ($reason !== '') {
-        continue;
-    }
-
-    $subtotal += $lineSubtotal;
-    $shippingTotal += merchAmountToMinorUnits($shippingCost);
-    $checkoutItems[] = [
-        'entry_index' => $index,
-        'quantity' => $entry['quantity'],
-        'variant' => $entry['variant'],
-        'fulfillment' => $entry['fulfillment'],
-        'item' => $item,
-        'shipping_cost' => $shippingCost,
-    ];
-}
+$cartState = buildMerchCartState($cartEntries, $catalogItems);
+$cartLines = $cartState['cartLines'];
+$checkoutItems = $cartState['checkoutItems'];
+$subtotal = $cartState['subtotal'];
+$shippingTotal = $cartState['shippingTotal'];
+$paypalStatus = getString('paypal');
+$paypalAttemptId = trim(getString('attempt'));
 
 include __DIR__ . '/includes/header.php';
 ?>
@@ -343,6 +640,11 @@ include __DIR__ . '/includes/header.php';
                     <?php if ($storeSettings['paypal_email'] !== ''): ?>
                       <div class="mt-1">Current checkout target: <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?> → <?= e($storeSettings['paypal_email']) ?></div>
                     <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+                <?php if ($paypalAttemptId !== '' && ($paypalStatus === 'cancelled' || $paypalStatus === 'returned')): ?>
+                  <div class="alert-inline alert-info" style="margin-top:1rem;">
+                    Checkout attempt <strong><?= e($paypalAttemptId) ?></strong> was logged to the server <code>error_log</code> file before redirecting to PayPal.
                   </div>
                 <?php endif; ?>
                 <?php if ($storeSettings['paypal_email'] === ''): ?>
