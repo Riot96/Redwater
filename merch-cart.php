@@ -189,7 +189,7 @@ function merchGenerateCheckoutAttemptId(): string {
     try {
         return 'merch_checkout_' . bin2hex(random_bytes(6));
     } catch (Exception $e) {
-        return uniqid('merch_checkout_', false);
+        return str_replace('.', '', uniqid('merch_checkout_', true));
     }
 }
 
@@ -311,7 +311,8 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
         ? (string) MERCH_PAYPAL_LOG_PATH
         : __DIR__ . '/error_log';
-    if (@error_log($line, 3, $logPath) === false) {
+    if (error_log($line, 3, $logPath) === false) {
+        error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . ' at ' . $logPath);
         error_log($line);
     }
 }
@@ -652,7 +653,7 @@ include __DIR__ . '/includes/header.php';
                 <?php endif; ?>
                 <?php if ($paypalAttemptId !== '' && ($paypalStatus === 'cancelled' || $paypalStatus === 'returned')): ?>
                   <div class="alert-inline alert-info" style="margin-top:1rem;">
-                    Checkout attempt <strong><?= e($paypalAttemptId) ?></strong> was logged to the server <code>error_log</code> file before redirecting to PayPal.
+                    Checkout attempt <strong><?= e($paypalAttemptId) ?></strong> was logged on the server before redirecting to PayPal.
                   </div>
                 <?php endif; ?>
                 <?php if ($storeSettings['paypal_email'] === ''): ?>
