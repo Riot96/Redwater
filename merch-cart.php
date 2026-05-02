@@ -127,7 +127,7 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
 function merchPaypalItemName(array $entry): string {
     $fulfillmentLabel = merchFormatFulfillmentLabel($entry['fulfillment']);
     if ($entry['variant'] === '') {
-        return $entry['item']['name'] . ' — ' . $fulfillmentLabel;
+        return $entry['item']['name'] . ' - ' . $fulfillmentLabel;
     }
     return $entry['item']['name'] . ' (' . $entry['variant'] . ' / ' . $fulfillmentLabel . ')';
 }
@@ -142,7 +142,7 @@ function merchAmountToMinorUnits(string $amount): int {
     } elseif (strlen($fractionalUnits) === 1) {
         $fractionalMinorUnits = (int) $fractionalUnits * 10;
     } else {
-        $fractionalMinorUnits = (int) str_pad(substr($fractionalUnits, 0, 2), 2, '0', STR_PAD_RIGHT);
+        $fractionalMinorUnits = (int) substr($fractionalUnits, 0, 2);
     }
     return ((int) $wholeUnits * 100) + $fractionalMinorUnits;
 }
