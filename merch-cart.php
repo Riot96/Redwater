@@ -114,7 +114,7 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
       <?= csrfField() ?>
       <input type="hidden" name="action" value="checkout">
       <button type="submit" class="btn btn-primary w-full">Checkout with PayPal</button>
-      <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. We log each checkout attempt to the server <code>error_log</code> file before redirecting to PayPal so sandbox issues can be traced.</p>
+      <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. Each checkout attempt is logged on the server before redirecting to PayPal so sandbox issues can be traced.</p>
     </form>
     <?php
 }
@@ -199,6 +199,11 @@ function merchSiteUrl(): string {
     }
 
     $scheme = 'http';
+    $forwardedProtoParts = explode(',', serverString('HTTP_X_FORWARDED_PROTO'));
+    $forwardedProto = strtolower(trim($forwardedProtoParts[0]));
+    if ($forwardedProto === 'https') {
+        $scheme = 'https';
+    }
     $https = strtolower(serverString('HTTPS'));
     if ($https !== '' && $https !== 'off') {
         $scheme = 'https';
@@ -300,10 +305,13 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     ];
     $json = json_encode($entry, JSON_UNESCAPED_SLASHES);
     if (!is_string($json)) {
-        $json = '{"attempt_id":"' . $attemptId . '"}';
+        $json = (string) json_encode(['attempt_id' => $attemptId], JSON_UNESCAPED_SLASHES);
     }
     $line = '[Merch PayPal Checkout] ' . $json . PHP_EOL;
-    if (@error_log($line, 3, __DIR__ . '/error_log') === false) {
+    $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
+        ? (string) MERCH_PAYPAL_LOG_PATH
+        : __DIR__ . '/error_log';
+    if (@error_log($line, 3, $logPath) === false) {
         error_log($line);
     }
 }
@@ -331,7 +339,7 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
               <h1 style="font-size:1.6rem;">Redirecting to <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?></h1>
               <div class="alert-inline alert-info" style="margin:1rem 0;">
                 Attempt ID: <strong><?= e($attemptId) ?></strong><br>
-                The outgoing checkout payload was logged to the server <code>error_log</code> file before redirecting.
+                The outgoing checkout payload was logged on the server before redirecting.
               </div>
               <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log.</p>
               <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" id="paypal-redirect-form" class="merch-cart-checkout-form">
