@@ -101,7 +101,7 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
         <?php
         $paypalIndex = $index + 1;
         ?>
-        <input type="hidden" name="item_name_<?= $paypalIndex ?>" value="<?= e($entry['item']['name']) ?>">
+        <input type="hidden" name="item_name_<?= $paypalIndex ?>" value="<?= e(merchPaypalItemName($entry)) ?>">
         <input type="hidden" name="item_number_<?= $paypalIndex ?>" value="<?= e($entry['item']['id']) ?>">
         <input type="hidden" name="amount_<?= $paypalIndex ?>" value="<?= e(merchNormalizeAmount($entry['item']['price'])) ?>">
         <input type="hidden" name="quantity_<?= $paypalIndex ?>" value="<?= e((string) $entry['quantity']) ?>">
@@ -124,10 +124,26 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
     <?php
 }
 
+function merchPaypalItemName(array $entry): string {
+    $details = [];
+    if ($entry['variant'] !== '') {
+        $details[] = $entry['variant'];
+    }
+    $details[] = merchFormatFulfillmentLabel($entry['fulfillment']);
+    return $entry['item']['name'] . ' (' . implode(' / ', $details) . ')';
+}
+
 function merchAmountToMinorUnits(string $amount): int {
     $normalized = merchNormalizeAmount($amount);
     [$wholeUnits, $fractionalUnits] = array_pad(explode('.', $normalized, 2), 2, '');
-    return ((int) $wholeUnits * 100) + (int) str_pad(substr($fractionalUnits, 0, 2), 2, '0');
+    if ($fractionalUnits === '') {
+        $fractionalMinorUnits = 0;
+    } elseif (strlen($fractionalUnits) === 1) {
+        $fractionalMinorUnits = (int) $fractionalUnits * 10;
+    } else {
+        $fractionalMinorUnits = (int) substr($fractionalUnits, 0, 2);
+    }
+    return ((int) $wholeUnits * 100) + $fractionalMinorUnits;
 }
 
 function merchMinorUnitsToAmountString(int $minorUnits): string {
