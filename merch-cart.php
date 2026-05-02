@@ -130,12 +130,21 @@ function merchPaypalItemName(array $entry): string {
         $details[] = $entry['variant'];
     }
     $details[] = merchFormatFulfillmentLabel($entry['fulfillment']);
+    if ($details === []) {
+        return $entry['item']['name'];
+    }
     return $entry['item']['name'] . ' (' . implode(' / ', $details) . ')';
 }
 
 function merchAmountToMinorUnits(string $amount): int {
     $normalized = merchNormalizeAmount($amount);
-    [$wholeUnits, $fractionalUnits] = array_pad(explode('.', $normalized, 2), 2, '');
+    $wholeUnits = $normalized;
+    $fractionalUnits = '';
+    $separatorPosition = strpos($normalized, '.');
+    if ($separatorPosition !== false) {
+        $wholeUnits = substr($normalized, 0, $separatorPosition);
+        $fractionalUnits = substr($normalized, $separatorPosition + 1);
+    }
     if ($fractionalUnits === '') {
         $fractionalMinorUnits = 0;
     } elseif (strlen($fractionalUnits) === 1) {
@@ -149,7 +158,7 @@ function merchAmountToMinorUnits(string $amount): int {
 function merchMinorUnitsToAmountString(int $minorUnits): string {
     $sign = $minorUnits < 0 ? '-' : '';
     $absoluteMinorUnits = abs($minorUnits);
-    return $sign . intdiv($absoluteMinorUnits, 100) . '.' . str_pad((string) ($absoluteMinorUnits % 100), 2, '0', STR_PAD_LEFT);
+    return sprintf('%s%d.%02d', $sign, intdiv($absoluteMinorUnits, 100), $absoluteMinorUnits % 100);
 }
 
 function merchCartDisplayAmount(int $minorUnits, string $currency): string {
