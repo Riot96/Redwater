@@ -125,11 +125,13 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
 }
 
 function merchAmountToMinorUnits(string $amount): int {
-    return (int) str_replace('.', '', merchNormalizeAmount($amount));
+    $normalized = merchNormalizeAmount($amount);
+    [$wholeUnits, $fractionalUnits] = array_pad(explode('.', $normalized, 2), 2, '00');
+    return ((int) $wholeUnits * 100) + (int) str_pad(substr($fractionalUnits, 0, 2), 2, '0');
 }
 
 function merchMinorUnitsToAmountString(int $minorUnits): string {
-    return number_format($minorUnits / 100, 2, '.', '');
+    return intdiv($minorUnits, 100) . '.' . str_pad((string) ($minorUnits % 100), 2, '0', STR_PAD_LEFT);
 }
 
 function merchCartDisplayAmount(int $minorUnits, string $currency): string {
