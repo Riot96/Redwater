@@ -189,6 +189,7 @@ function merchGenerateCheckoutAttemptId(): string {
     try {
         return 'merch_checkout_' . bin2hex(random_bytes(6));
     } catch (Exception $e) {
+        error_log('[Merch PayPal Checkout] random_bytes failed while generating a checkout attempt ID. Falling back to uniqid().');
         return str_replace('.', '', uniqid('merch_checkout_', true));
     }
 }
@@ -311,11 +312,11 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     $defaultLogPath = trim((string) ini_get('error_log'));
     $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
         ? (string) MERCH_PAYPAL_LOG_PATH
-        : ($defaultLogPath !== '' ? $defaultLogPath : __DIR__ . '/error_log');
+        : ($defaultLogPath !== '' ? $defaultLogPath : dirname(__DIR__) . '/error_log');
     if (error_log($line, 3, $logPath) === false) {
         $lastError = error_get_last();
         $reason = is_array($lastError) && isset($lastError['message']) ? ' Reason: ' . $lastError['message'] : '';
-        error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . ' at ' . $logPath . '. Falling back to the default PHP error log.' . $reason);
+        error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . '. Falling back to the default PHP error log.' . $reason);
         if (error_log($line) === false) {
             trigger_error('[Merch PayPal Checkout] Fallback log write also failed for attempt ' . $attemptId . '.', E_USER_WARNING);
         }
@@ -362,9 +363,9 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
     <script>
       window.addEventListener('load', function () {
         var form = document.getElementById('paypal-redirect-form');
-        // Short delay gives assistive tech time to announce the attempt ID before redirecting.
-        var autoSubmitDelayMs = 1200;
         if (form) {
+          // Short delay gives assistive tech time to announce the attempt ID before redirecting.
+          var autoSubmitDelayMs = 1200;
           window.setTimeout(function () {
             form.submit();
           }, autoSubmitDelayMs);
