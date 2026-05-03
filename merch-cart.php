@@ -195,6 +195,29 @@ function merchGenerateCheckoutAttemptId(): string {
     }
 }
 
+/**
+ * @param array<string, string> $payload
+ * @return array<string, string>
+ */
+function merchPaypalDiagnosticPayload(array $payload): array {
+    $diagnosticPayload = [];
+    foreach ($payload as $name => $value) {
+        if (in_array($name, ['cmd', 'upload', 'business', 'currency_code', 'return', 'cancel_return', 'custom'], true)
+            || str_starts_with($name, 'item_name_')
+            || str_starts_with($name, 'item_number_')
+            || str_starts_with($name, 'amount_')
+            || str_starts_with($name, 'quantity_')
+            || str_starts_with($name, 'shipping_')
+            || str_starts_with($name, 'on0_')
+            || str_starts_with($name, 'os0_')
+            || str_starts_with($name, 'on1_')
+            || str_starts_with($name, 'os1_')) {
+            $diagnosticPayload[$name] = $value;
+        }
+    }
+    return $diagnosticPayload;
+}
+
 function merchSiteUrl(): string {
     if (defined('SITE_URL') && trim((string) SITE_URL) !== '') {
         return rtrim((string) SITE_URL, '/');
@@ -319,7 +342,7 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     $siteLogPath = __DIR__ . '/uploads/temp/redwater_merch_paypal.log';
     $siteLogDirectory = dirname($siteLogPath);
     if (!is_dir($siteLogDirectory)) {
-        @mkdir($siteLogDirectory, 0755, true);
+        @mkdir($siteLogDirectory, 0750, true);
     }
     $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
         ? (string) MERCH_PAYPAL_LOG_PATH
@@ -381,7 +404,7 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
  * } $logResult
  */
 function rememberMerchCheckoutAttempt(string $attemptId, array $storeSettings, array $payload, array $logResult): void {
-    $payloadPreview = (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    $payloadPreview = (string) json_encode(merchPaypalDiagnosticPayload($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     $_SESSION['merch_last_checkout_attempt'] = [
         'attempt_id' => $attemptId,
         'environment' => merchPaypalEnvironmentLabel($storeSettings),
@@ -447,7 +470,7 @@ function getMerchLastCheckoutAttempt(): ?array {
 function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, string $attemptId, array $logResult): void {
     $pageTitle = 'Review PayPal Checkout';
     $seoDescription = 'Review PayPal checkout details before continuing.';
-    $payloadPreview = (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    $payloadPreview = (string) json_encode(merchPaypalDiagnosticPayload($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     include __DIR__ . '/includes/header.php';
     ?>
     <main class="page-wrapper">
@@ -469,7 +492,7 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
                 <div><strong>Log status:</strong> <?= e($logResult['status_message']) ?></div>
               </div>
               <details style="margin:1rem 0;">
-                <summary style="cursor:pointer;font-weight:600;">Show outgoing PayPal payload</summary>
+                <summary style="cursor:pointer;font-weight:600;">Show PayPal diagnostic fields</summary>
                 <pre style="margin-top:0.75rem;padding:1rem;border-radius:0.75rem;background:rgba(15,23,42,0.7);overflow:auto;white-space:pre-wrap;word-break:break-word;"><?= e($payloadPreview) ?></pre>
               </details>
               <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" id="paypal-redirect-form" class="merch-cart-checkout-form">
@@ -782,7 +805,7 @@ include __DIR__ . '/includes/header.php';
                     <div style="margin-top:0.5rem;">Log status: <?= e($lastPaypalAttempt['log_status']) ?></div>
                     <?php if ($lastPaypalAttempt['payload_preview'] !== ''): ?>
                       <details style="margin-top:0.75rem;">
-                        <summary style="cursor:pointer;font-weight:600;">Show most recent PayPal payload</summary>
+                        <summary style="cursor:pointer;font-weight:600;">Show most recent PayPal diagnostic fields</summary>
                         <pre style="margin-top:0.75rem;padding:1rem;border-radius:0.75rem;background:rgba(15,23,42,0.7);overflow:auto;white-space:pre-wrap;word-break:break-word;"><?= e($lastPaypalAttempt['payload_preview']) ?></pre>
                       </details>
                     <?php endif; ?>
