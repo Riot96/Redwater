@@ -18,6 +18,7 @@ $pageMeta = stringValue($pageMeta ?? null);
 
 $user = currentUser();
 $currentScript = basename(serverString('PHP_SELF'));
+$merchCartCount = getMerchCartItemCount();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,7 +58,8 @@ $currentScript = basename(serverString('PHP_SELF'));
             <li><a href="/tickets.php" class="nav-link<?= $currentScript === 'tickets.php' ? ' active' : '' ?>">Tickets</a></li>
             <li><a href="/gallery.php" class="nav-link<?= $currentScript === 'gallery.php' ? ' active' : '' ?>">Gallery</a></li>
             <li><a href="/sponsors.php" class="nav-link<?= $currentScript === 'sponsors.php' ? ' active' : '' ?>">Sponsors</a></li>
-            <li><a href="/merch.php" class="nav-link<?= $currentScript === 'merch.php' ? ' active' : '' ?>">Merch</a></li>
+            <li><a href="/merch.php" class="nav-link<?= in_array($currentScript, ['merch.php', 'merch-item.php'], true) ? ' active' : '' ?>">Merch</a></li>
+            <li><a href="/merch-cart.php" class="nav-link<?= $currentScript === 'merch-cart.php' ? ' active' : '' ?>">Cart<?= $merchCartCount > 0 ? ' (' . $merchCartCount . ')' : '' ?></a></li>
             <li><a href="/policies.php" class="nav-link<?= $currentScript === 'policies.php' ? ' active' : '' ?>">Policies</a></li>
             <li><a href="/contact.php" class="nav-link<?= $currentScript === 'contact.php' ? ' active' : '' ?>">Contact</a></li>
             <?php if ($user): ?>

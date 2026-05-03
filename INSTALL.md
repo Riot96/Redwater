@@ -182,7 +182,12 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 - **Tickets** — Paste your HauntPay embed code
 - **Policies** — Add your policy text and/or image
 - **Sponsors** — Create tiers and add sponsors
+- **Merch** — Configure PayPal-backed merch items with photos, per-product SEO fields, variants, shipping, local pickup, and cart checkout
 - **Members** — Create member accounts for your volunteers/staff
+
+When using the built-in merch checkout, manually verify each paid order against the merch catalog details (item id/options/fulfillment) before fulfillment. The current PayPal Standard flow does not lock pricing server-side, and it uses the store PayPal email instead of API keys.
+
+For PayPal sandbox testing, use the email for a PayPal Developer sandbox business seller account in the merch settings and complete checkout with a separate sandbox personal buyer account. Using the seller login or a live PayPal account against sandbox checkout will trigger PayPal's generic "payment can't be completed" message.
 
 ---
 
@@ -195,7 +200,9 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 ├── policies.php           Policies page
 ├── gallery.php            Gallery page
 ├── sponsors.php           Sponsors page
-├── merch.php              Merch page (placeholder)
+├── merch.php              Merch storefront
+├── merch-item.php         Individual merch product page
+├── merch-cart.php         Merch cart & PayPal checkout
 ├── contact.php            Contact page
 ├── login.php              Login
 ├── forgot-password.php    Forgot password
@@ -210,6 +217,7 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 │   ├── policies.php       Edit policies
 │   ├── gallery.php        Manage gallery & approvals
 │   ├── sponsors.php       Manage sponsors & tiers
+│   ├── merch.php          Manage merch catalog & PayPal settings
 │   ├── contact.php        Contact settings & messages
 │   └── members.php        Manage members
 │
@@ -233,6 +241,7 @@ Log in as admin and visit the **Admin Dashboard** to configure:
 │
 ├── uploads/               User-uploaded files
 │   ├── gallery/           Gallery photos & videos
+│   ├── merch/             Merch product photos
 │   ├── policies/          Policy images
 │   └── sponsors/          Sponsor logos
 │

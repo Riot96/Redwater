@@ -78,6 +78,7 @@ include __DIR__ . '/../includes/header.php';
           <a href="/admin/gallery.php" class="btn btn-secondary btn-sm">Approve Gallery</a>
           <a href="/admin/members.php" class="btn btn-secondary btn-sm">Manage Members</a>
           <a href="/admin/sponsors.php" class="btn btn-secondary btn-sm">Manage Sponsors</a>
+          <a href="/admin/merch.php" class="btn btn-secondary btn-sm">Manage Merch</a>
           <a href="/admin/tickets.php" class="btn btn-secondary btn-sm">Update Tickets</a>
           <a href="/admin/contact.php" class="btn btn-secondary btn-sm">Contact Settings</a>
         </div>
