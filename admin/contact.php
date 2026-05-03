@@ -8,7 +8,7 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 $db = getDb();
-$supportsConvertedVolunteerLink = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
+$hasConvertedVolunteerIdColumn = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
 
 if (getString('export') === 'inquiries') {
     $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
@@ -66,12 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($act === 'convert_to_volunteer') {
         $msgId = postInt('msg_id');
-        if (!$supportsConvertedVolunteerLink) {
+        if (!$hasConvertedVolunteerIdColumn) {
             try {
                 ensureAutomaticMigrationColumn($db, 'contact_submissions', 'converted_volunteer_id INT NULL');
-                $supportsConvertedVolunteerLink = true;
-            } catch (PDOException) {
+                $hasConvertedVolunteerIdColumn = true;
+            } catch (PDOException $e) {
                 // Fall back to conversion without a persistent inquiry link on hosts that have not run this migration yet.
+                error_log('Unable to add contact_submissions.converted_volunteer_id automatically: ' . $e->getMessage());
             }
         }
 
@@ -117,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pending',
         ]);
         $volunteerId = (int)$db->lastInsertId();
-        if ($supportsConvertedVolunteerLink) {
+        if ($hasConvertedVolunteerIdColumn) {
             $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=?, is_read=1 WHERE id=?')->execute([$volunteerId, $msgId]);
         } else {
             $db->prepare('UPDATE contact_submissions SET is_read=1 WHERE id=?')->execute([$msgId]);
@@ -134,8 +135,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         flashMessage('success', 'Inquiry converted to a volunteer entry. Review and complete the volunteer profile.');
-        if (!$supportsConvertedVolunteerLink) {
-            flashMessage('info', 'The volunteer was created successfully. This inquiry will not keep an automatic volunteer link until the latest system update is applied.');
+        if (!$hasConvertedVolunteerIdColumn) {
+            flashMessage('info', 'The volunteer was created successfully. This inquiry will not keep an automatic volunteer link until the latest database migrations are applied.');
         }
         redirect('/admin/volunteers.php?edit=' . $volunteerId . '#volunteer-form');
     }
