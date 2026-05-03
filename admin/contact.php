@@ -8,7 +8,15 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 $db = getDb();
-$hasConvertedVolunteerIdColumn = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
+$contactSubmissionColumnsStmt = $db->query('SHOW COLUMNS FROM `contact_submissions`');
+assert($contactSubmissionColumnsStmt instanceof PDOStatement);
+$hasConvertedVolunteerIdColumn = false;
+foreach ($contactSubmissionColumnsStmt->fetchAll() as $columnDefinition) {
+    if (stringValue($columnDefinition['Field'] ?? '') === 'converted_volunteer_id') {
+        $hasConvertedVolunteerIdColumn = true;
+        break;
+    }
+}
 
 if (getString('export') === 'inquiries') {
     $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');

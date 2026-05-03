@@ -10,7 +10,15 @@ requireAdmin();
 $db = getDb();
 $currentUser = currentUser();
 assert($currentUser !== null);
-$hasConvertedVolunteerIdColumn = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
+$contactSubmissionColumnsStmt = $db->query('SHOW COLUMNS FROM `contact_submissions`');
+assert($contactSubmissionColumnsStmt instanceof PDOStatement);
+$hasConvertedVolunteerIdColumn = false;
+foreach ($contactSubmissionColumnsStmt->fetchAll() as $columnDefinition) {
+    if (stringValue($columnDefinition['Field'] ?? '') === 'converted_volunteer_id') {
+        $hasConvertedVolunteerIdColumn = true;
+        break;
+    }
+}
 
 $statusFilter = getString('status', 'all');
 if (!in_array($statusFilter, ['all', 'pending', 'active', 'inactive'], true)) {
