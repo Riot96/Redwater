@@ -200,7 +200,7 @@ function merchGenerateCheckoutAttemptId(): string {
  * @return array<string, string>
  */
 function merchPaypalDiagnosticPayload(array $payload): array {
-    $allowedFieldPrefixes = ['item_name_', 'item_number_', 'amount_', 'quantity_', 'shipping_', 'on0_', 'os0_', 'on1_', 'os1_'];
+    $allowedFieldPrefixes = merchPaypalDiagnosticFieldPrefixes();
     $diagnosticPayload = [];
     foreach ($payload as $name => $value) {
         $isAllowedField = in_array($name, ['cmd', 'upload', 'business', 'currency_code', 'return', 'cancel_return', 'custom'], true);
@@ -215,6 +215,20 @@ function merchPaypalDiagnosticPayload(array $payload): array {
         }
     }
     return $diagnosticPayload;
+}
+
+/**
+ * @return list<string>
+ */
+function merchPaypalDiagnosticFieldPrefixes(): array {
+    return ['item_name_', 'item_number_', 'amount_', 'quantity_', 'shipping_', 'on0_', 'os0_', 'on1_', 'os1_'];
+}
+
+/**
+ * @param array<string, string> $payload
+ */
+function merchPaypalDiagnosticPayloadPreview(array $payload): string {
+    return (string) json_encode(merchPaypalDiagnosticPayload($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 }
 
 function merchPaypalSiteLogPath(): string {
@@ -366,7 +380,7 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     $siteLogPath = merchPaypalSiteLogPath();
     $siteLogDirectory = dirname($siteLogPath);
     if (!is_dir($siteLogDirectory)) {
-        @mkdir($siteLogDirectory, 0750, true);
+        @mkdir($siteLogDirectory, 0700, true);
         if (!is_dir($siteLogDirectory)) {
             error_log('[Merch PayPal Checkout] Could not create the site-local log directory at ' . $siteLogDirectory . '.');
         }
@@ -439,7 +453,7 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
  * } $logResult
  */
 function rememberMerchCheckoutAttempt(string $attemptId, array $storeSettings, array $payload, array $logResult): void {
-    $payloadPreview = (string) json_encode(merchPaypalDiagnosticPayload($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    $payloadPreview = merchPaypalDiagnosticPayloadPreview($payload);
     $_SESSION['merch_last_checkout_attempt'] = [
         'attempt_id' => $attemptId,
         'environment' => merchPaypalEnvironmentLabel($storeSettings),
@@ -509,7 +523,7 @@ function getMerchLastCheckoutAttempt(): ?array {
 function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, string $attemptId, array $logResult): void {
     $pageTitle = 'Review PayPal Checkout';
     $seoDescription = 'Review PayPal checkout details before continuing.';
-    $payloadPreview = (string) json_encode(merchPaypalDiagnosticPayload($payload), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    $payloadPreview = merchPaypalDiagnosticPayloadPreview($payload);
     include __DIR__ . '/includes/header.php';
     ?>
     <main class="page-wrapper">
@@ -522,7 +536,7 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
                 Attempt ID: <strong><?= e($attemptId) ?></strong><br>
                 The outgoing checkout payload was logged on the server before you continue to PayPal.
               </div>
-              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log. By default this first tries <code>/uploads/temp/redwater_merch_paypal.log</code>, unless <code>MERCH_PAYPAL_LOG_PATH</code> is set.</p>
+              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log. By default this first tries <code>/uploads/temp/redwater_merch_paypal.log</code>, unless <code>MERCH_PAYPAL_LOG_PATH</code> is set, then falls back to PHP&rsquo;s error log or the system temp directory if needed.</p>
               <div class="alert-inline" style="margin:1rem 0;display:grid;gap:0.65rem;">
                 <div><strong>PayPal environment:</strong> <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?></div>
                 <div><strong>Receiver email:</strong> <code><?= e($storeSettings['paypal_email']) ?></code></div>
