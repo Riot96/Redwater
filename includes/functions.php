@@ -501,14 +501,15 @@ function isValidMerchAmountInput(string $value, bool $allowEmpty = false): bool 
         return $allowEmpty;
     }
 
-    if (str_starts_with($trimmed, '$')) {
-        $trimmed = ltrim(substr($trimmed, 1));
+    $normalizedForValidation = $trimmed;
+    if (str_starts_with($normalizedForValidation, '$')) {
+        $normalizedForValidation = substr($normalizedForValidation, 1);
     }
-    if (str_starts_with($trimmed, '.')) {
-        $trimmed = '0' . $trimmed;
+    if (str_starts_with($normalizedForValidation, '.')) {
+        $normalizedForValidation = '0' . $normalizedForValidation;
     }
 
-    return preg_match('/^\d+(?:\.\d{1,2})?$/', $trimmed) === 1;
+    return preg_match('/^\d+(?:\.\d{1,2})?$/', $normalizedForValidation) === 1;
 }
 
 function merchFormatAmount(string $amount, string $currency = 'USD'): string {
@@ -570,7 +571,7 @@ function normalizeLocalMerchImagePath(string $path): string {
     if (preg_match('/[\x00-\x1F\x7F\\\\]/', $normalized) === 1 || str_contains($normalized, '..')) {
         return '';
     }
-    if (preg_match('#^/uploads/merch/[A-Za-z0-9._-]+$#', $normalized) !== 1) {
+    if (preg_match('#^/uploads/merch/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i', $normalized) !== 1) {
         return '';
     }
 

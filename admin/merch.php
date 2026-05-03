@@ -118,7 +118,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $itemErrors[] = 'Enable shipping, local pickup, or both.';
         }
         if ($imageUrl !== '' && !isSupportedMerchImageUrl($imageUrl)) {
-            $itemErrors[] = 'Product images must use HTTPS or a valid /uploads/merch/ image path.';
+            $itemErrors[] = 'Product images must be HTTPS URLs or valid local paths in /uploads/merch/ using safe jpg, jpeg, png, gif, or webp filenames only.';
         }
 
         $finalImagePath = stringValue($existingItem['image_path'] ?? '');
