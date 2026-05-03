@@ -903,6 +903,18 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   gap: 3rem;
   align-items: start;
 }
+.submission-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+.spam-trap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
 .contact-info-item {
   display: flex;
   gap: 1rem;
@@ -1387,6 +1399,12 @@ tbody tr { border-top: 1px solid var(--border); }
 tbody tr:hover { background: rgba(255,255,255,0.02); }
 tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
 .td-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
 
 /* Member area */
 .member-layout {
@@ -1616,8 +1634,10 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
   .about-grid      { grid-template-columns: 1fr; }
   .about-image-wrap{ display: none; }
   .contact-grid    { grid-template-columns: 1fr; }
+  .submission-grid { grid-template-columns: 1fr; }
   .footer-grid     { grid-template-columns: 1fr 1fr; }
   .admin-layout    { grid-template-columns: 200px 1fr; }
+  .filter-grid     { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 768px) {
@@ -1660,6 +1680,7 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
   .policies-content  { grid-template-columns: 1fr; }
   .form-row          { grid-template-columns: 1fr; }
   .footer-grid       { grid-template-columns: 1fr; }
+  .filter-grid       { grid-template-columns: 1fr; }
   .merch-card-header { flex-direction: column; }
   .merch-product-layout,
   .merch-cart-summary { grid-template-columns: 1fr; }

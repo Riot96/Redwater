@@ -1,6 +1,6 @@
 <?php
 /**
- * RedWater Entertainment - Admin: Contact Settings & Messages
+ * RedWater Entertainment - Admin: Contact Settings & Inquiries
  */
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/auth.php';
@@ -9,15 +9,47 @@ require_once __DIR__ . '/../includes/functions.php';
 requireAdmin();
 $db = getDb();
 
+if (getString('export') === 'inquiries') {
+    $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
+    assert($messagesStmt instanceof PDOStatement);
+    /** @var list<array<string, mixed>> $messages */
+    $messages = array_values($messagesStmt->fetchAll());
+
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="redwater-inquiries.csv"');
+    $output = fopen('php://output', 'wb');
+    if (is_resource($output)) {
+        fputcsv($output, ['ID', 'Name', 'Email', 'Phone', 'Preferred Contact', 'Location', 'Subject', 'Message', 'Read', 'Created At', 'Updated At']);
+        foreach ($messages as $message) {
+            fputcsv($output, [
+                intValue($message['id'] ?? null),
+                stringValue($message['name'] ?? ''),
+                stringValue($message['email'] ?? ''),
+                stringValue($message['phone_number'] ?? ''),
+                stringValue($message['preferred_contact_method'] ?? 'email'),
+                stringValue($message['location_address'] ?? ''),
+                stringValue($message['subject'] ?? ''),
+                stringValue($message['message'] ?? ''),
+                !empty($message['is_read']) ? 'Yes' : 'No',
+                stringValue($message['created_at'] ?? ''),
+                stringValue($message['updated_at'] ?? ''),
+            ]);
+            fflush($output);
+        }
+        fclose($output);
+    }
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $act = postString('action', 'save_settings');
 
     if ($act === 'save_settings') {
-        $fields = ['contact_phone','contact_email','contact_address','contact_map_embed',
-                   'social_facebook','social_instagram','social_twitter','social_youtube',
-                   'site_name','site_tagline',
-                   'home_hero_heading','home_hero_subheading','home_about_text'];
+        $fields = ['contact_phone', 'contact_email', 'contact_address', 'contact_map_embed',
+                   'social_facebook', 'social_instagram', 'social_twitter', 'social_youtube',
+                   'site_name', 'site_tagline',
+                   'home_hero_heading', 'home_hero_subheading', 'home_about_text'];
         foreach ($fields as $field) {
             setSetting($field, trim(postString($field)));
         }
@@ -28,22 +60,101 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($act === 'mark_read') {
         $msgId = postInt('msg_id');
         $db->prepare('UPDATE contact_submissions SET is_read=1 WHERE id=?')->execute([$msgId]);
-        redirect('/admin/contact.php#messages');
+        redirect('/admin/contact.php#inquiries');
     }
 
     if ($act === 'delete_message') {
         $msgId = postInt('msg_id');
         $db->prepare('DELETE FROM contact_submissions WHERE id=?')->execute([$msgId]);
-        flashMessage('success', 'Message deleted.');
-        redirect('/admin/contact.php#messages');
+        flashMessage('success', 'Inquiry deleted.');
+        redirect('/admin/contact.php#inquiries');
+    }
+
+    if ($act === 'add_inquiry' || $act === 'edit_inquiry') {
+        $messageId = postInt('msg_id');
+        $name = trim(postString('name'));
+        $email = trim(postString('email'));
+        $phoneNumber = trim(postString('phone_number'));
+        $preferredContactMethod = normalizePreferredContactMethod(postString('preferred_contact_method', 'email'));
+        $locationAddress = trim(postString('location_address'));
+        $subject = trim(postString('subject'));
+        $message = trim(postString('message'));
+        $isRead = postBool('is_read') ? 1 : 0;
+
+        if ($name === '') {
+            flashMessage('error', 'Name is required.');
+        } elseif ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            flashMessage('error', 'A valid email address is required.');
+        } elseif ($preferredContactMethod === 'phone' && $phoneNumber === '') {
+            flashMessage('error', 'Phone number is required when phone is the preferred contact method.');
+        } elseif ($message === '') {
+            flashMessage('error', 'Message is required.');
+        } else {
+            if ($act === 'add_inquiry') {
+                $stmt = $db->prepare(
+                    'INSERT INTO contact_submissions (
+                        name, email, phone_number, preferred_contact_method, location_address,
+                        subject, message, privacy_consent, is_read
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute([
+                    $name,
+                    $email,
+                    $phoneNumber !== '' ? $phoneNumber : null,
+                    $preferredContactMethod,
+                    $locationAddress !== '' ? $locationAddress : null,
+                    $subject !== '' ? $subject : null,
+                    $message,
+                    1,
+                    $isRead,
+                ]);
+                flashMessage('success', 'Inquiry added.');
+            } else {
+                $stmt = $db->prepare(
+                    'UPDATE contact_submissions
+                     SET name=?, email=?, phone_number=?, preferred_contact_method=?, location_address=?,
+                         subject=?, message=?, privacy_consent=1, is_read=?
+                     WHERE id=?'
+                );
+                $stmt->execute([
+                    $name,
+                    $email,
+                    $phoneNumber !== '' ? $phoneNumber : null,
+                    $preferredContactMethod,
+                    $locationAddress !== '' ? $locationAddress : null,
+                    $subject !== '' ? $subject : null,
+                    $message,
+                    $isRead,
+                    $messageId,
+                ]);
+                flashMessage('success', 'Inquiry updated.');
+            }
+        }
+
+        if ($act === 'edit_inquiry') {
+            redirect('/admin/contact.php?edit=' . $messageId . '#inquiry-form');
+        }
+        redirect('/admin/contact.php#inquiries');
     }
 }
 
-// Load messages
+$editMessageId = getInt('edit');
+$showInquiryForm = getString('mode') === 'create' || $editMessageId > 0;
+$editMessage = null;
+if ($editMessageId > 0) {
+    $stmt = $db->prepare('SELECT * FROM contact_submissions WHERE id=?');
+    $stmt->execute([$editMessageId]);
+    /** @var array<string, mixed>|false $editMessage */
+    $editMessage = $stmt->fetch();
+    if (!is_array($editMessage)) {
+        $editMessage = null;
+    }
+}
+
 $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
 assert($messagesStmt instanceof PDOStatement);
 /** @var list<array<string, mixed>> $messages */
-$messages = $messagesStmt->fetchAll();
+$messages = array_values($messagesStmt->fetchAll());
 
 $pageTitle = 'Contact Settings';
 include __DIR__ . '/../includes/header.php';
@@ -52,7 +163,14 @@ include __DIR__ . '/../includes/header.php';
 <div class="admin-layout">
   <?php include __DIR__ . '/sidebar.php'; ?>
   <main class="admin-main">
-    <h1 class="admin-page-title">Contact &amp; Site <span>Settings</span></h1>
+    <div class="d-flex justify-between align-center mb-3" style="gap:1rem;flex-wrap:wrap;">
+      <h1 class="admin-page-title" style="margin:0;border:none;padding:0;">Contact, <span>Inquiries</span> &amp; Settings</h1>
+      <div class="d-flex gap-1" style="flex-wrap:wrap;">
+        <a href="/admin/contact.php?mode=create#inquiry-form" class="btn btn-primary btn-sm">+ Add Inquiry</a>
+        <a href="/admin/contact.php?export=inquiries" class="btn btn-outline btn-sm">Export CSV</a>
+        <a href="/admin/volunteers.php" class="btn btn-outline btn-sm">Manage Volunteers</a>
+      </div>
+    </div>
 
     <div class="card mb-3">
       <div class="card-body">
@@ -137,25 +255,121 @@ include __DIR__ . '/../includes/header.php';
       </div>
     </div>
 
-    <!-- Contact Messages -->
-    <div class="card" id="messages">
+    <?php if ($showInquiryForm): ?>
+      <?php
+      $inquiryFormValues = [
+          'id' => intValue($editMessage['id'] ?? null),
+          'name' => stringValue($editMessage['name'] ?? ''),
+          'email' => stringValue($editMessage['email'] ?? ''),
+          'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
+          'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
+          'location_address' => stringValue($editMessage['location_address'] ?? ''),
+          'subject' => stringValue($editMessage['subject'] ?? ''),
+          'message' => stringValue($editMessage['message'] ?? ''),
+          'is_read' => !empty($editMessage['is_read']),
+      ];
+      ?>
+      <div class="card mb-3" id="inquiry-form">
+        <div class="card-body">
+          <div class="d-flex justify-between align-center mb-2" style="gap:1rem;flex-wrap:wrap;">
+            <h3 style="font-size:1rem;"><?= $editMessage ? 'Edit Inquiry' : 'Add Inquiry' ?></h3>
+            <a href="/admin/contact.php#inquiries" class="btn btn-outline btn-sm">Back to List</a>
+          </div>
+          <form method="POST" action="/admin/contact.php<?= $editMessage ? '?edit=' . intValue($inquiryFormValues['id']) . '#inquiry-form' : '#inquiry-form' ?>">
+            <?= csrfField() ?>
+            <input type="hidden" name="action" value="<?= $editMessage ? 'edit_inquiry' : 'add_inquiry' ?>">
+            <input type="hidden" name="msg_id" value="<?= intValue($inquiryFormValues['id']) ?>">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" name="name" class="form-control" value="<?= e($inquiryFormValues['name']) ?>" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input type="email" name="email" class="form-control" value="<?= e($inquiryFormValues['email']) ?>" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <input type="text" name="phone_number" class="form-control" value="<?= e($inquiryFormValues['phone_number']) ?>">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Preferred Contact Method</label>
+                <select name="preferred_contact_method" class="form-control">
+                  <option value="email" <?= $inquiryFormValues['preferred_contact_method'] === 'email' ? 'selected' : '' ?>>Email</option>
+                  <option value="phone" <?= $inquiryFormValues['preferred_contact_method'] === 'phone' ? 'selected' : '' ?>>Phone</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Location / Address</label>
+              <input type="text" name="location_address" class="form-control" value="<?= e($inquiryFormValues['location_address']) ?>">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Subject</label>
+              <input type="text" name="subject" class="form-control" value="<?= e($inquiryFormValues['subject']) ?>">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Message</label>
+              <textarea name="message" class="form-control" rows="5" required><?= e($inquiryFormValues['message']) ?></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-check">
+                <input type="checkbox" name="is_read" value="1" <?= $inquiryFormValues['is_read'] ? 'checked' : '' ?>>
+                Mark as read
+              </label>
+            </div>
+            <div class="d-flex gap-1" style="flex-wrap:wrap;">
+              <button type="submit" class="btn btn-primary btn-sm"><?= $editMessage ? 'Save Inquiry' : 'Add Inquiry' ?></button>
+              <a href="/admin/contact.php#inquiries" class="btn btn-outline btn-sm">Cancel</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    <?php endif; ?>
+
+    <div class="card" id="inquiries">
       <div class="card-body">
-        <h3 style="font-size:1rem;margin-bottom:1rem;">Contact Form Submissions</h3>
+        <div class="d-flex justify-between align-center mb-2" style="gap:1rem;flex-wrap:wrap;">
+          <h3 style="font-size:1rem;">Inquiry Records</h3>
+          <div class="text-muted"><?= count($messages) ?> total</div>
+        </div>
         <?php if ($messages): ?>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Name</th><th>Email</th><th>Subject</th><th>Message</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Preferred</th>
+                  <th>Subject</th>
+                  <th>Message</th>
+                  <th>Location</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
               <tbody>
               <?php foreach ($messages as $msg): ?>
                 <tr>
                   <td><?= e($msg['name']) ?></td>
-                  <td><a href="mailto:<?= e($msg['email']) ?>"><?= e($msg['email']) ?></a></td>
+                  <td>
+                    <div><a href="mailto:<?= e($msg['email']) ?>"><?= e($msg['email']) ?></a></div>
+                    <?php if (!empty($msg['phone_number'])): ?>
+                      <div><a href="tel:<?= e(preg_replace('/\D/', '', stringValue($msg['phone_number'] ?? '')) ?? '') ?>"><?= e($msg['phone_number']) ?></a></div>
+                    <?php endif; ?>
+                  </td>
+                  <td><?= e(ucfirst(stringValue($msg['preferred_contact_method'] ?? 'email'))) ?></td>
                   <td><?= e($msg['subject'] ?: '—') ?></td>
-                  <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($msg['message']) ?>"><?= e($msg['message']) ?></td>
+                  <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($msg['message']) ?>"><?= e($msg['message']) ?></td>
+                  <td><?= e($msg['location_address'] ?: '—') ?></td>
                   <td><?= formatDateOrFallback($msg['created_at'] ?? null, 'M j, Y g:ia') ?></td>
                   <td><span class="status-badge <?= $msg['is_read'] ? 'status-approved' : 'status-pending' ?>"><?= $msg['is_read'] ? 'Read' : 'New' ?></span></td>
                   <td>
                     <div class="td-actions">
+                      <a href="/admin/contact.php?edit=<?= intValue($msg['id']) ?>#inquiry-form" class="btn btn-outline btn-sm">Edit</a>
                       <?php if (!$msg['is_read']): ?>
                         <form method="POST" style="display:inline;">
                           <?= csrfField() ?>
@@ -168,7 +382,7 @@ include __DIR__ . '/../includes/header.php';
                         <?= csrfField() ?>
                         <input type="hidden" name="action" value="delete_message">
                         <input type="hidden" name="msg_id" value="<?= intValue($msg['id']) ?>">
-                        <button class="btn btn-danger btn-sm" data-confirm="Delete this message?">Delete</button>
+                        <button class="btn btn-danger btn-sm" data-confirm="Delete this inquiry?">Delete</button>
                       </form>
                     </div>
                   </td>
@@ -178,7 +392,7 @@ include __DIR__ . '/../includes/header.php';
             </table>
           </div>
         <?php else: ?>
-          <p class="text-muted">No messages yet.</p>
+          <p class="text-muted">No inquiries yet.</p>
         <?php endif; ?>
       </div>
     </div>

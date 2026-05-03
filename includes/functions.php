@@ -446,6 +446,52 @@ function redirectWithMessage(string $url, string $type, string $message): void {
     redirect($url);
 }
 
+function normalizePreferredContactMethod(string $method): string {
+    return $method === 'phone' ? 'phone' : 'email';
+}
+
+function sanitizeMailHeaderValue(string $value): string {
+    return trim(str_replace(["\r", "\n"], '', $value));
+}
+
+function sendSiteMail(string $toEmail, string $subject, string $body, string $replyToEmail = '', string $replyToName = ''): bool {
+    if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+
+    $host = serverString('HTTP_HOST', 'localhost');
+    $fallbackFrom = 'noreply@' . ($host !== '' ? $host : 'localhost');
+    $from = defined('MAIL_FROM') ? stringValue(MAIL_FROM, $fallbackFrom) : $fallbackFrom;
+    if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
+        $from = 'noreply@localhost';
+    }
+
+    $fromName = sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, 'RedWater Entertainment') : 'RedWater Entertainment');
+    $safeSubject = sanitizeMailHeaderValue($subject);
+    $headers = 'From: ' . $fromName . ' <' . $from . '>';
+
+    if (filter_var($replyToEmail, FILTER_VALIDATE_EMAIL)) {
+        $safeReplyToName = sanitizeMailHeaderValue($replyToName);
+        $headers .= "\r\nReply-To: " . $safeReplyToName . ' <' . sanitizeMailHeaderValue($replyToEmail) . '>';
+    }
+
+    return @mail($toEmail, $safeSubject, $body, $headers);
+}
+
+function logVolunteerAudit(PDO $db, ?int $volunteerId, string $volunteerName, ?int $actorUserId, string $action, string $details = ''): void {
+    $stmt = $db->prepare(
+        'INSERT INTO volunteer_audit_log (volunteer_id, volunteer_name, actor_user_id, action, details)
+         VALUES (?, ?, ?, ?, ?)'
+    );
+    $stmt->execute([
+        $volunteerId,
+        $volunteerName,
+        $actorUserId !== null && $actorUserId > 0 ? $actorUserId : null,
+        $action,
+        $details,
+    ]);
+}
+
 // ─── Pagination ───────────────────────────────────────────────────────────────
 /**
  * @return array{total: int, per_page: int, current_page: int, total_pages: int, offset: int}

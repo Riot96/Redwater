@@ -88,10 +88,45 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(50) NULL,
+    preferred_contact_method ENUM('email', 'phone') NOT NULL DEFAULT 'email',
+    location_address VARCHAR(255) NULL,
     subject VARCHAR(255) NULL,
     message TEXT NOT NULL,
+    privacy_consent TINYINT(1) NOT NULL DEFAULT 0,
     is_read TINYINT(1) NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Volunteer submissions and profiles
+CREATE TABLE IF NOT EXISTS volunteers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone_number VARCHAR(50) NULL,
+    preferred_contact_method ENUM('email', 'phone') NOT NULL DEFAULT 'email',
+    location_address VARCHAR(255) NULL,
+    areas_of_interest TEXT NULL,
+    availability TEXT NULL,
+    message TEXT NULL,
+    internal_notes TEXT NULL,
+    privacy_consent TINYINT(1) NOT NULL DEFAULT 0,
+    status ENUM('pending', 'active', 'inactive') NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Volunteer audit history
+CREATE TABLE IF NOT EXISTS volunteer_audit_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    volunteer_id INT NULL,
+    volunteer_name VARCHAR(255) NOT NULL,
+    actor_user_id INT NULL,
+    action VARCHAR(50) NOT NULL,
+    details TEXT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (actor_user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;
