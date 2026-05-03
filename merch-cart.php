@@ -66,9 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $attemptId = merchGenerateCheckoutAttemptId();
         $payload = buildMerchPaypalCheckoutPayload($cartState['checkoutItems'], $storeSettings, $attemptId);
-        logMerchPaypalCheckoutAttempt($attemptId, $payload, $storeSettings);
-        rememberMerchCheckoutAttempt($attemptId, $storeSettings);
-        renderMerchPaypalRedirectPage($payload, $storeSettings, $attemptId);
+        $logResult = logMerchPaypalCheckoutAttempt($attemptId, $payload, $storeSettings);
+        rememberMerchCheckoutAttempt($attemptId, $storeSettings, $payload, $logResult);
+        renderMerchPaypalRedirectPage($payload, $storeSettings, $attemptId, $logResult);
         exit;
     }
 }
@@ -295,8 +295,13 @@ function buildMerchPaypalCheckoutPayload(array $checkoutItems, array $storeSetti
  *   shipping_notice: string,
  *   pickup_notice: string
  * } $storeSettings
+ * @return array{
+ *   log_path: string,
+ *   status_message: string,
+ *   write_succeeded: bool
+ * }
  */
-function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array $storeSettings): void {
+function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array $storeSettings): array {
     $entry = [
         'timestamp' => gmdate('c'),
         'attempt_id' => $attemptId,
@@ -311,10 +316,27 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     }
     $line = '[Merch PayPal Checkout] ' . $json . PHP_EOL;
     $defaultLogPath = trim((string) ini_get('error_log'));
+    $siteLogPath = __DIR__ . '/uploads/temp/redwater_merch_paypal.log';
+    $siteLogDirectory = dirname($siteLogPath);
+    if (!is_dir($siteLogDirectory)) {
+        @mkdir($siteLogDirectory, 0755, true);
+    }
     $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
         ? (string) MERCH_PAYPAL_LOG_PATH
-        : ($defaultLogPath !== '' ? $defaultLogPath : rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'redwater_merch_paypal.log');
-    if (error_log($line, 3, $logPath) === false) {
+        : ((is_dir($siteLogDirectory) && is_writable($siteLogDirectory))
+            ? $siteLogPath
+            : ($defaultLogPath !== '' ? $defaultLogPath : rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'redwater_merch_paypal.log'));
+    if (error_log($line, 3, $logPath) !== false) {
+        return [
+            'log_path' => $logPath,
+            'status_message' => 'Saved before redirect.',
+            'write_succeeded' => true,
+        ];
+    }
+
+    $statusMessage = 'Primary log write failed.';
+    $effectiveLogPath = $logPath;
+    if ($defaultLogPath !== '') {
         $lastError = error_get_last();
         $lastErrorData = is_array($lastError) ? $lastError : [];
         $reason = '';
@@ -327,8 +349,20 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
         error_log('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . '. Falling back to the default PHP error log.' . $reason);
         if (error_log($line) === false) {
             trigger_error('[Merch PayPal Checkout] Fallback log write also failed for attempt ' . $attemptId . '.', E_USER_WARNING);
+            return [
+                'log_path' => $effectiveLogPath,
+                'status_message' => $statusMessage . ' Fallback PHP error_log write also failed.',
+                'write_succeeded' => false,
+            ];
         }
+        $effectiveLogPath = $defaultLogPath;
+        $statusMessage = 'Primary log write failed, but the fallback PHP error log write succeeded.';
     }
+    return [
+        'log_path' => $effectiveLogPath,
+        'status_message' => $statusMessage,
+        'write_succeeded' => $defaultLogPath !== '',
+    ];
 }
 
 /**
@@ -339,14 +373,24 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
  *   shipping_notice: string,
  *   pickup_notice: string
  * } $storeSettings
+ * @param array<string, string> $payload
+ * @param array{
+ *   log_path: string,
+ *   status_message: string,
+ *   write_succeeded: bool
+ * } $logResult
  */
-function rememberMerchCheckoutAttempt(string $attemptId, array $storeSettings): void {
+function rememberMerchCheckoutAttempt(string $attemptId, array $storeSettings, array $payload, array $logResult): void {
+    $payloadPreview = (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     $_SESSION['merch_last_checkout_attempt'] = [
         'attempt_id' => $attemptId,
         'environment' => merchPaypalEnvironmentLabel($storeSettings),
         'target_url' => merchPaypalCheckoutUrl($storeSettings),
         'receiver_email' => $storeSettings['paypal_email'],
         'logged_at' => gmdate('c'),
+        'log_path' => $logResult['log_path'],
+        'log_status' => $logResult['status_message'],
+        'payload_preview' => $payloadPreview,
     ];
 }
 
@@ -356,7 +400,10 @@ function rememberMerchCheckoutAttempt(string $attemptId, array $storeSettings): 
  *   environment: string,
  *   target_url: string,
  *   receiver_email: string,
- *   logged_at: string
+ *   logged_at: string,
+ *   log_path: string,
+ *   log_status: string,
+ *   payload_preview: string
  * }|null
  */
 function getMerchLastCheckoutAttempt(): ?array {
@@ -376,6 +423,9 @@ function getMerchLastCheckoutAttempt(): ?array {
         'target_url' => trim(stringValue($attempt['target_url'] ?? '')),
         'receiver_email' => trim(stringValue($attempt['receiver_email'] ?? '')),
         'logged_at' => trim(stringValue($attempt['logged_at'] ?? '')),
+        'log_path' => trim(stringValue($attempt['log_path'] ?? '')),
+        'log_status' => trim(stringValue($attempt['log_status'] ?? '')),
+        'payload_preview' => trim(stringValue($attempt['payload_preview'] ?? '')),
     ];
 }
 
@@ -388,10 +438,16 @@ function getMerchLastCheckoutAttempt(): ?array {
  *   shipping_notice: string,
  *   pickup_notice: string
  * } $storeSettings
+ * @param array{
+ *   log_path: string,
+ *   status_message: string,
+ *   write_succeeded: bool
+ * } $logResult
  */
-function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, string $attemptId): void {
+function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, string $attemptId, array $logResult): void {
     $pageTitle = 'Review PayPal Checkout';
     $seoDescription = 'Review PayPal checkout details before continuing.';
+    $payloadPreview = (string) json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     include __DIR__ . '/includes/header.php';
     ?>
     <main class="page-wrapper">
@@ -404,12 +460,18 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
                 Attempt ID: <strong><?= e($attemptId) ?></strong><br>
                 The outgoing checkout payload was logged on the server before you continue to PayPal.
               </div>
-              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log. By default this uses PHP's configured error log, unless <code>MERCH_PAYPAL_LOG_PATH</code> is set.</p>
+              <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log. By default this first tries <code>/uploads/temp/redwater_merch_paypal.log</code>, unless <code>MERCH_PAYPAL_LOG_PATH</code> is set.</p>
               <div class="alert-inline" style="margin:1rem 0;display:grid;gap:0.65rem;">
                 <div><strong>PayPal environment:</strong> <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?></div>
                 <div><strong>Receiver email:</strong> <code><?= e($storeSettings['paypal_email']) ?></code></div>
                 <div><strong>Checkout endpoint:</strong> <code><?= e(merchPaypalCheckoutUrl($storeSettings)) ?></code></div>
+                <div><strong>Log destination:</strong> <code><?= e($logResult['log_path']) ?></code></div>
+                <div><strong>Log status:</strong> <?= e($logResult['status_message']) ?></div>
               </div>
+              <details style="margin:1rem 0;">
+                <summary style="cursor:pointer;font-weight:600;">Show outgoing PayPal payload</summary>
+                <pre style="margin-top:0.75rem;padding:1rem;border-radius:0.75rem;background:rgba(15,23,42,0.7);overflow:auto;white-space:pre-wrap;word-break:break-word;"><?= e($payloadPreview) ?></pre>
+              </details>
               <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" id="paypal-redirect-form" class="merch-cart-checkout-form">
                 <?php foreach ($payload as $name => $value): ?>
                   <input type="hidden" name="<?= e($name) ?>" value="<?= e($value) ?>">
@@ -716,6 +778,14 @@ include __DIR__ . '/includes/header.php';
                     <div><strong>Most recent PayPal attempt:</strong> <code><?= e($lastPaypalAttempt['attempt_id']) ?></code></div>
                     <div style="margin-top:0.5rem;">Target: <?= e($lastPaypalAttempt['environment']) ?> → <code><?= e($lastPaypalAttempt['receiver_email']) ?></code></div>
                     <div style="margin-top:0.5rem;">Endpoint: <code><?= e($lastPaypalAttempt['target_url']) ?></code></div>
+                    <div style="margin-top:0.5rem;">Log destination: <code><?= e($lastPaypalAttempt['log_path']) ?></code></div>
+                    <div style="margin-top:0.5rem;">Log status: <?= e($lastPaypalAttempt['log_status']) ?></div>
+                    <?php if ($lastPaypalAttempt['payload_preview'] !== ''): ?>
+                      <details style="margin-top:0.75rem;">
+                        <summary style="cursor:pointer;font-weight:600;">Show most recent PayPal payload</summary>
+                        <pre style="margin-top:0.75rem;padding:1rem;border-radius:0.75rem;background:rgba(15,23,42,0.7);overflow:auto;white-space:pre-wrap;word-break:break-word;"><?= e($lastPaypalAttempt['payload_preview']) ?></pre>
+                      </details>
+                    <?php endif; ?>
                   </div>
                 <?php endif; ?>
                 <?php if ($paypalAttemptId !== '' && ($paypalStatus === 'cancelled' || $paypalStatus === 'returned')): ?>
