@@ -200,18 +200,17 @@ function merchGenerateCheckoutAttemptId(): string {
  * @return array<string, string>
  */
 function merchPaypalDiagnosticPayload(array $payload): array {
+    $allowedFieldPrefixes = ['item_name_', 'item_number_', 'amount_', 'quantity_', 'shipping_', 'on0_', 'os0_', 'on1_', 'os1_'];
     $diagnosticPayload = [];
     foreach ($payload as $name => $value) {
-        if (in_array($name, ['cmd', 'upload', 'business', 'currency_code', 'return', 'cancel_return', 'custom'], true)
-            || str_starts_with($name, 'item_name_')
-            || str_starts_with($name, 'item_number_')
-            || str_starts_with($name, 'amount_')
-            || str_starts_with($name, 'quantity_')
-            || str_starts_with($name, 'shipping_')
-            || str_starts_with($name, 'on0_')
-            || str_starts_with($name, 'os0_')
-            || str_starts_with($name, 'on1_')
-            || str_starts_with($name, 'os1_')) {
+        $isAllowedField = in_array($name, ['cmd', 'upload', 'business', 'currency_code', 'return', 'cancel_return', 'custom'], true);
+        foreach ($allowedFieldPrefixes as $prefix) {
+            if (str_starts_with($name, $prefix)) {
+                $isAllowedField = true;
+                break;
+            }
+        }
+        if ($isAllowedField) {
             $diagnosticPayload[$name] = $value;
         }
     }
@@ -367,15 +366,20 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     $siteLogPath = merchPaypalSiteLogPath();
     $siteLogDirectory = dirname($siteLogPath);
     if (!is_dir($siteLogDirectory)) {
-        if (!mkdir($siteLogDirectory, 0750, true) && !is_dir($siteLogDirectory)) {
+        @mkdir($siteLogDirectory, 0750, true);
+        if (!is_dir($siteLogDirectory)) {
             error_log('[Merch PayPal Checkout] Could not create the site-local log directory at ' . $siteLogDirectory . '.');
         }
     }
-    $logPath = defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== ''
-        ? (string) MERCH_PAYPAL_LOG_PATH
-        : ((is_dir($siteLogDirectory) && is_writable($siteLogDirectory))
-            ? $siteLogPath
-            : ($defaultLogPath !== '' ? $defaultLogPath : rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'redwater_merch_paypal.log'));
+    if (defined('MERCH_PAYPAL_LOG_PATH') && trim((string) MERCH_PAYPAL_LOG_PATH) !== '') {
+        $logPath = (string) MERCH_PAYPAL_LOG_PATH;
+    } elseif (is_dir($siteLogDirectory) && is_writable($siteLogDirectory)) {
+        $logPath = $siteLogPath;
+    } elseif ($defaultLogPath !== '') {
+        $logPath = $defaultLogPath;
+    } else {
+        $logPath = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'redwater_merch_paypal.log';
+    }
     if (error_log($line, 3, $logPath) !== false) {
         return [
             'log_path' => $logPath,
