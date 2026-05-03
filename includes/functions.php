@@ -495,6 +495,22 @@ function merchNormalizeAmount(string $value): string {
     return number_format(max(0, (float) $normalized), 2, '.', '');
 }
 
+function isValidMerchAmountInput(string $value, bool $allowEmpty = false): bool {
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return $allowEmpty;
+    }
+
+    if (str_starts_with($trimmed, '$')) {
+        $trimmed = ltrim(substr($trimmed, 1));
+    }
+    if (str_starts_with($trimmed, '.')) {
+        $trimmed = '0' . $trimmed;
+    }
+
+    return preg_match('/^\d+(?:\.\d{1,2})?$/', $trimmed) === 1;
+}
+
 function merchFormatAmount(string $amount, string $currency = 'USD'): string {
     $normalized = merchNormalizeAmount($amount);
     if ($currency === 'USD') {
@@ -546,13 +562,28 @@ function merchParseVariantLines(string $variants): array {
     return $normalized;
 }
 
+function normalizeLocalMerchImagePath(string $path): string {
+    $normalized = trim($path);
+    if ($normalized === '') {
+        return '';
+    }
+    if (preg_match('/[\x00-\x1F\x7F\\\\]/', $normalized) === 1 || str_contains($normalized, '..')) {
+        return '';
+    }
+    if (preg_match('#^/uploads/merch/[A-Za-z0-9._-]+$#', $normalized) !== 1) {
+        return '';
+    }
+
+    return $normalized;
+}
+
 function isSupportedMerchImageUrl(string $url): bool {
     $url = trim($url);
     if ($url === '') {
         return false;
     }
 
-    if (str_starts_with($url, '/uploads/merch/')) {
+    if (normalizeLocalMerchImagePath($url) !== '') {
         return true;
     }
 
@@ -565,7 +596,7 @@ function isSupportedMerchImageUrl(string $url): bool {
 }
 
 function isManagedMerchImagePath(string $path): bool {
-    return str_starts_with(trim($path), '/uploads/merch/');
+    return normalizeLocalMerchImagePath($path) !== '';
 }
 
 function deleteManagedMerchImage(string $path): void {

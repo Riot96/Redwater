@@ -427,12 +427,19 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
         }
         $effectiveLogPath = $defaultLogPath;
         $statusMessage = 'Primary log write failed, but the fallback PHP error log write succeeded.';
+        return [
+            'log_path' => $effectiveLogPath,
+            'log_label' => merchPaypalDisplayLogDestination($effectiveLogPath),
+            'status_message' => $statusMessage,
+            'write_succeeded' => true,
+        ];
     }
+    trigger_error('[Merch PayPal Checkout] Primary log write failed for attempt ' . $attemptId . ' and no fallback PHP error log is configured.', E_USER_WARNING);
     return [
         'log_path' => $effectiveLogPath,
         'log_label' => merchPaypalDisplayLogDestination($effectiveLogPath),
-        'status_message' => $statusMessage,
-        'write_succeeded' => true,
+        'status_message' => $statusMessage . ' No fallback PHP error log is configured.',
+        'write_succeeded' => false,
     ];
 }
 

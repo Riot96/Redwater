@@ -65,13 +65,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $seoTitle = trim(postString('seo_title'));
         $seoDescription = trim(postString('seo_description'));
         $description = trim(postString('description'));
-        $price = merchNormalizeAmount(postString('price'));
+        $rawPrice = trim(postString('price'));
+        $price = merchNormalizeAmount($rawPrice);
         $category = trim(postString('category'));
         $tags = trim(postString('tags'));
         $variantsText = trim(postString('variants'));
         $variants = merchParseVariantLines($variantsText);
         $shippingEnabled = postBool('shipping_enabled');
-        $shippingCost = merchNormalizeAmount(postString('shipping_cost'));
+        $rawShippingCost = trim(postString('shipping_cost'));
+        $shippingCost = merchNormalizeAmount($rawShippingCost);
         $shippingNotes = trim(postString('shipping_notes'));
         $pickupEnabled = postBool('pickup_enabled');
         $pickupNotes = trim(postString('pickup_notes'));
@@ -104,11 +106,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($name === '') {
             $itemErrors[] = 'Item name is required.';
         }
+        if (!isValidMerchAmountInput($rawPrice)) {
+            $itemErrors[] = 'Enter a valid item price using digits and up to 2 decimals.';
+            $itemFormState['price'] = $rawPrice;
+        }
+        if (!isValidMerchAmountInput($rawShippingCost, true)) {
+            $itemErrors[] = 'Enter a valid shipping fee using digits and up to 2 decimals.';
+            $itemFormState['shipping_cost'] = $rawShippingCost;
+        }
         if (!$shippingEnabled && !$pickupEnabled) {
             $itemErrors[] = 'Enable shipping, local pickup, or both.';
         }
         if ($imageUrl !== '' && !isSupportedMerchImageUrl($imageUrl)) {
-            $itemErrors[] = 'External product images must use HTTPS.';
+            $itemErrors[] = 'Product images must use HTTPS or a valid /uploads/merch/ image path.';
         }
 
         $finalImagePath = stringValue($existingItem['image_path'] ?? '');

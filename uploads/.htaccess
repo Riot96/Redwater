@@ -9,7 +9,7 @@
     </IfModule>
 </FilesMatch>
 
-<FilesMatch "\.(log)$">
+<FilesMatch "\.[lL][oO][gG]$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
