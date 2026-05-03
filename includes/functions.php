@@ -447,7 +447,15 @@ function redirectWithMessage(string $url, string $type, string $message): void {
 }
 
 function normalizePreferredContactMethod(string $method): string {
-    return $method === 'phone' ? 'phone' : 'email';
+    if (in_array($method, ['email', 'phone'], true)) {
+        return $method;
+    }
+
+    if ($method !== '') {
+        error_log('Unexpected preferred contact method received: ' . sanitizeMailHeaderValue($method));
+    }
+
+    return 'email';
 }
 
 function sanitizeMailHeaderValue(string $value): string {
@@ -466,7 +474,8 @@ function sendSiteMail(string $toEmail, string $subject, string $body, string $re
         $from = 'noreply@localhost';
     }
 
-    $fromName = sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, 'RedWater Entertainment') : 'RedWater Entertainment');
+    $fallbackSiteName = defined('SITE_NAME') ? stringValue(SITE_NAME, 'RedWater Entertainment') : 'RedWater Entertainment';
+    $fromName = sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, $fallbackSiteName) : $fallbackSiteName);
     $safeSubject = sanitizeMailHeaderValue($subject);
     $headers = 'From: ' . $fromName . ' <' . $from . '>';
 

@@ -123,8 +123,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'message' => '',
                     'privacy_consent' => false,
                 ];
-            }
+        }
         } else {
+            error_log('Volunteer form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
             $successMessage = 'Volunteer sign-up received! Our team will follow up soon.';
         }
     } else {
@@ -199,8 +200,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'message' => '',
                     'privacy_consent' => false,
                 ];
-            }
+        }
         } else {
+            error_log('Inquiry form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
             $successMessage = 'Message sent! Thank you for reaching out.';
         }
     }
