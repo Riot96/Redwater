@@ -69,10 +69,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$supportsConvertedVolunteerLink) {
             try {
                 ensureAutomaticMigrationColumn($db, 'contact_submissions', 'converted_volunteer_id INT NULL');
+                $supportsConvertedVolunteerLink = true;
             } catch (PDOException) {
                 // Fall back to conversion without a persistent inquiry link on hosts that have not run this migration yet.
             }
-            $supportsConvertedVolunteerLink = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
         }
 
         $stmt = $db->prepare('SELECT * FROM contact_submissions WHERE id=?');
@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         flashMessage('success', 'Inquiry converted to a volunteer entry. Review and complete the volunteer profile.');
         if (!$supportsConvertedVolunteerLink) {
-            flashMessage('info', 'The volunteer was created, but this environment still needs the latest inquiry schema update before inquiries can keep a direct volunteer link.');
+            flashMessage('info', 'The volunteer was created successfully. This inquiry will not keep an automatic volunteer link until the latest system update is applied.');
         }
         redirect('/admin/volunteers.php?edit=' . $volunteerId . '#volunteer-form');
     }
