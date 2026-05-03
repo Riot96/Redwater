@@ -147,6 +147,15 @@ function automaticMigrationTableColumns(PDO $db, string $table): array {
     return $columns;
 }
 
+function automaticMigrationHasColumn(PDO $db, string $table, string $column): bool {
+    $table = automaticMigrationTableName($table);
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $column) !== 1) {
+        throw new InvalidArgumentException('Invalid migration column name.');
+    }
+
+    return in_array($column, automaticMigrationTableColumns($db, $table), true);
+}
+
 function ensureAutomaticMigrationColumn(PDO $db, string $table, string $columnDefinition): void {
     /** @var array<string, list<string>> $tableColumns */
     static $tableColumns = [];

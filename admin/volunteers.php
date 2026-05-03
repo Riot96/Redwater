@@ -10,6 +10,7 @@ requireAdmin();
 $db = getDb();
 $currentUser = currentUser();
 assert($currentUser !== null);
+$supportsConvertedVolunteerLink = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
 
 $statusFilter = getString('status', 'all');
 if (!in_array($statusFilter, ['all', 'pending', 'active', 'inactive'], true)) {
@@ -229,7 +230,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $volunteer = $stmt->fetch();
 
         if ($volunteer) {
-            $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=NULL WHERE converted_volunteer_id=?')->execute([$volunteerId]);
+            if ($supportsConvertedVolunteerLink) {
+                $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=NULL WHERE converted_volunteer_id=?')->execute([$volunteerId]);
+            }
             $db->prepare('DELETE FROM volunteers WHERE id=?')->execute([$volunteerId]);
             logVolunteerAudit($db, $volunteerId, stringValue($volunteer['full_name']), $currentUser['id'], 'deleted', 'Volunteer record deleted.');
             flashMessage('success', 'Volunteer deleted.');

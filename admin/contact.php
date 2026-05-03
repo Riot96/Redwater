@@ -8,6 +8,7 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 $db = getDb();
+$supportsConvertedVolunteerLink = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
 
 if (getString('export') === 'inquiries') {
     $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
@@ -65,6 +66,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($act === 'convert_to_volunteer') {
         $msgId = postInt('msg_id');
+        if (!$supportsConvertedVolunteerLink) {
+            try {
+                ensureAutomaticMigrationColumn($db, 'contact_submissions', 'converted_volunteer_id INT NULL');
+            } catch (PDOException) {
+                // Fall back to conversion without a persistent inquiry link on hosts that have not run this migration yet.
+            }
+            $supportsConvertedVolunteerLink = automaticMigrationHasColumn($db, 'contact_submissions', 'converted_volunteer_id');
+        }
+
         $stmt = $db->prepare('SELECT * FROM contact_submissions WHERE id=?');
         $stmt->execute([$msgId]);
         /** @var array<string, mixed>|false $message */
@@ -107,7 +117,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'pending',
         ]);
         $volunteerId = (int)$db->lastInsertId();
-        $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=?, is_read=1 WHERE id=?')->execute([$volunteerId, $msgId]);
+        if ($supportsConvertedVolunteerLink) {
+            $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=?, is_read=1 WHERE id=?')->execute([$volunteerId, $msgId]);
+        } else {
+            $db->prepare('UPDATE contact_submissions SET is_read=1 WHERE id=?')->execute([$msgId]);
+        }
 
         $currentUser = currentUser();
         logVolunteerAudit(
@@ -120,6 +134,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
 
         flashMessage('success', 'Inquiry converted to a volunteer entry. Review and complete the volunteer profile.');
+        if (!$supportsConvertedVolunteerLink) {
+            flashMessage('info', 'The volunteer was created, but this environment still needs the latest inquiry schema update before inquiries can keep a direct volunteer link.');
+        }
         redirect('/admin/volunteers.php?edit=' . $volunteerId . '#volunteer-form');
     }
 
