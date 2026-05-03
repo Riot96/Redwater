@@ -67,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $attemptId = merchGenerateCheckoutAttemptId();
         $payload = buildMerchPaypalCheckoutPayload($cartState['checkoutItems'], $storeSettings, $attemptId);
         logMerchPaypalCheckoutAttempt($attemptId, $payload, $storeSettings);
+        rememberMerchCheckoutAttempt($attemptId, $storeSettings);
         renderMerchPaypalRedirectPage($payload, $storeSettings, $attemptId);
         exit;
     }
@@ -114,7 +115,7 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
       <?= csrfField() ?>
       <input type="hidden" name="action" value="checkout">
       <button type="submit" class="btn btn-primary w-full">Checkout with PayPal</button>
-      <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. Each checkout attempt is logged on the server before redirecting to PayPal so sandbox issues can be traced.</p>
+      <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. Each checkout attempt is logged on the server, then a review page shows the target PayPal account and endpoint before you continue.</p>
     </form>
     <?php
 }
@@ -316,7 +317,7 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
     if (error_log($line, 3, $logPath) === false) {
         $lastError = error_get_last();
         $reason = '';
-        if (is_array($lastError) && isset($lastError['message'])) {
+        if (is_array($lastError)) {
             $sanitizedReason = trim(str_replace(["\r", "\n"], ' ', (string) $lastError['message']));
             if ($sanitizedReason !== '') {
                 $reason = ' Reason: ' . substr($sanitizedReason, 0, 300);
@@ -330,6 +331,54 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
 }
 
 /**
+ * @param array{
+ *   paypal_email: string,
+ *   paypal_currency: string,
+ *   paypal_use_sandbox: bool,
+ *   shipping_notice: string,
+ *   pickup_notice: string
+ * } $storeSettings
+ */
+function rememberMerchCheckoutAttempt(string $attemptId, array $storeSettings): void {
+    $_SESSION['merch_last_checkout_attempt'] = [
+        'attempt_id' => $attemptId,
+        'environment' => merchPaypalEnvironmentLabel($storeSettings),
+        'target_url' => merchPaypalCheckoutUrl($storeSettings),
+        'receiver_email' => $storeSettings['paypal_email'],
+        'logged_at' => gmdate('c'),
+    ];
+}
+
+/**
+ * @return array{
+ *   attempt_id: string,
+ *   environment: string,
+ *   target_url: string,
+ *   receiver_email: string,
+ *   logged_at: string
+ * }|null
+ */
+function getMerchLastCheckoutAttempt(): ?array {
+    $attempt = $_SESSION['merch_last_checkout_attempt'] ?? null;
+    if (!is_array($attempt)) {
+        return null;
+    }
+
+    $attemptId = trim(stringValue($attempt['attempt_id'] ?? ''));
+    if ($attemptId === '') {
+        return null;
+    }
+
+    return [
+        'attempt_id' => $attemptId,
+        'environment' => trim(stringValue($attempt['environment'] ?? '')),
+        'target_url' => trim(stringValue($attempt['target_url'] ?? '')),
+        'receiver_email' => trim(stringValue($attempt['receiver_email'] ?? '')),
+        'logged_at' => trim(stringValue($attempt['logged_at'] ?? '')),
+    ];
+}
+
+/**
  * @param array<string, string> $payload
  * @param array{
  *   paypal_email: string,
@@ -340,8 +389,8 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
  * } $storeSettings
  */
 function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, string $attemptId): void {
-    $pageTitle = 'Redirecting to PayPal';
-    $seoDescription = 'Redirecting to PayPal checkout.';
+    $pageTitle = 'Review PayPal Checkout';
+    $seoDescription = 'Review PayPal checkout details before continuing.';
     include __DIR__ . '/includes/header.php';
     ?>
     <main class="page-wrapper">
@@ -349,12 +398,17 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
         <div class="container" style="max-width:760px;">
           <div class="card">
             <div class="card-body">
-              <h1 style="font-size:1.6rem;">Redirecting to <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?></h1>
+              <h1 style="font-size:1.6rem;">Review <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?> Checkout</h1>
               <div class="alert-inline alert-info" style="margin:1rem 0;">
                 Attempt ID: <strong><?= e($attemptId) ?></strong><br>
-                The outgoing checkout payload was logged on the server before redirecting.
+                The outgoing checkout payload was logged on the server before you continue to PayPal.
               </div>
               <p class="text-muted">If PayPal still shows the generic sandbox payment error, use this attempt ID to find the matching <code>[Merch PayPal Checkout]</code> entry in the server log. By default this uses PHP's configured error log, unless <code>MERCH_PAYPAL_LOG_PATH</code> is set.</p>
+              <div class="alert-inline" style="margin:1rem 0;display:grid;gap:0.65rem;">
+                <div><strong>PayPal environment:</strong> <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?></div>
+                <div><strong>Receiver email:</strong> <code><?= e($storeSettings['paypal_email']) ?></code></div>
+                <div><strong>Checkout endpoint:</strong> <code><?= e(merchPaypalCheckoutUrl($storeSettings)) ?></code></div>
+              </div>
               <form method="post" action="<?= e(merchPaypalCheckoutUrl($storeSettings)) ?>" id="paypal-redirect-form" class="merch-cart-checkout-form">
                 <?php foreach ($payload as $name => $value): ?>
                   <input type="hidden" name="<?= e($name) ?>" value="<?= e($value) ?>">
@@ -366,18 +420,6 @@ function renderMerchPaypalRedirectPage(array $payload, array $storeSettings, str
         </div>
       </section>
     </main>
-    <script>
-      window.addEventListener('load', function () {
-        var form = document.getElementById('paypal-redirect-form');
-        if (form) {
-          // Short delay gives assistive tech time to announce the attempt ID before redirecting.
-          var PAYPAL_REDIRECT_DELAY_MS = 1200;
-          window.setTimeout(function () {
-            form.submit();
-          }, PAYPAL_REDIRECT_DELAY_MS);
-        }
-      });
-    </script>
     <?php
     include __DIR__ . '/includes/footer.php';
 }
@@ -553,6 +595,7 @@ $subtotal = $cartState['subtotal'];
 $shippingTotal = $cartState['shippingTotal'];
 $paypalStatus = getString('paypal');
 $paypalAttemptId = trim(getString('attempt'));
+$lastPaypalAttempt = getMerchLastCheckoutAttempt();
 
 include __DIR__ . '/includes/header.php';
 ?>
@@ -665,6 +708,13 @@ include __DIR__ . '/includes/header.php';
                     <?php if ($storeSettings['paypal_email'] !== ''): ?>
                       <div class="mt-1">Current checkout target: <?= e(merchPaypalEnvironmentLabel($storeSettings)) ?> → <?= e($storeSettings['paypal_email']) ?></div>
                     <?php endif; ?>
+                  </div>
+                <?php endif; ?>
+                <?php if ($lastPaypalAttempt !== null): ?>
+                  <div class="alert-inline alert-info" style="margin-top:1rem;">
+                    <div><strong>Most recent PayPal attempt:</strong> <code><?= e($lastPaypalAttempt['attempt_id']) ?></code></div>
+                    <div class="mt-1">Target: <?= e($lastPaypalAttempt['environment']) ?> → <code><?= e($lastPaypalAttempt['receiver_email']) ?></code></div>
+                    <div class="mt-1">Endpoint: <code><?= e($lastPaypalAttempt['target_url']) ?></code></div>
                   </div>
                 <?php endif; ?>
                 <?php if ($paypalAttemptId !== '' && ($paypalStatus === 'cancelled' || $paypalStatus === 'returned')): ?>
