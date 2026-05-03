@@ -101,6 +101,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $volunteerId = postInt('volunteer_id');
 
     if (in_array($act, ['add_volunteer', 'edit_volunteer'], true)) {
+        $redirectTarget = $act === 'add_volunteer'
+            ? '/admin/volunteers.php?mode=create#volunteer-form'
+            : '/admin/volunteers.php?edit=' . $volunteerId . '#volunteer-form';
         $fullName = trim(postString('full_name'));
         $email = trim(postString('email'));
         $phoneNumber = trim(postString('phone_number'));
@@ -216,7 +219,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('success', 'Volunteer updated.');
         }
 
-        redirect('/admin/volunteers.php?edit=' . $volunteerId . '#volunteer-form');
+        redirect($redirectTarget);
     }
 
     if ($act === 'delete_volunteer') {
@@ -227,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($volunteer) {
             $db->prepare('DELETE FROM volunteers WHERE id=?')->execute([$volunteerId]);
-            logVolunteerAudit($db, $volunteerId, stringValue($volunteer['full_name'] ?? ''), $currentUser['id'], 'deleted', 'Volunteer record deleted.');
+            logVolunteerAudit($db, $volunteerId, stringValue($volunteer['full_name']), $currentUser['id'], 'deleted', 'Volunteer record deleted.');
             flashMessage('success', 'Volunteer deleted.');
         } else {
             flashMessage('error', 'Volunteer not found.');
@@ -516,7 +519,7 @@ include __DIR__ . '/../includes/header.php';
                     <td>
                       <div><a href="mailto:<?= e($volunteer['email']) ?>"><?= e($volunteer['email']) ?></a></div>
                       <?php if (!empty($volunteer['phone_number'])): ?>
-                        <div><a href="tel:<?= e(preg_replace('/\D/', '', stringValue($volunteer['phone_number'] ?? '')) ?? '') ?>"><?= e($volunteer['phone_number']) ?></a></div>
+                        <div><a href="tel:<?= e(preg_replace('/\D/', '', stringValue($volunteer['phone_number'])) ?? '') ?>"><?= e($volunteer['phone_number']) ?></a></div>
                       <?php endif; ?>
                       <div class="text-muted">Prefers <?= e(ucfirst(stringValue($volunteer['preferred_contact_method'] ?? 'email'))) ?></div>
                     </td>

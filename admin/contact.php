@@ -72,6 +72,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($act === 'add_inquiry' || $act === 'edit_inquiry') {
         $messageId = postInt('msg_id');
+        $redirectTarget = $act === 'edit_inquiry'
+            ? '/admin/contact.php?edit=' . $messageId . '#inquiry-form'
+            : '/admin/contact.php?mode=create#inquiry-form';
         $name = trim(postString('name'));
         $email = trim(postString('email'));
         $phoneNumber = trim(postString('phone_number'));
@@ -80,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $subject = trim(postString('subject'));
         $message = trim(postString('message'));
         $isRead = postBool('is_read') ? 1 : 0;
+        $savedSuccessfully = false;
 
         if ($name === '') {
             flashMessage('error', 'Name is required.');
@@ -109,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $isRead,
                 ]);
                 flashMessage('success', 'Inquiry added.');
+                $savedSuccessfully = true;
             } else {
                 $stmt = $db->prepare(
                     'UPDATE contact_submissions
@@ -128,13 +133,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $messageId,
                 ]);
                 flashMessage('success', 'Inquiry updated.');
+                $savedSuccessfully = true;
             }
         }
 
-        if ($act === 'edit_inquiry') {
-            redirect('/admin/contact.php?edit=' . $messageId . '#inquiry-form');
-        }
-        redirect('/admin/contact.php#inquiries');
+        redirect($savedSuccessfully && $act === 'add_inquiry' ? '/admin/contact.php#inquiries' : $redirectTarget);
     }
 }
 
@@ -358,7 +361,7 @@ include __DIR__ . '/../includes/header.php';
                   <td>
                     <div><a href="mailto:<?= e($msg['email']) ?>"><?= e($msg['email']) ?></a></div>
                     <?php if (!empty($msg['phone_number'])): ?>
-                      <div><a href="tel:<?= e(preg_replace('/\D/', '', stringValue($msg['phone_number'] ?? '')) ?? '') ?>"><?= e($msg['phone_number']) ?></a></div>
+                      <div><a href="tel:<?= e(preg_replace('/\D/', '', stringValue($msg['phone_number'])) ?? '') ?>"><?= e($msg['phone_number']) ?></a></div>
                     <?php endif; ?>
                   </td>
                   <td><?= e(ucfirst(stringValue($msg['preferred_contact_method'] ?? 'email'))) ?></td>
