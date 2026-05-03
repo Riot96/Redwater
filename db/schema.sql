@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
     subject VARCHAR(255) NULL,
     message TEXT NOT NULL,
     privacy_consent TINYINT(1) NOT NULL DEFAULT 0,
+    converted_volunteer_id INT NULL,
     is_read TINYINT(1) NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

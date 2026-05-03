@@ -229,6 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $volunteer = $stmt->fetch();
 
         if ($volunteer) {
+            $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=NULL WHERE converted_volunteer_id=?')->execute([$volunteerId]);
             $db->prepare('DELETE FROM volunteers WHERE id=?')->execute([$volunteerId]);
             logVolunteerAudit($db, $volunteerId, stringValue($volunteer['full_name']), $currentUser['id'], 'deleted', 'Volunteer record deleted.');
             flashMessage('success', 'Volunteer deleted.');

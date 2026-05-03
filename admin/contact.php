@@ -63,6 +63,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         redirect('/admin/contact.php#inquiries');
     }
 
+    if ($act === 'convert_to_volunteer') {
+        $msgId = postInt('msg_id');
+        $stmt = $db->prepare('SELECT * FROM contact_submissions WHERE id=?');
+        $stmt->execute([$msgId]);
+        /** @var array<string, mixed>|false $message */
+        $message = $stmt->fetch();
+
+        if (!$message) {
+            flashMessage('error', 'Inquiry not found.');
+            redirect('/admin/contact.php#inquiries');
+        }
+
+        $existingVolunteerId = intValue($message['converted_volunteer_id'] ?? null);
+        if ($existingVolunteerId > 0) {
+            flashMessage('info', 'This inquiry has already been converted to a volunteer entry.');
+            redirect('/admin/volunteers.php?edit=' . $existingVolunteerId . '#volunteer-form');
+        }
+
+        $subject = trim(stringValue($message['subject'] ?? ''));
+        $internalNotes = 'Converted from inquiry #' . intValue($message['id'] ?? 0) . ' on ' . date('M j, Y g:ia') . '.';
+        if ($subject !== '') {
+            $internalNotes .= "\nOriginal inquiry subject: " . $subject;
+        }
+
+        $stmt = $db->prepare(
+            'INSERT INTO volunteers (
+                full_name, email, phone_number, preferred_contact_method, location_address,
+                areas_of_interest, availability, message, internal_notes, privacy_consent, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            stringValue($message['name'] ?? ''),
+            stringValue($message['email'] ?? ''),
+            ($message['phone_number'] ?? null) !== null && stringValue($message['phone_number']) !== '' ? stringValue($message['phone_number']) : null,
+            normalizePreferredContactMethod(stringValue($message['preferred_contact_method'] ?? 'email')),
+            ($message['location_address'] ?? null) !== null && stringValue($message['location_address']) !== '' ? stringValue($message['location_address']) : null,
+            $subject !== '' ? $subject : null,
+            null,
+            stringValue($message['message'] ?? ''),
+            $internalNotes,
+            !empty($message['privacy_consent']) ? 1 : 0,
+            'pending',
+        ]);
+        $volunteerId = (int)$db->lastInsertId();
+        $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=?, is_read=1 WHERE id=?')->execute([$volunteerId, $msgId]);
+
+        $currentUser = currentUser();
+        logVolunteerAudit(
+            $db,
+            $volunteerId,
+            stringValue($message['name'] ?? ''),
+            is_array($currentUser) ? intValue($currentUser['id']) : null,
+            'created',
+            'Volunteer record converted from inquiry #' . intValue($message['id'] ?? 0) . '.'
+        );
+
+        flashMessage('success', 'Inquiry converted to a volunteer entry. Review and complete the volunteer profile.');
+        redirect('/admin/volunteers.php?edit=' . $volunteerId . '#volunteer-form');
+    }
+
     if ($act === 'delete_message') {
         $msgId = postInt('msg_id');
         $db->prepare('DELETE FROM contact_submissions WHERE id=?')->execute([$msgId]);
@@ -266,12 +326,13 @@ include __DIR__ . '/../includes/header.php';
           'email' => stringValue($editMessage['email'] ?? ''),
           'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
           'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
-          'location_address' => stringValue($editMessage['location_address'] ?? ''),
-          'subject' => stringValue($editMessage['subject'] ?? ''),
-          'message' => stringValue($editMessage['message'] ?? ''),
-          'is_read' => !empty($editMessage['is_read']),
-      ];
-      ?>
+           'location_address' => stringValue($editMessage['location_address'] ?? ''),
+           'subject' => stringValue($editMessage['subject'] ?? ''),
+           'message' => stringValue($editMessage['message'] ?? ''),
+           'converted_volunteer_id' => intValue($editMessage['converted_volunteer_id'] ?? null),
+           'is_read' => !empty($editMessage['is_read']),
+       ];
+       ?>
       <div class="card mb-3" id="inquiry-form">
         <div class="card-body">
           <div class="d-flex justify-between align-center mb-2" style="gap:1rem;flex-wrap:wrap;">
@@ -328,6 +389,20 @@ include __DIR__ . '/../includes/header.php';
               <a href="/admin/contact.php#inquiries" class="btn btn-outline btn-sm">Cancel</a>
             </div>
           </form>
+          <?php if ($editMessage): ?>
+            <div class="d-flex gap-1 mt-2" style="flex-wrap:wrap;">
+              <?php if ($inquiryFormValues['converted_volunteer_id'] > 0): ?>
+                <a href="/admin/volunteers.php?edit=<?= intValue($inquiryFormValues['converted_volunteer_id']) ?>#volunteer-form" class="btn btn-outline btn-sm">View Volunteer</a>
+              <?php else: ?>
+                <form method="POST" style="display:inline;">
+                  <?= csrfField() ?>
+                  <input type="hidden" name="action" value="convert_to_volunteer">
+                  <input type="hidden" name="msg_id" value="<?= intValue($inquiryFormValues['id']) ?>">
+                  <button type="submit" class="btn btn-secondary btn-sm">Convert to Volunteer</button>
+                </form>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
         </div>
       </div>
     <?php endif; ?>
@@ -373,6 +448,16 @@ include __DIR__ . '/../includes/header.php';
                   <td>
                     <div class="td-actions">
                       <a href="/admin/contact.php?edit=<?= intValue($msg['id']) ?>#inquiry-form" class="btn btn-outline btn-sm">Edit</a>
+                      <?php if (intValue($msg['converted_volunteer_id'] ?? null) > 0): ?>
+                        <a href="/admin/volunteers.php?edit=<?= intValue($msg['converted_volunteer_id'] ?? null) ?>#volunteer-form" class="btn btn-outline btn-sm">Volunteer</a>
+                      <?php else: ?>
+                        <form method="POST" style="display:inline;">
+                          <?= csrfField() ?>
+                          <input type="hidden" name="action" value="convert_to_volunteer">
+                          <input type="hidden" name="msg_id" value="<?= intValue($msg['id']) ?>">
+                          <button type="submit" class="btn btn-secondary btn-sm">Convert</button>
+                        </form>
+                      <?php endif; ?>
                       <?php if (!$msg['is_read']): ?>
                         <form method="POST" style="display:inline;">
                           <?= csrfField() ?>
