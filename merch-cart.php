@@ -316,9 +316,10 @@ function logMerchPaypalCheckoutAttempt(string $attemptId, array $payload, array 
         : ($defaultLogPath !== '' ? $defaultLogPath : rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'redwater_merch_paypal.log');
     if (error_log($line, 3, $logPath) === false) {
         $lastError = error_get_last();
+        $lastErrorData = is_array($lastError) ? $lastError : [];
         $reason = '';
-        if (is_array($lastError)) {
-            $sanitizedReason = trim(str_replace(["\r", "\n"], ' ', (string) $lastError['message']));
+        if (array_key_exists('message', $lastErrorData)) {
+            $sanitizedReason = trim(str_replace(["\r", "\n"], ' ', stringValue($lastErrorData['message'])));
             if ($sanitizedReason !== '') {
                 $reason = ' Reason: ' . substr($sanitizedReason, 0, 300);
             }
@@ -713,8 +714,8 @@ include __DIR__ . '/includes/header.php';
                 <?php if ($lastPaypalAttempt !== null): ?>
                   <div class="alert-inline alert-info" style="margin-top:1rem;">
                     <div><strong>Most recent PayPal attempt:</strong> <code><?= e($lastPaypalAttempt['attempt_id']) ?></code></div>
-                    <div class="mt-1">Target: <?= e($lastPaypalAttempt['environment']) ?> → <code><?= e($lastPaypalAttempt['receiver_email']) ?></code></div>
-                    <div class="mt-1">Endpoint: <code><?= e($lastPaypalAttempt['target_url']) ?></code></div>
+                    <div style="margin-top:0.5rem;">Target: <?= e($lastPaypalAttempt['environment']) ?> → <code><?= e($lastPaypalAttempt['receiver_email']) ?></code></div>
+                    <div style="margin-top:0.5rem;">Endpoint: <code><?= e($lastPaypalAttempt['target_url']) ?></code></div>
                   </div>
                 <?php endif; ?>
                 <?php if ($paypalAttemptId !== '' && ($paypalStatus === 'cancelled' || $paypalStatus === 'returned')): ?>
