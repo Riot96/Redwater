@@ -808,7 +808,7 @@ function getRaffleShareUrl(): string {
     if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
         $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
         $host = serverString('HTTP_HOST');
-        if ($host !== '') {
+        if ($host !== '' && preg_match('/^[A-Za-z0-9.-]+(?::\d+)?$/', $host) === 1) {
             $baseUrl = $scheme . '://' . $host;
         }
     }

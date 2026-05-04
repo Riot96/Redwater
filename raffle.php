@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = postString('action');
 
     if ($action !== 'submit_raffle_entry') {
-        redirect('/raffle.php#raffle-entry-form');
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid form submission.');
     }
 
     $entryValues = [
@@ -88,7 +88,13 @@ include __DIR__ . '/includes/header.php';
       <div class="raffle-hero">
         <div>
           <span class="badge badge-red">Current Promotion</span>
-          <h1><?= $isActiveRaffle ? e($raffleSettings['title']) : 'Raffle <span>Entries</span>' ?></h1>
+          <h1>
+            <?php if ($isActiveRaffle): ?>
+              <?= e($raffleSettings['title']) ?>
+            <?php else: ?>
+              Raffle <span>Entries</span>
+            <?php endif; ?>
+          </h1>
           <p class="raffle-lead">
             <?php if ($isActiveRaffle): ?>
               <?= $raffleSettings['description'] !== '' ? e($raffleSettings['description']) : 'Use the form below to enter the current raffle.' ?>
