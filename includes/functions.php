@@ -812,6 +812,8 @@ function getRaffleShareUrl(): string {
     if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
         $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
         $host = serverString('HTTP_HOST');
+        // FILTER_VALIDATE_DOMAIN only accepts the hostname portion, so strip an
+        // optional port before validating and rebuild the original host value.
         $hostWithoutPort = preg_replace('/:\d+$/', '', $host);
         if (
             is_string($hostWithoutPort)
