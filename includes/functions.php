@@ -711,6 +711,13 @@ function parseRaffleCsvNames(string $input): array {
 }
 
 /**
+ * @param array<string, mixed> $settings
+ */
+function raffleRequiresEmail(array $settings): bool {
+    return !empty($settings['collect_email']) && !empty($settings['require_email']);
+}
+
+/**
  * @return array{
  *   entry_form_enabled: bool,
  *   title: string,
@@ -730,7 +737,7 @@ function getRaffleSettings(): array {
     $title = trim(stringValue($settings['title'] ?? ''));
     $optInLabel = trim(stringValue($settings['opt_in_label'] ?? ''));
     $collectEmail = !empty($settings['collect_email']);
-    $requireEmail = $collectEmail && !empty($settings['require_email']);
+    $requireEmail = raffleRequiresEmail($settings);
 
     return [
         'entry_form_enabled' => !empty($settings['entry_form_enabled']),
@@ -761,7 +768,7 @@ function saveRaffleSettings(array $settings): void {
         'title' => trim($settings['title']),
         'description' => trim($settings['description']),
         'collect_email' => $collectEmail,
-        'require_email' => $collectEmail && !empty($settings['require_email']),
+        'require_email' => raffleRequiresEmail($settings),
         'opt_in_label' => trim($settings['opt_in_label']),
         'expires_at' => trim($settings['expires_at']),
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
