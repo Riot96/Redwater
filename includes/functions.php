@@ -919,7 +919,7 @@ function addRaffleEntry(array $entry): string {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        error_log('Failed to save raffle entry: ' . $e);
+        error_log("Failed to save raffle entry: {$e->getMessage()}\n{$e->getTraceAsString()}");
         return 'We could not save your raffle entry right now. Please try again.';
     }
 
