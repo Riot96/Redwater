@@ -42,6 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'title' => trim(postString('title')),
             'description' => trim(postString('description')),
             'collect_email' => postBool('collect_email'),
+            'require_email' => postBool('require_email'),
             'opt_in_label' => trim(postString('opt_in_label')),
             'expires_at' => trim(postString('expires_at')),
         ];
@@ -180,7 +181,11 @@ include __DIR__ . '/../includes/header.php';
               </label>
               <label class="raffle-checkbox">
                 <input type="checkbox" name="collect_email" value="1" <?= $settingsValues['collect_email'] ? 'checked' : '' ?>>
-                <span>Show optional email address field</span>
+                <span>Show email address field</span>
+              </label>
+              <label class="raffle-checkbox">
+                <input type="checkbox" name="require_email" value="1" <?= $settingsValues['require_email'] ? 'checked' : '' ?>>
+                <span>Require an email address for entry</span>
               </label>
               <div class="form-group">
                 <label class="form-label" for="raffle-title">Form title</label>

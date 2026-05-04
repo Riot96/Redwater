@@ -716,6 +716,7 @@ function parseRaffleCsvNames(string $input): array {
  *   title: string,
  *   description: string,
  *   collect_email: bool,
+ *   require_email: bool,
  *   opt_in_label: string,
  *   expires_at: string
  * }
@@ -734,6 +735,7 @@ function getRaffleSettings(): array {
         'title' => $title !== '' ? $title : 'RedWater Giveaway Entry',
         'description' => trim(stringValue($settings['description'] ?? '')),
         'collect_email' => !empty($settings['collect_email']),
+        'require_email' => !empty($settings['collect_email']) && !empty($settings['require_email']),
         'opt_in_label' => $optInLabel !== '' ? $optInLabel : 'I want to receive email updates about future promotions.',
         'expires_at' => trim(stringValue($settings['expires_at'] ?? '')),
     ];
@@ -745,16 +747,19 @@ function getRaffleSettings(): array {
  *   title: string,
  *   description: string,
  *   collect_email: bool,
+ *   require_email: bool,
  *   opt_in_label: string,
  *   expires_at: string
  * } $settings
  */
 function saveRaffleSettings(array $settings): void {
+    $collectEmail = !empty($settings['collect_email']);
     setSetting('raffle_settings', (string) json_encode([
         'entry_form_enabled' => !empty($settings['entry_form_enabled']),
         'title' => trim($settings['title']),
         'description' => trim($settings['description']),
-        'collect_email' => !empty($settings['collect_email']),
+        'collect_email' => $collectEmail,
+        'require_email' => $collectEmail && !empty($settings['require_email']),
         'opt_in_label' => trim($settings['opt_in_label']),
         'expires_at' => trim($settings['expires_at']),
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));

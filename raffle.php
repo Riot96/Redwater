@@ -46,8 +46,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             : $inactiveRaffleMessage;
     } elseif (!isValidRaffleName($entryValues['name'])) {
         $entryError = 'Please enter a valid participant name using letters, numbers, and basic punctuation only.';
+    } elseif ($raffleSettings['require_email'] && $entryValues['email'] === '') {
+        $entryError = 'Please enter your email address to complete this raffle entry.';
     } elseif ($entryValues['email'] !== '' && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
-        $entryError = 'Please enter a valid email address or leave the field blank.';
+        $entryError = $raffleSettings['require_email']
+            ? 'Please enter a valid email address to complete this raffle entry.'
+            : 'Please enter a valid email address or leave the field blank.';
     } else {
         $entryEmailKey = $entryValues['email'] !== '' ? strtolower($entryValues['email']) : '';
         $entryNameKey = raffleNameKey($entryValues['name']);
@@ -172,9 +176,9 @@ include __DIR__ . '/includes/header.php';
                 </div>
                 <?php if ($raffleSettings['collect_email']): ?>
                   <div class="form-group">
-                    <label class="form-label" for="raffle-entry-email">Email address</label>
-                    <input id="raffle-entry-email" type="email" name="email" class="form-control" value="<?= e($entryValues['email']) ?>">
-                    <div class="form-hint">Optional, but helpful if you need to contact the winner directly.</div>
+                    <label class="form-label" for="raffle-entry-email">Email address<?= $raffleSettings['require_email'] ? ' <span class="text-red">*</span>' : '' ?></label>
+                    <input id="raffle-entry-email" type="email" name="email" class="form-control" <?= $raffleSettings['require_email'] ? 'required' : '' ?> value="<?= e($entryValues['email']) ?>">
+                    <div class="form-hint"><?= $raffleSettings['require_email'] ? 'A valid email address is required to enter this raffle.' : 'Optional, but helpful if you need to contact the winner directly.' ?></div>
                   </div>
                 <?php endif; ?>
                 <label class="raffle-checkbox">
@@ -194,7 +198,7 @@ include __DIR__ . '/includes/header.php';
             <h3 class="mb-2">What to Expect</h3>
             <ol class="raffle-steps">
               <li>Check this page to see whether a raffle is currently accepting entries.</li>
-              <li>Enter the participant name and optional email while the raffle is open.</li>
+              <li>Enter the participant name<?= $raffleSettings['collect_email'] ? ($raffleSettings['require_email'] ? ' and required email address' : ' and optional email address') : '' ?> while the raffle is open.</li>
               <li>Watch RedWater channels for winner announcements and future giveaways.</li>
             </ol>
           </div>
