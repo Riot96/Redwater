@@ -38,7 +38,7 @@ $currentDir  = basename(dirname($currentPhpSelf));
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     Sponsors
   </a>
-  <a href="/raffle.php#raffle-admin" class="admin-nav-link <?= $currentPage === 'raffle.php' ? 'active' : '' ?>">
+  <a href="/admin/raffle.php" class="admin-nav-link <?= $currentPage === 'raffle.php' ? 'active' : '' ?>">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 11V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"/><path d="M4 11h16v4a7 7 0 0 1-7 7h-2a7 7 0 0 1-7-7z"/><path d="M8 15h8"/><path d="M12 11v4"/></svg>
     Raffles
   </a>

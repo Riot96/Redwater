@@ -803,6 +803,19 @@ function saveRaffleEntries(array $entries): void {
     setSetting('raffle_entries', (string) json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 }
 
+function getRaffleShareUrl(): string {
+    $baseUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
+    if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
+        $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
+        $host = serverString('HTTP_HOST');
+        if ($host !== '') {
+            $baseUrl = $scheme . '://' . $host;
+        }
+    }
+
+    return ($baseUrl !== '' ? $baseUrl : '') . '/raffle.php#raffle-entry-form';
+}
+
 // ─── Merch Helpers ────────────────────────────────────────────────────────────
 function merchNormalizeAmount(string $value): string {
     $normalized = str_replace([',', '$', ' '], '', trim($value));
