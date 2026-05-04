@@ -26,11 +26,11 @@ $isActiveRaffle = $raffleSettings['entry_form_enabled'] && !$entryFormClosed;
 $expiresAtDisplay = $expiresAtTimestamp !== false ? date('M j, Y g:ia', $expiresAtTimestamp) : '';
 $inactiveRaffleMessage = 'There is no active raffle accepting entries right now. Please check back for the next giveaway.';
 $emailRequired = $raffleSettings['require_email'];
-$entryDetailsText = !$raffleSettings['collect_email']
-    ? 'Enter the participant name while the raffle is open.'
-    : ($emailRequired
-        ? 'Enter the participant name and required email address while the raffle is open.'
-        : 'Enter the participant name and optional email address while the raffle is open.');
+$entryDetailsText = $emailRequired
+    ? 'Enter the participant name and required email address while the raffle is open.'
+    : ($raffleSettings['collect_email']
+        ? 'Enter the participant name and optional email address while the raffle is open.'
+        : 'Enter the participant name while the raffle is open.');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -183,8 +183,8 @@ include __DIR__ . '/includes/header.php';
                 </div>
                 <?php if ($raffleSettings['collect_email']): ?>
                   <div class="form-group">
-                    <label class="form-label" for="raffle-entry-email">Email address<?= $emailRequired ? ' <span class="text-red" aria-hidden="true">*</span> (required)' : '' ?></label>
-                    <input id="raffle-entry-email" type="email" name="email" class="form-control" <?= $emailRequired ? 'required' : '' ?> value="<?= e($entryValues['email']) ?>">
+                    <label class="form-label" for="raffle-entry-email">Email address<?= $emailRequired ? ' <span class="text-red">*</span> (required)' : '' ?></label>
+                    <input id="raffle-entry-email" type="email" name="email" class="form-control" <?= $emailRequired ? 'required aria-required="true"' : '' ?> value="<?= e($entryValues['email']) ?>">
                     <div class="form-hint"><?= $emailRequired ? 'A valid email address is required to enter this raffle.' : 'Optional, but helpful if you need to contact the winner directly.' ?></div>
                   </div>
                 <?php endif; ?>
