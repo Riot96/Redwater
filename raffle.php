@@ -53,6 +53,7 @@ $entryError = '';
 $expiresAtTimestamp = $raffleSettings['expires_at'] !== '' ? strtotime($raffleSettings['expires_at']) : false;
 $entryFormClosed = !$raffleSettings['entry_form_enabled']
     || ($expiresAtTimestamp !== false && $expiresAtTimestamp < time());
+$expiresAtDisplay = $expiresAtTimestamp !== false ? date('M j, Y g:ia', $expiresAtTimestamp) : '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -233,7 +234,7 @@ include __DIR__ . '/includes/header.php';
           <h3>Entry Form Status</h3>
           <div class="raffle-status-pill <?= $entryFormClosed ? 'is-closed' : 'is-open' ?>"><?= e($entryStatusText) ?></div>
           <p><strong>Title:</strong> <?= e($raffleSettings['title']) ?></p>
-          <p><strong>Closes:</strong> <?= $raffleSettings['expires_at'] !== '' ? e(date('M j, Y g:ia', (int) strtotime($raffleSettings['expires_at']))) : 'No closing date set' ?></p>
+          <p><strong>Closes:</strong> <?= $expiresAtDisplay !== '' ? e($expiresAtDisplay) : 'No closing date set' ?></p>
           <p><strong>Saved entries:</strong> <?= count($storedEntries) ?></p>
           <?php if ($isAdmin): ?>
             <p><strong>Share URL:</strong><br><a href="<?= e($shareUrl) ?>"><?= e($shareUrl) ?></a></p>
@@ -352,8 +353,8 @@ include __DIR__ . '/includes/header.php';
             <?php if ($entryError !== ''): ?>
               <div class="alert alert-error"><?= e($entryError) ?></div>
             <?php endif; ?>
-            <?php if ($raffleSettings['expires_at'] !== ''): ?>
-              <p class="text-muted">Entries close on <?= e(date('M j, Y g:ia', (int) strtotime($raffleSettings['expires_at']))) ?>.</p>
+            <?php if ($expiresAtDisplay !== ''): ?>
+              <p class="text-muted">Entries close on <?= e($expiresAtDisplay) ?>.</p>
             <?php endif; ?>
             <?php if ($entryFormClosed): ?>
               <p class="text-muted">This form is currently unavailable for new entries.</p>

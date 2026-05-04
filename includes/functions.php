@@ -556,7 +556,7 @@ function isValidRaffleName(string $name): bool {
     $normalized = normalizeRaffleName($name);
     return $normalized !== ''
         && mb_strlen($normalized) <= 100
-        && preg_match("/^[\p{L}\p{N}][\p{L}\p{N}\s'’.,()&\/-]*$/u", $normalized) === 1;
+        && preg_match("/^[\p{L}\p{N}][\p{L}\p{N}\s'’.,()&\/\-]*$/u", $normalized) === 1;
 }
 
 /**
@@ -650,6 +650,20 @@ function parseRaffleCsvNames(string $input): array {
     /** @var list<string> $candidates */
     $candidates = [];
     $rowIndex = 0;
+    $headerLabels = [
+        'name',
+        'full name',
+        'fullname',
+        'participant',
+        'participant name',
+        'email',
+        'newsletter opt in',
+        'newsletter_opt_in',
+        'opt in',
+        'opt_in',
+        'created at',
+        'created_at',
+    ];
     while (($row = fgetcsv($stream)) !== false) {
         $cells = [];
         foreach ($row as $cell) {
@@ -667,14 +681,21 @@ function parseRaffleCsvNames(string $input): array {
             continue;
         }
 
-        if ($rowIndex === 0 && raffleNameKey($cells[0]) === 'name') {
-            array_shift($cells);
+        if ($rowIndex === 0) {
+            $headerMatches = 0;
+            foreach ($cells as $cell) {
+                if (in_array(raffleNameKey($cell), $headerLabels, true)) {
+                    $headerMatches++;
+                }
+            }
+
+            if ($headerMatches >= 2 || ($headerMatches >= 1 && count($cells) === 1)) {
+                $rowIndex++;
+                continue;
+            }
         }
 
         foreach ($cells as $cell) {
-            if ($rowIndex === 0 && in_array(raffleNameKey($cell), ['email', 'newsletter opt in', 'newsletter_opt_in', 'opt in', 'opt_in', 'created at', 'created_at'], true)) {
-                continue;
-            }
             if (filter_var($cell, FILTER_VALIDATE_EMAIL)) {
                 continue;
             }
