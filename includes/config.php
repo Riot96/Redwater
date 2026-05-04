@@ -35,6 +35,8 @@ defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
 defined('ALLOWED_IMAGE_TYPES')|| define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 defined('ALLOWED_VIDEO_TYPES')|| define('ALLOWED_VIDEO_TYPES', ['video/mp4', 'video/webm', 'video/ogg']);
 defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
+defined('RAFFLE_ENTRY_MAX_COUNT') || define('RAFFLE_ENTRY_MAX_COUNT', 5000);
+defined('RAFFLE_ENTRY_MAX_BYTES') || define('RAFFLE_ENTRY_MAX_BYTES', 1024 * 1024);
 
 // ─── Session Settings ─────────────────────────────────────────────────────────
 defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);

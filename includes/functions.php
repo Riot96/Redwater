@@ -555,8 +555,21 @@ function raffleNameKey(string $name): string {
 function isValidRaffleName(string $name): bool {
     $normalized = normalizeRaffleName($name);
     return $normalized !== ''
-        && mb_strlen($normalized) <= 100
+        && raffleNameLength($normalized) <= 100
         && preg_match("/^[\p{L}\p{N}][\p{L}\p{N}\s'’.,()&\/\-]*$/u", $normalized) === 1;
+}
+
+function raffleNameLength(string $name): int {
+    if (function_exists('mb_strlen')) {
+        return mb_strlen($name, 'UTF-8');
+    }
+
+    $length = preg_match_all('/./us', $name, $matches);
+    if ($length !== false) {
+        return $length;
+    }
+
+    return strlen($name);
 }
 
 /**
@@ -779,12 +792,18 @@ function saveRaffleSettings(array $settings): void {
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 }
 
+function raffleEntryMaxCount(): int {
+    return max(1, defined('RAFFLE_ENTRY_MAX_COUNT') ? (int) RAFFLE_ENTRY_MAX_COUNT : 5000);
+}
+
+function raffleEntryMaxBytes(): int {
+    return max(1024, defined('RAFFLE_ENTRY_MAX_BYTES') ? (int) RAFFLE_ENTRY_MAX_BYTES : 1024 * 1024);
+}
+
 /**
  * @return list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}>
  */
-function getRaffleEntries(): array {
-    $raw = getSetting('raffle_entries', '[]');
-    $decoded = json_decode($raw, true);
+function parseStoredRaffleEntries(mixed $decoded): array {
     if (!is_array($decoded)) {
         return [];
     }
@@ -818,8 +837,100 @@ function getRaffleEntries(): array {
 /**
  * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
  */
+function encodeRaffleEntries(array $entries): string {
+    $json = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    return is_string($json) ? $json : '[]';
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ */
+function canStoreRaffleEntries(array $entries): bool {
+    return count($entries) <= raffleEntryMaxCount()
+        && strlen(encodeRaffleEntries($entries)) <= raffleEntryMaxBytes();
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ * @param array{name: string, email: string, newsletter_opt_in: bool, created_at: string} $entry
+ */
+function findRaffleEntryConflict(array $entries, array $entry): string {
+    $entryNameKey = raffleNameKey($entry['name']);
+    $entryEmailKey = $entry['email'] !== '' ? strtolower($entry['email']) : '';
+
+    foreach ($entries as $storedEntry) {
+        $storedEmailKey = $storedEntry['email'] !== '' ? strtolower($storedEntry['email']) : '';
+        if (raffleNameKey($storedEntry['name']) === $entryNameKey) {
+            return 'That participant is already in the raffle list.';
+        }
+        if ($entryEmailKey !== '' && $storedEmailKey === $entryEmailKey) {
+            return 'That email address is already in the raffle list.';
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @param array{name: string, email: string, newsletter_opt_in: bool, created_at: string} $entry
+ */
+function addRaffleEntry(array $entry): string {
+    $db = getDb();
+
+    try {
+        $db->beginTransaction();
+
+        $ensureStmt = $db->prepare(
+            'INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE setting_key = setting_key'
+        );
+        $ensureStmt->execute(['raffle_entries', '[]']);
+
+        $selectStmt = $db->prepare('SELECT setting_value FROM site_settings WHERE setting_key = ? FOR UPDATE');
+        $selectStmt->execute(['raffle_entries']);
+        /** @var array{setting_value: string|null}|false $row */
+        $row = $selectStmt->fetch();
+        $entries = parseStoredRaffleEntries(json_decode(stringValue($row['setting_value'] ?? '[]'), true));
+
+        $conflictMessage = findRaffleEntryConflict($entries, $entry);
+        if ($conflictMessage !== '') {
+            $db->rollBack();
+            return $conflictMessage;
+        }
+
+        $entries[] = $entry;
+        if (!canStoreRaffleEntries($entries)) {
+            $db->rollBack();
+            return 'This raffle has reached its entry storage limit. Please contact the organizer.';
+        }
+
+        $updateStmt = $db->prepare('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?');
+        $updateStmt->execute([encodeRaffleEntries($entries), 'raffle_entries']);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log('Failed to save raffle entry: ' . $e->getMessage());
+        return 'We could not save your raffle entry right now. Please try again.';
+    }
+
+    return '';
+}
+
+/**
+ * @return list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}>
+ */
+function getRaffleEntries(): array {
+    $raw = getSetting('raffle_entries', '[]');
+    return parseStoredRaffleEntries(json_decode($raw, true));
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ */
 function saveRaffleEntries(array $entries): void {
-    setSetting('raffle_entries', (string) json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    setSetting('raffle_entries', encodeRaffleEntries($entries));
 }
 
 /**

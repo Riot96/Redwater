@@ -10,7 +10,6 @@ $pageTitle = 'Raffle';
 $seoDescription = 'Enter the current RedWater Entertainment raffle when entries are open.';
 
 $raffleSettings = getRaffleSettings();
-$storedEntries = getRaffleEntries();
 
 $entryValues = [
     'name' => '',
@@ -58,33 +57,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $entryError = 'Please enter a valid email address or leave the field blank.';
         }
-    } else {
-        $entryEmailKey = $entryValues['email'] !== '' ? strtolower($entryValues['email']) : '';
-        $entryNameKey = raffleNameKey($entryValues['name']);
-        foreach ($storedEntries as $storedEntry) {
-            $storedEmail = trim($storedEntry['email']);
-            $storedEmailKey = $storedEmail !== '' ? strtolower($storedEmail) : '';
-            $sameEmail = $entryEmailKey !== '' && $storedEmailKey === $entryEmailKey;
-            $sameNameWithoutEmail = $entryEmailKey === ''
-                && $storedEmailKey === ''
-                && raffleNameKey($storedEntry['name']) === $entryNameKey;
-
-            if ($sameEmail || $sameNameWithoutEmail) {
-                $entryError = 'That participant is already in the raffle list.';
-                break;
-            }
-        }
     }
 
     if ($entryError === '') {
-        $storedEntries[] = [
+        $entryError = addRaffleEntry([
             'name' => $entryValues['name'],
             'email' => $entryValues['email'],
             'newsletter_opt_in' => $entryValues['newsletter_opt_in'],
             'created_at' => date('Y-m-d H:i:s'),
-        ];
-        saveRaffleEntries($storedEntries);
-        redirectWithMessage('/raffle.php#raffle-entry-form', 'success', 'Your raffle entry has been received.');
+        ]);
+        if ($entryError === '') {
+            redirectWithMessage('/raffle.php#raffle-entry-form', 'success', 'Your raffle entry has been received.');
+        }
     }
 }
 

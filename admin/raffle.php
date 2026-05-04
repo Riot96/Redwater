@@ -187,6 +187,7 @@ include __DIR__ . '/../includes/header.php';
                 <input id="raffle-require-email" type="checkbox" name="require_email" value="1" <?= $settingsValues['require_email'] ? 'checked' : '' ?>>
                 <span>Require an email address for entry</span>
               </label>
+              <p class="form-hint">Public raffle entries accept one submission per participant name and store up to <?= number_format(raffleEntryMaxCount()) ?> saved entries.</p>
               <div class="form-group">
                 <label class="form-label" for="raffle-title">Form title</label>
                 <input id="raffle-title" type="text" name="title" class="form-control" maxlength="120" value="<?= e($settingsValues['title']) ?>">
