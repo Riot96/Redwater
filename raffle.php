@@ -29,51 +29,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $action = postString('action');
 
-    if ($action === 'submit_raffle_entry') {
-        $entryValues = [
-            'name' => normalizeRaffleName(postString('name')),
-            'email' => trim(postString('email')),
-            'newsletter_opt_in' => postBool('newsletter_opt_in'),
-        ];
+    if ($action !== 'submit_raffle_entry') {
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid action. Please submit your entry using the form below.');
+    }
 
-        if ($entryFormClosed) {
-            $entryError = $raffleSettings['entry_form_enabled']
-                ? 'This raffle is no longer accepting entries.'
-                : 'There is no active raffle accepting entries right now.';
-        } elseif (!isValidRaffleName($entryValues['name'])) {
-            $entryError = 'Please enter a valid participant name using letters, numbers, and basic punctuation only.';
-        } elseif ($entryValues['email'] !== '' && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
-            $entryError = 'Please enter a valid email address or leave the field blank.';
-        } else {
-            $entryEmailKey = $entryValues['email'] !== '' ? strtolower($entryValues['email']) : '';
-            $entryNameKey = raffleNameKey($entryValues['name']);
-            foreach ($storedEntries as $storedEntry) {
-                $storedEmail = trim($storedEntry['email']);
-                $storedEmailKey = $storedEmail !== '' ? strtolower($storedEmail) : '';
-                $sameEmail = $entryEmailKey !== '' && $storedEmailKey === $entryEmailKey;
-                $sameNameWithoutEmail = $entryEmailKey === ''
-                    && $storedEmailKey === ''
-                    && raffleNameKey($storedEntry['name']) === $entryNameKey;
+    $entryValues = [
+        'name' => normalizeRaffleName(postString('name')),
+        'email' => trim(postString('email')),
+        'newsletter_opt_in' => postBool('newsletter_opt_in'),
+    ];
 
-                if ($sameEmail || $sameNameWithoutEmail) {
-                    $entryError = 'That participant is already in the raffle list.';
-                    break;
-                }
+    if ($entryFormClosed) {
+        $entryError = $raffleSettings['entry_form_enabled']
+            ? 'This raffle is no longer accepting entries.'
+            : 'There is no active raffle accepting entries right now.';
+    } elseif (!isValidRaffleName($entryValues['name'])) {
+        $entryError = 'Please enter a valid participant name using letters, numbers, and basic punctuation only.';
+    } elseif ($entryValues['email'] !== '' && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
+        $entryError = 'Please enter a valid email address or leave the field blank.';
+    } else {
+        $entryEmailKey = $entryValues['email'] !== '' ? strtolower($entryValues['email']) : '';
+        $entryNameKey = raffleNameKey($entryValues['name']);
+        foreach ($storedEntries as $storedEntry) {
+            $storedEmail = trim($storedEntry['email']);
+            $storedEmailKey = $storedEmail !== '' ? strtolower($storedEmail) : '';
+            $sameEmail = $entryEmailKey !== '' && $storedEmailKey === $entryEmailKey;
+            $sameNameWithoutEmail = $entryEmailKey === ''
+                && $storedEmailKey === ''
+                && raffleNameKey($storedEntry['name']) === $entryNameKey;
+
+            if ($sameEmail || $sameNameWithoutEmail) {
+                $entryError = 'That participant is already in the raffle list.';
+                break;
             }
         }
+    }
 
-        if ($entryError === '') {
-            $storedEntries[] = [
-                'name' => $entryValues['name'],
-                'email' => $entryValues['email'],
-                'newsletter_opt_in' => $entryValues['newsletter_opt_in'],
-                'created_at' => date('Y-m-d H:i:s'),
-            ];
-            saveRaffleEntries($storedEntries);
-            redirectWithMessage('/raffle.php#raffle-entry-form', 'success', 'Your raffle entry has been received.');
-        }
-    } else {
-        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid action. Please submit your entry using the form below.');
+    if ($entryError === '') {
+        $storedEntries[] = [
+            'name' => $entryValues['name'],
+            'email' => $entryValues['email'],
+            'newsletter_opt_in' => $entryValues['newsletter_opt_in'],
+            'created_at' => date('Y-m-d H:i:s'),
+        ];
+        saveRaffleEntries($storedEntries);
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'success', 'Your raffle entry has been received.');
     }
 }
 
