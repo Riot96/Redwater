@@ -13,8 +13,8 @@ $socialInstagram = trim(getSetting('social_instagram'));
 $socialTiktok    = trim(getSetting('social_tiktok'));
 $socialYoutube   = trim(getSetting('social_youtube'));
 $socialPinterest = trim(getSetting('social_pinterest'));
-$contactEmail    = getSetting('contact_email');
-$contactPhone    = getSetting('contact_phone');
+$contactEmail    = trim(getSetting('contact_email'));
+$contactPhone    = trim(getSetting('contact_phone'));
 $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
 ?>
 

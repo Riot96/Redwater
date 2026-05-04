@@ -365,7 +365,6 @@ include __DIR__ . '/../includes/header.php';
               <label class="form-label">Pinterest URL</label>
               <input type="url" name="social_pinterest" class="form-control" value="<?= e(getSetting('social_pinterest')) ?>">
             </div>
-            <div class="form-group"></div>
           </div>
 
           <button type="submit" class="btn btn-primary">Save Settings</button>
