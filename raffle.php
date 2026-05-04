@@ -183,7 +183,7 @@ include __DIR__ . '/includes/header.php';
                 <?php if ($raffleSettings['collect_email']): ?>
                   <div class="form-group">
                     <label class="form-label" for="raffle-entry-email">Email address<?= $emailRequired ? ' (required) <span class="text-red" aria-hidden="true">*</span>' : '' ?></label>
-                    <input id="raffle-entry-email" type="email" name="email" class="form-control" <?= $emailRequired ? 'required aria-required="true" aria-label="Email address (required)"' : '' ?> value="<?= e($entryValues['email']) ?>">
+                    <input id="raffle-entry-email" type="email" name="email" class="form-control" <?= $emailRequired ? 'required' : '' ?> value="<?= e($entryValues['email']) ?>">
                     <div class="form-hint"><?= $emailRequired ? 'A valid email address is required to enter this raffle.' : 'Optional, but helpful if you need to contact the winner directly.' ?></div>
                   </div>
                 <?php endif; ?>

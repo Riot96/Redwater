@@ -360,10 +360,6 @@ include __DIR__ . '/../includes/header.php';
   const collectEmailToggle = document.getElementById('raffle-collect-email');
   const requireEmailToggle = document.getElementById('raffle-require-email');
   const syncEmailSettings = () => {
-    if (!collectEmailToggle || !requireEmailToggle) {
-      return;
-    }
-
     requireEmailToggle.disabled = !collectEmailToggle.checked;
     if (!collectEmailToggle.checked) {
       requireEmailToggle.checked = false;
