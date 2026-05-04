@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = postString('action');
 
     if ($action !== 'submit_raffle_entry') {
-        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Unexpected action received. Please use the raffle entry form to submit your information.');
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid action. Please submit your entry using the form below.');
     }
 
     $entryValues = [

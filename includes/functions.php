@@ -803,12 +803,21 @@ function saveRaffleEntries(array $entries): void {
     setSetting('raffle_entries', (string) json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
 }
 
+/**
+ * Builds the public raffle entry URL, preferring SITE_URL and only falling back
+ * to the current request host when it is a valid hostname.
+ */
 function getRaffleShareUrl(): string {
     $baseUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
     if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
         $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
         $host = serverString('HTTP_HOST');
-        if ($host !== '' && preg_match('/^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*(?::\d+)?$/', $host) === 1) {
+        $hostWithoutPort = preg_replace('/:\d+$/', '', $host);
+        if (
+            is_string($hostWithoutPort)
+            && $hostWithoutPort !== ''
+            && filter_var($hostWithoutPort, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+        ) {
             $baseUrl = $scheme . '://' . $host;
         }
     }
