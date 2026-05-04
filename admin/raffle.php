@@ -181,7 +181,7 @@ include __DIR__ . '/../includes/header.php';
               </label>
               <label class="raffle-checkbox">
                 <input type="checkbox" name="collect_email" value="1" <?= $settingsValues['collect_email'] ? 'checked' : '' ?>>
-                <span>Show email address field</span>
+                <span>Show email address field (optional unless required below)</span>
               </label>
               <label class="raffle-checkbox">
                 <input type="checkbox" name="require_email" value="1" <?= $settingsValues['require_email'] ? 'checked' : '' ?>>
