@@ -36,6 +36,70 @@ $volunteerValues = [
     'privacy_consent' => false,
 ];
 
+/**
+ * @return list<string>
+ */
+$getTableColumns = static function (PDO $db, string $table): array {
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table) !== 1) {
+        return [];
+    }
+
+    try {
+        $tableExistsStmt = $db->query('SHOW TABLES LIKE ' . $db->quote($table));
+        if (!$tableExistsStmt instanceof PDOStatement || $tableExistsStmt->fetchColumn() === false) {
+            return [];
+        }
+
+        $columnsStmt = $db->query('SHOW COLUMNS FROM `' . $table . '`');
+        if (!$columnsStmt instanceof PDOStatement) {
+            return [];
+        }
+
+        $columns = [];
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $columnsStmt->fetchAll();
+        foreach ($rows as $row) {
+            $field = stringValue($row['Field'] ?? '');
+            if ($field !== '') {
+                $columns[] = $field;
+            }
+        }
+
+        return $columns;
+    } catch (PDOException $e) {
+        error_log('Unable to inspect table schema for ' . $table . ': ' . $e->getMessage());
+        return [];
+    }
+};
+
+/**
+ * @param array<string, mixed> $values
+ * @param list<string> $availableColumns
+ */
+$insertUsingAvailableColumns = static function (PDO $db, string $table, array $values, array $availableColumns): bool {
+    if (preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $table) !== 1) {
+        return false;
+    }
+
+    $insertValues = [];
+    foreach ($values as $column => $value) {
+        if (in_array($column, $availableColumns, true)) {
+            $insertValues[$column] = $value;
+        }
+    }
+
+    if ($insertValues === []) {
+        return false;
+    }
+
+    $columnsSql = implode(', ', array_map(static fn (string $column): string => '`' . $column . '`', array_keys($insertValues)));
+    $placeholdersSql = implode(', ', array_fill(0, count($insertValues), '?'));
+    $stmt = $db->prepare('INSERT INTO `' . $table . '` (' . $columnsSql . ') VALUES (' . $placeholdersSql . ')');
+    $stmt->execute(array_values($insertValues));
+
+    return true;
+};
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $activeForm = postString('form_type') === 'volunteer' ? 'volunteer' : 'inquiry';
@@ -76,54 +140,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($errors === []) {
                 $db = getDb();
-                $stmt = $db->prepare(
-                    'INSERT INTO volunteers (
-                        full_name, email, phone_number, preferred_contact_method, location_address,
-                        areas_of_interest, availability, message, privacy_consent, status
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $stmt->execute([
-                    $volunteerValues['full_name'],
-                    $volunteerValues['email'],
-                    $volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : null,
-                    $volunteerValues['preferred_contact_method'],
-                    $volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : null,
-                    $volunteerValues['areas_of_interest'],
-                    $volunteerValues['availability'],
-                    $volunteerValues['message'] !== '' ? $volunteerValues['message'] : null,
-                    1,
-                    'pending',
-                ]);
-                $volunteerId = (int)$db->lastInsertId();
-                logVolunteerAudit($db, $volunteerId, $volunteerValues['full_name'], null, 'submitted', 'Volunteer sign-up received from website.');
+                $volunteerColumns = $getTableColumns($db, 'volunteers');
+                $contactSubmissionColumns = $getTableColumns($db, 'contact_submissions');
+                $volunteerAuditColumns = $getTableColumns($db, 'volunteer_audit_log');
+                $savedVolunteerSignup = false;
 
-                $adminEmail = getSetting('contact_email');
-                if ($adminEmail !== '') {
-                    $body = "New volunteer sign-up received.\n\n";
-                    $body .= "Name: {$volunteerValues['full_name']}\n";
-                    $body .= "Email: {$volunteerValues['email']}\n";
-                    $body .= "Phone: " . ($volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : '—') . "\n";
-                    $body .= "Preferred Contact: " . ucfirst($volunteerValues['preferred_contact_method']) . "\n";
-                    $body .= "Location: " . ($volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : '—') . "\n";
-                    $body .= "Areas of Interest / Skills:\n{$volunteerValues['areas_of_interest']}\n\n";
-                    $body .= "Availability:\n{$volunteerValues['availability']}\n\n";
-                    $body .= "Additional Notes:\n" . ($volunteerValues['message'] !== '' ? $volunteerValues['message'] : '—') . "\n";
-                    sendSiteMail($adminEmail, 'New Volunteer Sign-Up', $body, $volunteerValues['email'], $volunteerValues['full_name']);
+                if (in_array('full_name', $volunteerColumns, true) && in_array('email', $volunteerColumns, true)) {
+                    $savedVolunteerSignup = $insertUsingAvailableColumns($db, 'volunteers', [
+                        'full_name' => $volunteerValues['full_name'],
+                        'email' => $volunteerValues['email'],
+                        'phone_number' => $volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : null,
+                        'preferred_contact_method' => $volunteerValues['preferred_contact_method'],
+                        'location_address' => $volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : null,
+                        'areas_of_interest' => $volunteerValues['areas_of_interest'],
+                        'availability' => $volunteerValues['availability'],
+                        'message' => $volunteerValues['message'] !== '' ? $volunteerValues['message'] : null,
+                        'privacy_consent' => 1,
+                        'status' => 'pending',
+                    ], $volunteerColumns);
+
+                    if ($savedVolunteerSignup && $volunteerAuditColumns !== []) {
+                        $volunteerId = (int)$db->lastInsertId();
+                        logVolunteerAudit($db, $volunteerId, $volunteerValues['full_name'], null, 'submitted', 'Volunteer sign-up received from website.');
+                    }
                 }
 
-                $successMessage = 'Volunteer sign-up received! Our team will follow up soon.';
-                $volunteerValues = [
-                    'full_name' => '',
-                    'email' => '',
-                    'phone_number' => '',
-                    'preferred_contact_method' => 'email',
-                    'location_address' => '',
-                    'areas_of_interest' => '',
-                    'availability' => '',
-                    'message' => '',
-                    'privacy_consent' => false,
-                ];
-        }
+                if (!$savedVolunteerSignup && in_array('name', $contactSubmissionColumns, true) && in_array('email', $contactSubmissionColumns, true) && in_array('message', $contactSubmissionColumns, true)) {
+                    $fallbackSubject = 'Volunteer Sign-Up';
+                    if ($volunteerValues['areas_of_interest'] !== '') {
+                        $fallbackSubject .= ': ' . $volunteerValues['areas_of_interest'];
+                    }
+                    $fallbackSubject = substr($fallbackSubject, 0, 255);
+
+                    $fallbackMessage = "Volunteer sign-up received via public form.\n\n";
+                    $fallbackMessage .= "Areas of Interest / Skills:\n" . $volunteerValues['areas_of_interest'] . "\n\n";
+                    $fallbackMessage .= "Availability:\n" . $volunteerValues['availability'] . "\n\n";
+                    if ($volunteerValues['phone_number'] !== '') {
+                        $fallbackMessage .= "Phone Number: " . $volunteerValues['phone_number'] . "\n";
+                    }
+                    $fallbackMessage .= "Preferred Contact Method: " . ucfirst($volunteerValues['preferred_contact_method']) . "\n";
+                    if ($volunteerValues['location_address'] !== '') {
+                        $fallbackMessage .= "Location: " . $volunteerValues['location_address'] . "\n";
+                    }
+                    $fallbackMessage .= "\nAdditional Notes:\n" . ($volunteerValues['message'] !== '' ? $volunteerValues['message'] : '—');
+
+                    $savedVolunteerSignup = $insertUsingAvailableColumns($db, 'contact_submissions', [
+                        'name' => $volunteerValues['full_name'],
+                        'email' => $volunteerValues['email'],
+                        'phone_number' => $volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : null,
+                        'preferred_contact_method' => $volunteerValues['preferred_contact_method'],
+                        'location_address' => $volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : null,
+                        'subject' => $fallbackSubject,
+                        'message' => $fallbackMessage,
+                        'privacy_consent' => 1,
+                        'is_read' => 0,
+                    ], $contactSubmissionColumns);
+                }
+
+                if (!$savedVolunteerSignup) {
+                    $errors['general'] = 'We could not save your volunteer sign-up right now. Please try again in a few minutes.';
+                }
+
+                if ($errors === []) {
+                    $adminEmail = getSetting('contact_email');
+                    if ($adminEmail !== '') {
+                        $body = "New volunteer sign-up received.\n\n";
+                        $body .= "Name: {$volunteerValues['full_name']}\n";
+                        $body .= "Email: {$volunteerValues['email']}\n";
+                        $body .= "Phone: " . ($volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : '—') . "\n";
+                        $body .= "Preferred Contact: " . ucfirst($volunteerValues['preferred_contact_method']) . "\n";
+                        $body .= "Location: " . ($volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : '—') . "\n";
+                        $body .= "Areas of Interest / Skills:\n{$volunteerValues['areas_of_interest']}\n\n";
+                        $body .= "Availability:\n{$volunteerValues['availability']}\n\n";
+                        $body .= "Additional Notes:\n" . ($volunteerValues['message'] !== '' ? $volunteerValues['message'] : '—') . "\n";
+                        sendSiteMail($adminEmail, 'New Volunteer Sign-Up', $body, $volunteerValues['email'], $volunteerValues['full_name']);
+                    }
+
+                    $successMessage = 'Volunteer sign-up received! Our team will follow up soon.';
+                    $volunteerValues = [
+                        'full_name' => '',
+                        'email' => '',
+                        'phone_number' => '',
+                        'preferred_contact_method' => 'email',
+                        'location_address' => '',
+                        'areas_of_interest' => '',
+                        'availability' => '',
+                        'message' => '',
+                        'privacy_consent' => false,
+                    ];
+                }
+            }
         } else {
             error_log('Volunteer form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
             $successMessage = 'Volunteer sign-up received! Our team will follow up soon.';
@@ -159,48 +265,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($errors === []) {
                 $db = getDb();
-                $stmt = $db->prepare(
-                    'INSERT INTO contact_submissions (
-                        name, email, phone_number, preferred_contact_method, location_address,
-                        subject, message, privacy_consent
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $stmt->execute([
-                    $inquiryValues['name'],
-                    $inquiryValues['email'],
-                    $inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : null,
-                    $inquiryValues['preferred_contact_method'],
-                    $inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : null,
-                    $inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : null,
-                    $inquiryValues['message'],
-                    1,
-                ]);
+                $contactSubmissionColumns = $getTableColumns($db, 'contact_submissions');
+                $savedInquiry = $insertUsingAvailableColumns($db, 'contact_submissions', [
+                    'name' => $inquiryValues['name'],
+                    'email' => $inquiryValues['email'],
+                    'phone_number' => $inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : null,
+                    'preferred_contact_method' => $inquiryValues['preferred_contact_method'],
+                    'location_address' => $inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : null,
+                    'subject' => $inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : null,
+                    'message' => $inquiryValues['message'],
+                    'privacy_consent' => 1,
+                ], $contactSubmissionColumns);
 
-                $adminEmail = getSetting('contact_email');
-                if ($adminEmail !== '') {
-                    $body = "New inquiry received.\n\n";
-                    $body .= "Name: {$inquiryValues['name']}\n";
-                    $body .= "Email: {$inquiryValues['email']}\n";
-                    $body .= "Phone: " . ($inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : '—') . "\n";
-                    $body .= "Preferred Contact: " . ucfirst($inquiryValues['preferred_contact_method']) . "\n";
-                    $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
-                    $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
-                    $body .= "Message:\n{$inquiryValues['message']}\n";
-                    sendSiteMail($adminEmail, 'New Inquiry Submission', $body, $inquiryValues['email'], $inquiryValues['name']);
+                if (!$savedInquiry) {
+                    $errors['general'] = 'We could not save your message right now. Please try again in a few minutes.';
                 }
 
-                $successMessage = 'Message sent! Thank you for reaching out.';
-                $inquiryValues = [
-                    'name' => '',
-                    'email' => '',
-                    'phone_number' => '',
-                    'preferred_contact_method' => 'email',
-                    'location_address' => '',
-                    'subject' => '',
-                    'message' => '',
-                    'privacy_consent' => false,
-                ];
-        }
+                if ($errors === []) {
+                    $adminEmail = getSetting('contact_email');
+                    if ($adminEmail !== '') {
+                        $body = "New inquiry received.\n\n";
+                        $body .= "Name: {$inquiryValues['name']}\n";
+                        $body .= "Email: {$inquiryValues['email']}\n";
+                        $body .= "Phone: " . ($inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : '—') . "\n";
+                        $body .= "Preferred Contact: " . ucfirst($inquiryValues['preferred_contact_method']) . "\n";
+                        $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
+                        $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
+                        $body .= "Message:\n{$inquiryValues['message']}\n";
+                        sendSiteMail($adminEmail, 'New Inquiry Submission', $body, $inquiryValues['email'], $inquiryValues['name']);
+                    }
+
+                    $successMessage = 'Message sent! Thank you for reaching out.';
+                    $inquiryValues = [
+                        'name' => '',
+                        'email' => '',
+                        'phone_number' => '',
+                        'preferred_contact_method' => 'email',
+                        'location_address' => '',
+                        'subject' => '',
+                        'message' => '',
+                        'privacy_consent' => false,
+                    ];
+                }
+            }
         } else {
             error_log('Inquiry form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
             $successMessage = 'Message sent! Thank you for reaching out.';

@@ -20,6 +20,15 @@ foreach ($contactSubmissionColumnsStmt->fetchAll() as $columnDefinition) {
     }
 }
 
+$csvSafeCell = static function (mixed $value): string {
+    $string = stringValue($value);
+    if ($string !== '' && preg_match('/^\s*[=+\-@]/', $string) === 1) {
+        return "'" . $string;
+    }
+
+    return $string;
+};
+
 $statusFilter = getString('status', 'all');
 if (!in_array($statusFilter, ['all', 'pending', 'active', 'inactive'], true)) {
     $statusFilter = 'all';
@@ -84,18 +93,18 @@ if (getString('export') === 'csv') {
         foreach ($exportVolunteers as $volunteer) {
             fputcsv($output, [
                 intValue($volunteer['id'] ?? null),
-                stringValue($volunteer['full_name'] ?? ''),
-                stringValue($volunteer['email'] ?? ''),
-                stringValue($volunteer['phone_number'] ?? ''),
-                stringValue($volunteer['preferred_contact_method'] ?? 'email'),
-                stringValue($volunteer['location_address'] ?? ''),
-                stringValue($volunteer['areas_of_interest'] ?? ''),
-                stringValue($volunteer['availability'] ?? ''),
-                stringValue($volunteer['message'] ?? ''),
-                stringValue($volunteer['internal_notes'] ?? ''),
-                stringValue($volunteer['status'] ?? 'pending'),
-                stringValue($volunteer['created_at'] ?? ''),
-                stringValue($volunteer['updated_at'] ?? ''),
+                $csvSafeCell($volunteer['full_name'] ?? ''),
+                $csvSafeCell($volunteer['email'] ?? ''),
+                $csvSafeCell($volunteer['phone_number'] ?? ''),
+                $csvSafeCell($volunteer['preferred_contact_method'] ?? 'email'),
+                $csvSafeCell($volunteer['location_address'] ?? ''),
+                $csvSafeCell($volunteer['areas_of_interest'] ?? ''),
+                $csvSafeCell($volunteer['availability'] ?? ''),
+                $csvSafeCell($volunteer['message'] ?? ''),
+                $csvSafeCell($volunteer['internal_notes'] ?? ''),
+                $csvSafeCell($volunteer['status'] ?? 'pending'),
+                $csvSafeCell($volunteer['created_at'] ?? ''),
+                $csvSafeCell($volunteer['updated_at'] ?? ''),
             ]);
             fflush($output);
         }

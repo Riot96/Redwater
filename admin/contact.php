@@ -18,6 +18,15 @@ foreach ($contactSubmissionColumnsStmt->fetchAll() as $columnDefinition) {
     }
 }
 
+$csvSafeCell = static function (mixed $value): string {
+    $string = stringValue($value);
+    if ($string !== '' && preg_match('/^\s*[=+\-@]/', $string) === 1) {
+        return "'" . $string;
+    }
+
+    return $string;
+};
+
 if (getString('export') === 'inquiries') {
     $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_at DESC');
     assert($messagesStmt instanceof PDOStatement);
@@ -32,16 +41,16 @@ if (getString('export') === 'inquiries') {
         foreach ($messages as $message) {
             fputcsv($output, [
                 intValue($message['id'] ?? null),
-                stringValue($message['name'] ?? ''),
-                stringValue($message['email'] ?? ''),
-                stringValue($message['phone_number'] ?? ''),
-                stringValue($message['preferred_contact_method'] ?? 'email'),
-                stringValue($message['location_address'] ?? ''),
-                stringValue($message['subject'] ?? ''),
-                stringValue($message['message'] ?? ''),
+                $csvSafeCell($message['name'] ?? ''),
+                $csvSafeCell($message['email'] ?? ''),
+                $csvSafeCell($message['phone_number'] ?? ''),
+                $csvSafeCell($message['preferred_contact_method'] ?? 'email'),
+                $csvSafeCell($message['location_address'] ?? ''),
+                $csvSafeCell($message['subject'] ?? ''),
+                $csvSafeCell($message['message'] ?? ''),
                 !empty($message['is_read']) ? 'Yes' : 'No',
-                stringValue($message['created_at'] ?? ''),
-                stringValue($message['updated_at'] ?? ''),
+                $csvSafeCell($message['created_at'] ?? ''),
+                $csvSafeCell($message['updated_at'] ?? ''),
             ]);
             fflush($output);
         }
@@ -84,63 +93,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        $stmt = $db->prepare('SELECT * FROM contact_submissions WHERE id=?');
-        $stmt->execute([$msgId]);
-        /** @var array<string, mixed>|false $message */
-        $message = $stmt->fetch();
-
-        if (!$message) {
-            flashMessage('error', 'Inquiry not found.');
-            redirect('/admin/contact.php#inquiries');
-        }
-
-        $existingVolunteerId = intValue($message['converted_volunteer_id'] ?? null);
-        if ($existingVolunteerId > 0) {
-            flashMessage('info', 'This inquiry has already been converted to a volunteer entry.');
-            redirect('/admin/volunteers.php?edit=' . $existingVolunteerId . '#volunteer-form');
-        }
-
-        $subject = trim(stringValue($message['subject'] ?? ''));
-        $internalNotes = 'Converted from inquiry #' . intValue($message['id'] ?? 0) . ' on ' . date('M j, Y g:ia') . '.';
-        if ($subject !== '') {
-            $internalNotes .= "\nOriginal inquiry subject: " . $subject;
-        }
-
-        $stmt = $db->prepare(
-            'INSERT INTO volunteers (
-                full_name, email, phone_number, preferred_contact_method, location_address,
-                areas_of_interest, availability, message, internal_notes, privacy_consent, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        $stmt->execute([
-            stringValue($message['name'] ?? ''),
-            stringValue($message['email'] ?? ''),
-            ($message['phone_number'] ?? null) !== null && stringValue($message['phone_number']) !== '' ? stringValue($message['phone_number']) : null,
-            normalizePreferredContactMethod(stringValue($message['preferred_contact_method'] ?? 'email')),
-            ($message['location_address'] ?? null) !== null && stringValue($message['location_address']) !== '' ? stringValue($message['location_address']) : null,
-            $subject !== '' ? $subject : null,
-            null,
-            stringValue($message['message'] ?? ''),
-            $internalNotes,
-            !empty($message['privacy_consent']) ? 1 : 0,
-            'pending',
-        ]);
-        $volunteerId = (int)$db->lastInsertId();
-        if ($hasConvertedVolunteerIdColumn) {
-            $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=?, is_read=1 WHERE id=?')->execute([$volunteerId, $msgId]);
-        } else {
-            $db->prepare('UPDATE contact_submissions SET is_read=1 WHERE id=?')->execute([$msgId]);
-        }
-
         $currentUser = currentUser();
-        logVolunteerAudit(
-            $db,
-            $volunteerId,
-            stringValue($message['name'] ?? ''),
-            is_array($currentUser) ? intValue($currentUser['id']) : null,
-            'created',
-            'Volunteer record converted from inquiry #' . intValue($message['id'] ?? 0) . '.'
-        );
+        try {
+            $db->beginTransaction();
+
+            $stmt = $db->prepare('SELECT * FROM contact_submissions WHERE id=? FOR UPDATE');
+            $stmt->execute([$msgId]);
+            /** @var array<string, mixed>|false $message */
+            $message = $stmt->fetch();
+
+            if (!$message) {
+                $db->rollBack();
+                flashMessage('error', 'Inquiry not found.');
+                redirect('/admin/contact.php#inquiries');
+            }
+
+            $existingVolunteerId = intValue($message['converted_volunteer_id'] ?? null);
+            if ($existingVolunteerId > 0) {
+                $db->rollBack();
+                flashMessage('info', 'This inquiry has already been converted to a volunteer entry.');
+                redirect('/admin/volunteers.php?edit=' . $existingVolunteerId . '#volunteer-form');
+            }
+
+            $subject = trim(stringValue($message['subject'] ?? ''));
+            $internalNotes = 'Converted from inquiry #' . intValue($message['id'] ?? 0) . ' on ' . date('M j, Y g:ia') . '.';
+            if ($subject !== '') {
+                $internalNotes .= "\nOriginal inquiry subject: " . $subject;
+            }
+
+            $stmt = $db->prepare(
+                'INSERT INTO volunteers (
+                    full_name, email, phone_number, preferred_contact_method, location_address,
+                    areas_of_interest, availability, message, internal_notes, privacy_consent, status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([
+                stringValue($message['name'] ?? ''),
+                stringValue($message['email'] ?? ''),
+                ($message['phone_number'] ?? null) !== null && stringValue($message['phone_number']) !== '' ? stringValue($message['phone_number']) : null,
+                normalizePreferredContactMethod(stringValue($message['preferred_contact_method'] ?? 'email')),
+                ($message['location_address'] ?? null) !== null && stringValue($message['location_address']) !== '' ? stringValue($message['location_address']) : null,
+                $subject !== '' ? $subject : null,
+                null,
+                stringValue($message['message'] ?? ''),
+                $internalNotes,
+                !empty($message['privacy_consent']) ? 1 : 0,
+                'pending',
+            ]);
+            $volunteerId = (int)$db->lastInsertId();
+            if ($hasConvertedVolunteerIdColumn) {
+                $db->prepare('UPDATE contact_submissions SET converted_volunteer_id=?, is_read=1 WHERE id=?')->execute([$volunteerId, $msgId]);
+            } else {
+                $db->prepare('UPDATE contact_submissions SET is_read=1 WHERE id=?')->execute([$msgId]);
+            }
+
+            logVolunteerAudit(
+                $db,
+                $volunteerId,
+                stringValue($message['name'] ?? ''),
+                is_array($currentUser) ? intValue($currentUser['id']) : null,
+                'created',
+                'Volunteer record converted from inquiry #' . intValue($message['id'] ?? 0) . '.'
+            );
+
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            throw $e;
+        }
 
         flashMessage('success', 'Inquiry converted to a volunteer entry. Review and complete the volunteer profile.');
         if (!$hasConvertedVolunteerIdColumn) {
@@ -204,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $db->prepare(
                     'UPDATE contact_submissions
                      SET name=?, email=?, phone_number=?, preferred_contact_method=?, location_address=?,
-                         subject=?, message=?, privacy_consent=1, is_read=?
+                         subject=?, message=?, is_read=?
                      WHERE id=?'
                 );
                 $stmt->execute([
