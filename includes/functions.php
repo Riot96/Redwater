@@ -729,13 +729,15 @@ function getRaffleSettings(): array {
 
     $title = trim(stringValue($settings['title'] ?? ''));
     $optInLabel = trim(stringValue($settings['opt_in_label'] ?? ''));
+    $collectEmail = !empty($settings['collect_email']);
+    $requireEmail = $collectEmail && !empty($settings['require_email']);
 
     return [
         'entry_form_enabled' => !empty($settings['entry_form_enabled']),
         'title' => $title !== '' ? $title : 'RedWater Giveaway Entry',
         'description' => trim(stringValue($settings['description'] ?? '')),
-        'collect_email' => !empty($settings['collect_email']),
-        'require_email' => !empty($settings['collect_email']) && !empty($settings['require_email']),
+        'collect_email' => $collectEmail,
+        'require_email' => $requireEmail,
         'opt_in_label' => $optInLabel !== '' ? $optInLabel : 'I want to receive email updates about future promotions.',
         'expires_at' => trim(stringValue($settings['expires_at'] ?? '')),
     ];
