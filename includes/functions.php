@@ -567,13 +567,13 @@ function raffleNameLength(string $name): int {
     if (function_exists('iconv_strlen')) {
         $length = iconv_strlen($name, 'UTF-8');
         if ($length !== false) {
-            return $length;
+            return (int) $length;
         }
     }
 
-    $length = preg_match_all('/./u', $name, $matches);
-    if ($length !== false) {
-        return $length;
+    $matchCount = preg_match_all('/./u', $name, $matches);
+    if ($matchCount !== false) {
+        return $matchCount;
     }
 
     return strlen($name);
@@ -919,7 +919,7 @@ function addRaffleEntry(array $entry): string {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        error_log("Failed to save raffle entry: {$e->getMessage()}\n{$e->getTraceAsString()}");
+        error_log('Failed to save raffle entry: ' . $e->getMessage());
         return 'We could not save your raffle entry right now. Please try again.';
     }
 
