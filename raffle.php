@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = postString('action');
 
     if ($action !== 'submit_raffle_entry') {
-        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid action. Please submit your entry using the form below.');
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'This action is not available.');
     }
 
     $entryValues = [

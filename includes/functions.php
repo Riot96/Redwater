@@ -812,13 +812,19 @@ function getRaffleShareUrl(): string {
     if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
         $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
         $host = serverString('HTTP_HOST');
-        // FILTER_VALIDATE_DOMAIN only accepts the hostname portion, so strip an
-        // optional port before validating and rebuild the original host value.
-        $hostWithoutPort = preg_replace('/:\d+$/', '', $host);
+        $hostWithoutPort = $host;
+        if (preg_match('/^\[([0-9A-Fa-f:.]+)\](?::\d+)?$/', $host, $ipv6Matches) === 1) {
+            $hostWithoutPort = $ipv6Matches[1];
+        } elseif (preg_match('/^([^:]+)(?::\d+)?$/', $host, $hostMatches) === 1) {
+            $hostWithoutPort = $hostMatches[1];
+        }
+
         if (
-            is_string($hostWithoutPort)
-            && $hostWithoutPort !== ''
-            && filter_var($hostWithoutPort, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+            $hostWithoutPort !== ''
+            && (
+                filter_var($hostWithoutPort, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+                || filter_var($hostWithoutPort, FILTER_VALIDATE_IP) !== false
+            )
         ) {
             $baseUrl = $scheme . '://' . $host;
         }
