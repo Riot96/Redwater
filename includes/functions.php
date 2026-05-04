@@ -537,6 +537,251 @@ function renderTags(array $tags): string {
     return $html;
 }
 
+function normalizeRaffleName(string $name): string {
+    $normalized = str_replace("\xC2\xA0", ' ', $name);
+    $normalized = preg_replace('/\s+/u', ' ', trim($normalized));
+    return is_string($normalized) ? $normalized : trim($name);
+}
+
+function raffleNameKey(string $name): string {
+    $normalized = normalizeRaffleName($name);
+    if (function_exists('mb_strtolower')) {
+        return mb_strtolower($normalized, 'UTF-8');
+    }
+
+    return strtolower($normalized);
+}
+
+function isValidRaffleName(string $name): bool {
+    $normalized = normalizeRaffleName($name);
+    return $normalized !== ''
+        && mb_strlen($normalized) <= 100
+        && preg_match("/^[\p{L}\p{N}][\p{L}\p{N}\s'’.,()&\/-]*$/u", $normalized) === 1;
+}
+
+/**
+ * @param list<string> $candidates
+ * @return array{
+ *   names: list<string>,
+ *   duplicates: list<string>,
+ *   invalid: list<string>
+ * }
+ */
+function parseRaffleNameCandidates(array $candidates): array {
+    $names = [];
+    $duplicates = [];
+    $invalid = [];
+    /** @var array<string, bool> $seenNames */
+    $seenNames = [];
+    /** @var array<string, bool> $seenDuplicates */
+    $seenDuplicates = [];
+    /** @var array<string, bool> $seenInvalid */
+    $seenInvalid = [];
+
+    foreach ($candidates as $candidate) {
+        $normalized = normalizeRaffleName($candidate);
+        if ($normalized === '') {
+            continue;
+        }
+
+        if (!isValidRaffleName($normalized)) {
+            $invalidKey = raffleNameKey($normalized);
+            if (!isset($seenInvalid[$invalidKey])) {
+                $invalid[] = $normalized;
+                $seenInvalid[$invalidKey] = true;
+            }
+            continue;
+        }
+
+        $key = raffleNameKey($normalized);
+        if (isset($seenNames[$key])) {
+            if (!isset($seenDuplicates[$key])) {
+                $duplicates[] = $normalized;
+                $seenDuplicates[$key] = true;
+            }
+            continue;
+        }
+
+        $seenNames[$key] = true;
+        $names[] = $normalized;
+    }
+
+    return [
+        'names' => $names,
+        'duplicates' => $duplicates,
+        'invalid' => $invalid,
+    ];
+}
+
+/**
+ * @return array{
+ *   names: list<string>,
+ *   duplicates: list<string>,
+ *   invalid: list<string>
+ * }
+ */
+function parseRaffleNames(string $input): array {
+    $normalizedInput = preg_replace('/^\xEF\xBB\xBF/u', '', $input);
+    $lines = preg_split('/\r\n|\r|\n/', is_string($normalizedInput) ? $normalizedInput : $input);
+    if (!is_array($lines)) {
+        $lines = [$input];
+    }
+
+    /** @var list<string> $lines */
+    return parseRaffleNameCandidates($lines);
+}
+
+/**
+ * @return array{
+ *   names: list<string>,
+ *   duplicates: list<string>,
+ *   invalid: list<string>
+ * }
+ */
+function parseRaffleCsvNames(string $input): array {
+    $stream = fopen('php://temp', 'r+');
+    if (!is_resource($stream)) {
+        return parseRaffleNames($input);
+    }
+
+    fwrite($stream, preg_replace('/^\xEF\xBB\xBF/u', '', $input) ?: $input);
+    rewind($stream);
+
+    /** @var list<string> $candidates */
+    $candidates = [];
+    $rowIndex = 0;
+    while (($row = fgetcsv($stream)) !== false) {
+        $cells = [];
+        foreach ($row as $cell) {
+            if (!is_string($cell)) {
+                continue;
+            }
+            $normalizedCell = normalizeRaffleName($cell);
+            if ($normalizedCell !== '') {
+                $cells[] = $normalizedCell;
+            }
+        }
+
+        if ($cells === []) {
+            $rowIndex++;
+            continue;
+        }
+
+        if ($rowIndex === 0 && raffleNameKey($cells[0]) === 'name') {
+            array_shift($cells);
+        }
+
+        foreach ($cells as $cell) {
+            if ($rowIndex === 0 && in_array(raffleNameKey($cell), ['email', 'newsletter opt in', 'newsletter_opt_in', 'opt in', 'opt_in', 'created at', 'created_at'], true)) {
+                continue;
+            }
+            if (filter_var($cell, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $candidates[] = $cell;
+        }
+
+        $rowIndex++;
+    }
+
+    fclose($stream);
+
+    return parseRaffleNameCandidates($candidates);
+}
+
+/**
+ * @return array{
+ *   entry_form_enabled: bool,
+ *   title: string,
+ *   description: string,
+ *   collect_email: bool,
+ *   opt_in_label: string,
+ *   expires_at: string
+ * }
+ */
+function getRaffleSettings(): array {
+    $raw = getSetting('raffle_settings', '');
+    $decoded = json_decode($raw, true);
+    /** @var array<string, mixed> $settings */
+    $settings = is_array($decoded) ? $decoded : [];
+
+    $title = trim(stringValue($settings['title'] ?? ''));
+    $optInLabel = trim(stringValue($settings['opt_in_label'] ?? ''));
+
+    return [
+        'entry_form_enabled' => !empty($settings['entry_form_enabled']),
+        'title' => $title !== '' ? $title : 'RedWater Giveaway Entry',
+        'description' => trim(stringValue($settings['description'] ?? '')),
+        'collect_email' => !empty($settings['collect_email']),
+        'opt_in_label' => $optInLabel !== '' ? $optInLabel : 'I want to receive email updates about future promotions.',
+        'expires_at' => trim(stringValue($settings['expires_at'] ?? '')),
+    ];
+}
+
+/**
+ * @param array{
+ *   entry_form_enabled: bool,
+ *   title: string,
+ *   description: string,
+ *   collect_email: bool,
+ *   opt_in_label: string,
+ *   expires_at: string
+ * } $settings
+ */
+function saveRaffleSettings(array $settings): void {
+    setSetting('raffle_settings', (string) json_encode([
+        'entry_form_enabled' => !empty($settings['entry_form_enabled']),
+        'title' => trim($settings['title']),
+        'description' => trim($settings['description']),
+        'collect_email' => !empty($settings['collect_email']),
+        'opt_in_label' => trim($settings['opt_in_label']),
+        'expires_at' => trim($settings['expires_at']),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * @return list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}>
+ */
+function getRaffleEntries(): array {
+    $raw = getSetting('raffle_entries', '[]');
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $entries = [];
+    foreach ($decoded as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $name = normalizeRaffleName(stringValue($entry['name'] ?? ''));
+        $email = trim(stringValue($entry['email'] ?? ''));
+        if (!isValidRaffleName($name)) {
+            continue;
+        }
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+
+        $entries[] = [
+            'name' => $name,
+            'email' => $email,
+            'newsletter_opt_in' => !empty($entry['newsletter_opt_in']),
+            'created_at' => trim(stringValue($entry['created_at'] ?? '')),
+        ];
+    }
+
+    return $entries;
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ */
+function saveRaffleEntries(array $entries): void {
+    setSetting('raffle_entries', (string) json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+}
+
 // ─── Merch Helpers ────────────────────────────────────────────────────────────
 function merchNormalizeAmount(string $value): string {
     $normalized = str_replace([',', '$', ' '], '', trim($value));

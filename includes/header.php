@@ -58,6 +58,7 @@ $merchCartCount = getMerchCartItemCount();
             <li><a href="/tickets.php" class="nav-link<?= $currentScript === 'tickets.php' ? ' active' : '' ?>">Tickets</a></li>
             <li><a href="/gallery.php" class="nav-link<?= $currentScript === 'gallery.php' ? ' active' : '' ?>">Gallery</a></li>
             <li><a href="/sponsors.php" class="nav-link<?= $currentScript === 'sponsors.php' ? ' active' : '' ?>">Sponsors</a></li>
+            <li><a href="/raffle.php" class="nav-link<?= $currentScript === 'raffle.php' ? ' active' : '' ?>">Raffle</a></li>
             <li><a href="/merch.php" class="nav-link<?= in_array($currentScript, ['merch.php', 'merch-item.php'], true) ? ' active' : '' ?>">Merch</a></li>
             <li><a href="/merch-cart.php" class="nav-link<?= $currentScript === 'merch-cart.php' ? ' active' : '' ?>">Cart<?= $merchCartCount > 0 ? ' (' . $merchCartCount . ')' : '' ?></a></li>
             <li><a href="/policies.php" class="nav-link<?= $currentScript === 'policies.php' ? ' active' : '' ?>">Policies</a></li>

@@ -136,6 +136,8 @@ SET FOREIGN_KEY_CHECKS = 1;
 INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('site_name', 'RedWater Entertainment'),
 ('site_tagline', 'Where Fear Meets Wonder'),
+('raffle_settings', '{"entry_form_enabled":false,"title":"RedWater Giveaway Entry","description":"","collect_email":false,"opt_in_label":"I want to receive email updates about future promotions.","expires_at":""}'),
+('raffle_entries', '[]'),
 ('tickets_embed_code', ''),
 ('contact_phone', ''),
 ('contact_email', ''),
