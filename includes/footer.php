@@ -56,6 +56,7 @@ $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
                 <li><a href="/tickets.php">Tickets</a></li>
                 <li><a href="/gallery.php">Gallery</a></li>
                 <li><a href="/sponsors.php">Sponsors</a></li>
+                <li><a href="/raffle.php">Raffle</a></li>
                 <li><a href="/merch.php">Merch</a></li>
                 <li><a href="/policies.php">Policies</a></li>
                 <li><a href="/contact.php">Contact</a></li>

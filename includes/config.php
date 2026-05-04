@@ -35,6 +35,8 @@ defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
 defined('ALLOWED_IMAGE_TYPES')|| define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 defined('ALLOWED_VIDEO_TYPES')|| define('ALLOWED_VIDEO_TYPES', ['video/mp4', 'video/webm', 'video/ogg']);
 defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
+defined('RAFFLE_ENTRY_MAX_COUNT') || define('RAFFLE_ENTRY_MAX_COUNT', 5000);
+defined('RAFFLE_ENTRY_MAX_BYTES') || define('RAFFLE_ENTRY_MAX_BYTES', 1024 * 1024);
 
 // ─── Session Settings ─────────────────────────────────────────────────────────
 defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);
@@ -534,6 +536,8 @@ SQL,
 INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('site_name', 'RedWater Entertainment'),
 ('site_tagline', 'Where Fear Meets Wonder'),
+('raffle_settings', '{"entry_form_enabled":false,"title":"RedWater Giveaway Entry","description":"","collect_email":false,"require_email":false,"opt_in_label":"I want to receive email updates about future promotions.","expires_at":""}'),
+('raffle_entries', '[]'),
 ('tickets_embed_code', ''),
 ('contact_phone', ''),
 ('contact_email', ''),

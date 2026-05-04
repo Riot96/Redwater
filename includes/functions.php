@@ -537,6 +537,440 @@ function renderTags(array $tags): string {
     return $html;
 }
 
+function normalizeRaffleName(string $name): string {
+    $normalized = str_replace("\xC2\xA0", ' ', $name);
+    $normalized = preg_replace('/\s+/u', ' ', trim($normalized));
+    return is_string($normalized) ? $normalized : trim($name);
+}
+
+function raffleNameKey(string $name): string {
+    $normalized = normalizeRaffleName($name);
+    if (function_exists('mb_strtolower')) {
+        return mb_strtolower($normalized, 'UTF-8');
+    }
+
+    return strtolower($normalized);
+}
+
+function isValidRaffleName(string $name): bool {
+    $normalized = normalizeRaffleName($name);
+    return $normalized !== ''
+        && raffleNameLength($normalized) <= 100
+        && preg_match("/^[\p{L}\p{N}][\p{L}\p{N}\s'’.,()&\/\-]*$/u", $normalized) === 1;
+}
+
+function raffleNameLength(string $name): int {
+    if (function_exists('mb_strlen')) {
+        return mb_strlen($name, 'UTF-8');
+    }
+
+    if (function_exists('iconv_strlen')) {
+        $length = iconv_strlen($name, 'UTF-8');
+        if ($length !== false) {
+            return (int) $length;
+        }
+    }
+
+    $matchCount = preg_match_all('/./u', $name, $matches);
+    if ($matchCount !== false) {
+        return $matchCount;
+    }
+
+    return strlen($name);
+}
+
+/**
+ * @param list<string> $candidates
+ * @return array{
+ *   names: list<string>,
+ *   duplicates: list<string>,
+ *   invalid: list<string>
+ * }
+ */
+function parseRaffleNameCandidates(array $candidates): array {
+    $names = [];
+    $duplicates = [];
+    $invalid = [];
+    /** @var array<string, bool> $seenNames */
+    $seenNames = [];
+    /** @var array<string, bool> $seenDuplicates */
+    $seenDuplicates = [];
+    /** @var array<string, bool> $seenInvalid */
+    $seenInvalid = [];
+
+    foreach ($candidates as $candidate) {
+        $normalized = normalizeRaffleName($candidate);
+        if ($normalized === '') {
+            continue;
+        }
+
+        if (!isValidRaffleName($normalized)) {
+            $invalidKey = raffleNameKey($normalized);
+            if (!isset($seenInvalid[$invalidKey])) {
+                $invalid[] = $normalized;
+                $seenInvalid[$invalidKey] = true;
+            }
+            continue;
+        }
+
+        $key = raffleNameKey($normalized);
+        if (isset($seenNames[$key])) {
+            if (!isset($seenDuplicates[$key])) {
+                $duplicates[] = $normalized;
+                $seenDuplicates[$key] = true;
+            }
+            continue;
+        }
+
+        $seenNames[$key] = true;
+        $names[] = $normalized;
+    }
+
+    return [
+        'names' => $names,
+        'duplicates' => $duplicates,
+        'invalid' => $invalid,
+    ];
+}
+
+/**
+ * @return array{
+ *   names: list<string>,
+ *   duplicates: list<string>,
+ *   invalid: list<string>
+ * }
+ */
+function parseRaffleNames(string $input): array {
+    $normalizedInput = preg_replace('/^\xEF\xBB\xBF/u', '', $input);
+    $lines = preg_split('/\r\n|\r|\n/', is_string($normalizedInput) ? $normalizedInput : $input);
+    if (!is_array($lines)) {
+        $lines = [$input];
+    }
+
+    /** @var list<string> $lines */
+    return parseRaffleNameCandidates($lines);
+}
+
+/**
+ * @return array{
+ *   names: list<string>,
+ *   duplicates: list<string>,
+ *   invalid: list<string>
+ * }
+ */
+function parseRaffleCsvNames(string $input): array {
+    $stream = fopen('php://temp', 'r+');
+    if (!is_resource($stream)) {
+        return parseRaffleNames($input);
+    }
+
+    fwrite($stream, preg_replace('/^\xEF\xBB\xBF/u', '', $input) ?: $input);
+    rewind($stream);
+
+    /** @var list<string> $candidates */
+    $candidates = [];
+    $rowIndex = 0;
+    $headerLabels = [
+        'name',
+        'full name',
+        'fullname',
+        'participant',
+        'participant name',
+        'email',
+        'newsletter opt in',
+        'newsletter_opt_in',
+        'opt in',
+        'opt_in',
+        'created at',
+        'created_at',
+    ];
+    while (($row = fgetcsv($stream)) !== false) {
+        $cells = [];
+        foreach ($row as $cell) {
+            if (!is_string($cell)) {
+                continue;
+            }
+            $normalizedCell = normalizeRaffleName($cell);
+            if ($normalizedCell !== '') {
+                $cells[] = $normalizedCell;
+            }
+        }
+
+        if ($cells === []) {
+            $rowIndex++;
+            continue;
+        }
+
+        if ($rowIndex === 0) {
+            $headerMatches = 0;
+            foreach ($cells as $cell) {
+                if (in_array(raffleNameKey($cell), $headerLabels, true)) {
+                    $headerMatches++;
+                }
+            }
+
+            if ($headerMatches >= 2 || ($headerMatches >= 1 && count($cells) === 1)) {
+                $rowIndex++;
+                continue;
+            }
+        }
+
+        foreach ($cells as $cell) {
+            if (filter_var($cell, FILTER_VALIDATE_EMAIL)) {
+                continue;
+            }
+            $candidates[] = $cell;
+        }
+
+        $rowIndex++;
+    }
+
+    fclose($stream);
+
+    return parseRaffleNameCandidates($candidates);
+}
+
+/**
+ * @param array<string, mixed> $settings
+ *
+ * Email can only be required when the public form is also configured to
+ * collect email addresses.
+ */
+function raffleRequiresEmail(array $settings): bool {
+    return ($settings['collect_email'] ?? false) === true
+        && ($settings['require_email'] ?? false) === true;
+}
+
+/**
+ * @return array{
+ *   entry_form_enabled: bool,
+ *   title: string,
+ *   description: string,
+ *   collect_email: bool,
+ *   require_email: bool,
+ *   opt_in_label: string,
+ *   expires_at: string
+ * }
+ */
+function getRaffleSettings(): array {
+    $raw = getSetting('raffle_settings', '');
+    $decoded = json_decode($raw, true);
+    /** @var array<string, mixed> $settings */
+    $settings = is_array($decoded) ? $decoded : [];
+
+    $title = trim(stringValue($settings['title'] ?? ''));
+    $optInLabel = trim(stringValue($settings['opt_in_label'] ?? ''));
+    $collectEmail = !empty($settings['collect_email']);
+    $requireEmail = raffleRequiresEmail($settings);
+
+    return [
+        'entry_form_enabled' => !empty($settings['entry_form_enabled']),
+        'title' => $title !== '' ? $title : 'RedWater Giveaway Entry',
+        'description' => trim(stringValue($settings['description'] ?? '')),
+        'collect_email' => $collectEmail,
+        'require_email' => $requireEmail,
+        'opt_in_label' => $optInLabel !== '' ? $optInLabel : 'I want to receive email updates about future promotions.',
+        'expires_at' => trim(stringValue($settings['expires_at'] ?? '')),
+    ];
+}
+
+/**
+ * @param array{
+ *   entry_form_enabled: bool,
+ *   title: string,
+ *   description: string,
+ *   collect_email: bool,
+ *   require_email: bool,
+ *   opt_in_label: string,
+ *   expires_at: string
+ * } $settings
+ */
+function saveRaffleSettings(array $settings): void {
+    $collectEmail = !empty($settings['collect_email']);
+    $requireEmail = $collectEmail && $settings['require_email'] === true;
+    setSetting('raffle_settings', (string) json_encode([
+        'entry_form_enabled' => !empty($settings['entry_form_enabled']),
+        'title' => trim($settings['title']),
+        'description' => trim($settings['description']),
+        'collect_email' => $collectEmail,
+        'require_email' => $requireEmail,
+        'opt_in_label' => trim($settings['opt_in_label']),
+        'expires_at' => trim($settings['expires_at']),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+}
+
+function raffleEntryMaxCount(): int {
+    return max(1, defined('RAFFLE_ENTRY_MAX_COUNT') ? (int) RAFFLE_ENTRY_MAX_COUNT : 5000);
+}
+
+function raffleEntryMaxBytes(): int {
+    return max(1024, defined('RAFFLE_ENTRY_MAX_BYTES') ? (int) RAFFLE_ENTRY_MAX_BYTES : 1024 * 1024);
+}
+
+/**
+ * @return list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}>
+ */
+function parseStoredRaffleEntries(mixed $decoded): array {
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $entries = [];
+    foreach ($decoded as $entry) {
+        if (!is_array($entry)) {
+            continue;
+        }
+
+        $name = normalizeRaffleName(stringValue($entry['name'] ?? ''));
+        $email = trim(stringValue($entry['email'] ?? ''));
+        if (!isValidRaffleName($name)) {
+            continue;
+        }
+        if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            continue;
+        }
+
+        $entries[] = [
+            'name' => $name,
+            'email' => $email,
+            'newsletter_opt_in' => !empty($entry['newsletter_opt_in']),
+            'created_at' => trim(stringValue($entry['created_at'] ?? '')),
+        ];
+    }
+
+    return $entries;
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ */
+function encodeRaffleEntries(array $entries): string {
+    $json = json_encode($entries, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    return is_string($json) ? $json : '[]';
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ */
+function canStoreRaffleEntries(array $entries): bool {
+    return count($entries) <= raffleEntryMaxCount()
+        && strlen(encodeRaffleEntries($entries)) <= raffleEntryMaxBytes();
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ * @param array{name: string, email: string, newsletter_opt_in: bool, created_at: string} $entry
+ */
+function findRaffleEntryConflict(array $entries, array $entry): string {
+    $entryNameKey = raffleNameKey($entry['name']);
+    $entryEmailKey = $entry['email'] !== '' ? strtolower($entry['email']) : '';
+
+    foreach ($entries as $storedEntry) {
+        $storedEmailKey = $storedEntry['email'] !== '' ? strtolower($storedEntry['email']) : '';
+        if (raffleNameKey($storedEntry['name']) === $entryNameKey) {
+            return 'That participant is already in the raffle list.';
+        }
+        if ($entryEmailKey !== '' && $storedEmailKey === $entryEmailKey) {
+            return 'That email address is already in the raffle list.';
+        }
+    }
+
+    return '';
+}
+
+/**
+ * @param array{name: string, email: string, newsletter_opt_in: bool, created_at: string} $entry
+ */
+function addRaffleEntry(array $entry): string {
+    $db = getDb();
+
+    try {
+        $db->beginTransaction();
+
+        $ensureStmt = $db->prepare(
+            'INSERT INTO site_settings (setting_key, setting_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE setting_key = setting_key'
+        );
+        $ensureStmt->execute(['raffle_entries', '[]']);
+
+        $selectStmt = $db->prepare('SELECT setting_value FROM site_settings WHERE setting_key = ? FOR UPDATE');
+        $selectStmt->execute(['raffle_entries']);
+        /** @var array{setting_value: string|null}|false $row */
+        $row = $selectStmt->fetch();
+        $storedValue = $row !== false ? stringValue($row['setting_value']) : '[]';
+        $entries = parseStoredRaffleEntries(json_decode($storedValue, true));
+
+        $conflictMessage = findRaffleEntryConflict($entries, $entry);
+        if ($conflictMessage !== '') {
+            $db->rollBack();
+            return $conflictMessage;
+        }
+
+        $entries[] = $entry;
+        if (!canStoreRaffleEntries($entries)) {
+            $db->rollBack();
+            return 'This raffle has reached its entry storage limit. Please contact the organizer.';
+        }
+
+        $updateStmt = $db->prepare('UPDATE site_settings SET setting_value = ? WHERE setting_key = ?');
+        $updateStmt->execute([encodeRaffleEntries($entries), 'raffle_entries']);
+        $db->commit();
+    } catch (Throwable $e) {
+        if ($db->inTransaction()) {
+            $db->rollBack();
+        }
+        error_log('Failed to save raffle entry: ' . $e->getMessage());
+        return 'We could not save your raffle entry right now. Please try again.';
+    }
+
+    return '';
+}
+
+/**
+ * @return list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}>
+ */
+function getRaffleEntries(): array {
+    $raw = getSetting('raffle_entries', '[]');
+    return parseStoredRaffleEntries(json_decode($raw, true));
+}
+
+/**
+ * @param list<array{name: string, email: string, newsletter_opt_in: bool, created_at: string}> $entries
+ */
+function saveRaffleEntries(array $entries): void {
+    setSetting('raffle_entries', encodeRaffleEntries($entries));
+}
+
+/**
+ * Builds the public raffle entry URL, preferring SITE_URL and only falling back
+ * to the current request host when it is a valid hostname.
+ */
+function getRaffleShareUrl(): string {
+    $baseUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
+    if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
+        $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
+        $host = serverString('HTTP_HOST');
+        $hostWithoutPort = $host;
+        if (preg_match('/^\[([0-9A-Fa-f:.]+)\](?::\d+)?$/', $host, $ipv6Matches) === 1) {
+            $hostWithoutPort = $ipv6Matches[1];
+        } elseif (preg_match('/^([^:]+)(?::\d+)?$/', $host, $hostMatches) === 1) {
+            $hostWithoutPort = $hostMatches[1];
+        }
+
+        if (
+            $hostWithoutPort !== ''
+            && (
+                filter_var($hostWithoutPort, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+                || filter_var($hostWithoutPort, FILTER_VALIDATE_IP) !== false
+            )
+        ) {
+            $baseUrl = $scheme . '://' . $host;
+        }
+    }
+
+    return ($baseUrl !== '' ? $baseUrl : '') . '/raffle.php#raffle-entry-form';
+}
+
 // ─── Merch Helpers ────────────────────────────────────────────────────────────
 function merchNormalizeAmount(string $value): string {
     $normalized = str_replace([',', '$', ' '], '', trim($value));
