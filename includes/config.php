@@ -550,8 +550,9 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('merch_catalog', '[]'),
 ('social_facebook', ''),
 ('social_instagram', ''),
-('social_twitter', ''),
-('social_youtube', '')
+('social_tiktok', ''),
+('social_youtube', ''),
+('social_pinterest', '')
 SQL
         );
 
