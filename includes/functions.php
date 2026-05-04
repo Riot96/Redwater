@@ -712,6 +712,9 @@ function parseRaffleCsvNames(string $input): array {
 
 /**
  * @param array<string, mixed> $settings
+ *
+ * Email can only be required when the public form is also configured to
+ * collect email addresses.
  */
 function raffleRequiresEmail(array $settings): bool {
     return !empty($settings['collect_email']) && !empty($settings['require_email']);
