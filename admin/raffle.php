@@ -180,11 +180,11 @@ include __DIR__ . '/../includes/header.php';
                 <span>Accept public raffle entries</span>
               </label>
               <label class="raffle-checkbox">
-                <input type="checkbox" name="collect_email" value="1" <?= $settingsValues['collect_email'] ? 'checked' : '' ?>>
+                <input id="raffle-collect-email" type="checkbox" name="collect_email" value="1" <?= $settingsValues['collect_email'] ? 'checked' : '' ?>>
                 <span>Show email address field (optional unless required below)</span>
               </label>
               <label class="raffle-checkbox">
-                <input type="checkbox" name="require_email" value="1" <?= $settingsValues['require_email'] ? 'checked' : '' ?>>
+                <input id="raffle-require-email" type="checkbox" name="require_email" value="1" <?= $settingsValues['require_email'] ? 'checked' : '' ?>>
                 <span>Require an email address for entry</span>
               </label>
               <div class="form-group">
@@ -357,6 +357,24 @@ include __DIR__ . '/../includes/header.php';
 
 <script>
 (() => {
+  const collectEmailToggle = document.getElementById('raffle-collect-email');
+  const requireEmailToggle = document.getElementById('raffle-require-email');
+  const syncEmailSettings = () => {
+    if (!collectEmailToggle || !requireEmailToggle) {
+      return;
+    }
+
+    requireEmailToggle.disabled = !collectEmailToggle.checked;
+    if (!collectEmailToggle.checked) {
+      requireEmailToggle.checked = false;
+    }
+  };
+
+  if (collectEmailToggle && requireEmailToggle) {
+    syncEmailSettings();
+    collectEmailToggle.addEventListener('change', syncEmailSettings);
+  }
+
   const originalPool = <?= json_encode($preparedNames, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
   const currentPoolElement = document.getElementById('raffle-current-pool');
   const historyElement = document.getElementById('raffle-history');

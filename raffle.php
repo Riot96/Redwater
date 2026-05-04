@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'email' => trim(postString('email')),
         'newsletter_opt_in' => postBool('newsletter_opt_in'),
     ];
-    $emailProvided = $entryValues['email'] !== '';
+    $hasEmail = $entryValues['email'] !== '';
 
     if ($entryFormClosed) {
         if ($raffleSettings['entry_form_enabled']) {
@@ -50,9 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif (!isValidRaffleName($entryValues['name'])) {
         $entryError = 'Please enter a valid participant name using letters, numbers, and basic punctuation only.';
-    } elseif ($emailRequired && !$emailProvided) {
+    } elseif ($emailRequired && !$hasEmail) {
         $entryError = 'Please enter your email address to complete this raffle entry.';
-    } elseif ($emailProvided && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
+    } elseif ($hasEmail && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
         if ($emailRequired) {
             $entryError = 'Please enter a valid email address to complete this raffle entry.';
         } else {
@@ -182,7 +182,7 @@ include __DIR__ . '/includes/header.php';
                 </div>
                 <?php if ($raffleSettings['collect_email']): ?>
                   <div class="form-group">
-                    <label class="form-label" for="raffle-entry-email">Email address<?= $emailRequired ? ' <span class="text-red">*</span> (required)' : '' ?></label>
+                    <label class="form-label" for="raffle-entry-email">Email address<?= $emailRequired ? ' (required) <span class="text-red" aria-hidden="true">*</span>' : '' ?></label>
                     <input id="raffle-entry-email" type="email" name="email" class="form-control" <?= $emailRequired ? 'required aria-required="true" aria-label="Email address (required)"' : '' ?> value="<?= e($entryValues['email']) ?>">
                     <div class="form-hint"><?= $emailRequired ? 'A valid email address is required to enter this raffle.' : 'Optional, but helpful if you need to contact the winner directly.' ?></div>
                   </div>
