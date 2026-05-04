@@ -24,13 +24,14 @@ $entryFormClosed = !$raffleSettings['entry_form_enabled']
     || ($expiresAtTimestamp !== false && $expiresAtTimestamp < time());
 $isActiveRaffle = $raffleSettings['entry_form_enabled'] && !$entryFormClosed;
 $expiresAtDisplay = $expiresAtTimestamp !== false ? date('M j, Y g:ia', $expiresAtTimestamp) : '';
+$inactiveRaffleMessage = 'There is no active raffle accepting entries right now. Please check back for the next giveaway.';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $action = postString('action');
 
     if ($action !== 'submit_raffle_entry') {
-        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'This action is not available.');
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid action. Only raffle entry submissions are accepted on this page.');
     }
 
     $entryValues = [
@@ -42,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($entryFormClosed) {
         $entryError = $raffleSettings['entry_form_enabled']
             ? 'This raffle is no longer accepting entries.'
-            : 'There is no active raffle accepting entries right now.';
+            : $inactiveRaffleMessage;
     } elseif (!isValidRaffleName($entryValues['name'])) {
         $entryError = 'Please enter a valid participant name using letters, numbers, and basic punctuation only.';
     } elseif ($entryValues['email'] !== '' && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
@@ -105,7 +106,7 @@ include __DIR__ . '/includes/header.php';
             <?php if ($isActiveRaffle): ?>
               <?= $raffleSettings['description'] !== '' ? e($raffleSettings['description']) : 'Use the form below to enter the current raffle.' ?>
             <?php else: ?>
-              There is no active raffle accepting entries right now. Please check back for the next giveaway.
+              <?= e($inactiveRaffleMessage) ?>
             <?php endif; ?>
           </p>
           <div class="d-flex gap-1" style="flex-wrap:wrap;">
@@ -160,7 +161,7 @@ include __DIR__ . '/includes/header.php';
             <?php endif; ?>
 
             <?php if (!$isActiveRaffle): ?>
-              <p class="text-muted">There is no public raffle form available right now.</p>
+              <p class="text-muted"><?= e($inactiveRaffleMessage) ?></p>
             <?php else: ?>
               <form method="POST" action="/raffle.php#raffle-entry-form">
                 <?= csrfField() ?>
