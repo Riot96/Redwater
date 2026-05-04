@@ -767,12 +767,13 @@ function getRaffleSettings(): array {
  */
 function saveRaffleSettings(array $settings): void {
     $collectEmail = !empty($settings['collect_email']);
+    $requireEmail = $collectEmail && $settings['require_email'] === true;
     setSetting('raffle_settings', (string) json_encode([
         'entry_form_enabled' => !empty($settings['entry_form_enabled']),
         'title' => trim($settings['title']),
         'description' => trim($settings['description']),
         'collect_email' => $collectEmail,
-        'require_email' => raffleRequiresEmail($settings),
+        'require_email' => $requireEmail,
         'opt_in_label' => trim($settings['opt_in_label']),
         'expires_at' => trim($settings['expires_at']),
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));

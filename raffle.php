@@ -26,13 +26,6 @@ $isActiveRaffle = $raffleSettings['entry_form_enabled'] && !$entryFormClosed;
 $expiresAtDisplay = $expiresAtTimestamp !== false ? date('M j, Y g:ia', $expiresAtTimestamp) : '';
 $inactiveRaffleMessage = 'There is no active raffle accepting entries right now. Please check back for the next giveaway.';
 $emailRequired = raffleRequiresEmail($raffleSettings);
-if ($emailRequired) {
-    $entryDetailsText = 'Enter the participant name and required email address while the raffle is open.';
-} elseif ($raffleSettings['collect_email']) {
-    $entryDetailsText = 'Enter the participant name and optional email address while the raffle is open.';
-} else {
-    $entryDetailsText = 'Enter the participant name while the raffle is open.';
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -211,7 +204,15 @@ include __DIR__ . '/includes/header.php';
             <h3 class="mb-2">What to Expect</h3>
             <ol class="raffle-steps">
               <li>Check this page to see whether a raffle is currently accepting entries.</li>
-              <li><?= e($entryDetailsText) ?></li>
+              <li>
+                <?php if ($emailRequired): ?>
+                  Enter the participant name and required email address while the raffle is open.
+                <?php elseif ($raffleSettings['collect_email']): ?>
+                  Enter the participant name and optional email address while the raffle is open.
+                <?php else: ?>
+                  Enter the participant name while the raffle is open.
+                <?php endif; ?>
+              </li>
               <li>Watch RedWater channels for winner announcements and future giveaways.</li>
             </ol>
           </div>
