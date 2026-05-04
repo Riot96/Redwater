@@ -564,7 +564,14 @@ function raffleNameLength(string $name): int {
         return mb_strlen($name, 'UTF-8');
     }
 
-    $length = preg_match_all('/./us', $name, $matches);
+    if (function_exists('iconv_strlen')) {
+        $length = iconv_strlen($name, 'UTF-8');
+        if ($length !== false) {
+            return $length;
+        }
+    }
+
+    $length = preg_match_all('/./u', $name, $matches);
     if ($length !== false) {
         return $length;
     }
@@ -890,7 +897,8 @@ function addRaffleEntry(array $entry): string {
         $selectStmt->execute(['raffle_entries']);
         /** @var array{setting_value: string|null}|false $row */
         $row = $selectStmt->fetch();
-        $entries = parseStoredRaffleEntries(json_decode(stringValue($row['setting_value'] ?? '[]'), true));
+        $storedValue = $row !== false ? stringValue($row['setting_value']) : '[]';
+        $entries = parseStoredRaffleEntries(json_decode($storedValue, true));
 
         $conflictMessage = findRaffleEntryConflict($entries, $entry);
         if ($conflictMessage !== '') {
@@ -911,7 +919,7 @@ function addRaffleEntry(array $entry): string {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
-        error_log('Failed to save raffle entry: ' . $e->getMessage());
+        error_log('Failed to save raffle entry: ' . $e);
         return 'We could not save your raffle entry right now. Please try again.';
     }
 
