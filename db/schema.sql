@@ -150,8 +150,9 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('merch_catalog', '[]'),
 ('social_facebook', ''),
 ('social_instagram', ''),
-('social_twitter', ''),
-('social_youtube', '');
+('social_tiktok', ''),
+('social_youtube', ''),
+('social_pinterest', '');
 
 -- Default policies record
 INSERT IGNORE INTO policies (id, content_html, image_path) VALUES (1, '<p>Policies content coming soon. Please check back later.</p>', NULL);
