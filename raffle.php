@@ -26,11 +26,13 @@ $isActiveRaffle = $raffleSettings['entry_form_enabled'] && !$entryFormClosed;
 $expiresAtDisplay = $expiresAtTimestamp !== false ? date('M j, Y g:ia', $expiresAtTimestamp) : '';
 $inactiveRaffleMessage = 'There is no active raffle accepting entries right now. Please check back for the next giveaway.';
 $emailRequired = raffleRequiresEmail($raffleSettings);
-$entryDetailsText = $emailRequired
-    ? 'Enter the participant name and required email address while the raffle is open.'
-    : ($raffleSettings['collect_email']
-        ? 'Enter the participant name and optional email address while the raffle is open.'
-        : 'Enter the participant name while the raffle is open.');
+if ($emailRequired) {
+    $entryDetailsText = 'Enter the participant name and required email address while the raffle is open.';
+} elseif ($raffleSettings['collect_email']) {
+    $entryDetailsText = 'Enter the participant name and optional email address while the raffle is open.';
+} else {
+    $entryDetailsText = 'Enter the participant name while the raffle is open.';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -48,17 +50,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $emailProvided = $entryValues['email'] !== '';
 
     if ($entryFormClosed) {
-        $entryError = $raffleSettings['entry_form_enabled']
-            ? 'This raffle is no longer accepting entries.'
-            : $inactiveRaffleMessage;
+        if ($raffleSettings['entry_form_enabled']) {
+            $entryError = 'This raffle is no longer accepting entries.';
+        } else {
+            $entryError = $inactiveRaffleMessage;
+        }
     } elseif (!isValidRaffleName($entryValues['name'])) {
         $entryError = 'Please enter a valid participant name using letters, numbers, and basic punctuation only.';
     } elseif ($emailRequired && !$emailProvided) {
         $entryError = 'Please enter your email address to complete this raffle entry.';
     } elseif ($emailProvided && !filter_var($entryValues['email'], FILTER_VALIDATE_EMAIL)) {
-        $entryError = $emailRequired
-            ? 'Please enter a valid email address to complete this raffle entry.'
-            : 'Please enter a valid email address or leave the field blank.';
+        if ($emailRequired) {
+            $entryError = 'Please enter a valid email address to complete this raffle entry.';
+        } else {
+            $entryError = 'Please enter a valid email address or leave the field blank.';
+        }
     } else {
         $entryEmailKey = $entryValues['email'] !== '' ? strtolower($entryValues['email']) : '';
         $entryNameKey = raffleNameKey($entryValues['name']);

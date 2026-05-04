@@ -717,7 +717,8 @@ function parseRaffleCsvNames(string $input): array {
  * collect email addresses.
  */
 function raffleRequiresEmail(array $settings): bool {
-    return !empty($settings['collect_email']) && !empty($settings['require_email']);
+    return ($settings['collect_email'] ?? false) === true
+        && ($settings['require_email'] ?? false) === true;
 }
 
 /**
