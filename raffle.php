@@ -30,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = postString('action');
 
     if ($action !== 'submit_raffle_entry') {
-        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Invalid action. Please use the raffle entry form to submit your information.');
+        redirectWithMessage('/raffle.php#raffle-entry-form', 'error', 'Unexpected action received. Please use the raffle entry form to submit your information.');
     }
 
     $entryValues = [
@@ -77,7 +77,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$entryStatusText = $isActiveRaffle ? 'Open Now' : ($raffleSettings['entry_form_enabled'] ? 'Closed' : 'No Active Raffle');
+if ($isActiveRaffle) {
+    $entryStatusText = 'Open Now';
+} elseif ($raffleSettings['entry_form_enabled']) {
+    $entryStatusText = 'Closed';
+} else {
+    $entryStatusText = 'No Active Raffle';
+}
 
 include __DIR__ . '/includes/header.php';
 ?>
