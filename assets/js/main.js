@@ -298,10 +298,6 @@ document.addEventListener('DOMContentLoaded', function () {
       shareItemUrl.select();
     });
 
-    shareItemUrl.addEventListener('click', function () {
-      shareItemUrl.select();
-    });
-
     shareModal.querySelectorAll('[data-gallery-share-close]').forEach(function (button) {
       button.addEventListener('click', function () {
         closeShareModal();
