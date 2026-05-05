@@ -105,6 +105,34 @@ function uploadedFile(string $key): ?array {
 }
 
 /**
+ * @return array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int}|null
+ */
+function uploadedFileAtIndex(string $key, int $index): ?array {
+    $file = $_FILES[$key] ?? null;
+    if (!is_array($file)) {
+        return null;
+    }
+
+    $name = $file['name'] ?? null;
+    $type = $file['type'] ?? null;
+    $tmpName = $file['tmp_name'] ?? null;
+    $error = $file['error'] ?? null;
+    $size = $file['size'] ?? null;
+
+    if (!is_array($name) || !is_array($type) || !is_array($tmpName) || !is_array($error) || !is_array($size)) {
+        return null;
+    }
+
+    return [
+        'name' => stringValue($name[$index] ?? null),
+        'type' => stringValue($type[$index] ?? null),
+        'tmp_name' => stringValue($tmpName[$index] ?? null),
+        'error' => intValue($error[$index] ?? null, UPLOAD_ERR_NO_FILE),
+        'size' => intValue($size[$index] ?? null),
+    ];
+}
+
+/**
  * @param array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int}|null $file
  */
 function hasUploadedFile(?array $file): bool {
@@ -318,6 +346,55 @@ function saveGalleryWatermarkSettings(array $settings): void {
     setSetting('gallery_watermark_settings', is_string($json) ? $json : '{}');
 }
 
+function normalizeLocalTicketEventImagePath(string $path): string {
+    $normalized = trim($path);
+    if ($normalized === '') {
+        return '';
+    }
+    if (preg_match('/[\x00-\x1F\x7F\\\\]/', $normalized) === 1 || str_contains($normalized, '..')) {
+        return '';
+    }
+    if (preg_match('#^/uploads/tickets/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i', $normalized) !== 1) {
+        return '';
+    }
+
+    return $normalized;
+}
+
+function isSupportedTicketManualEventImagePath(string $path): bool {
+    $path = trim($path);
+    if ($path === '') {
+        return false;
+    }
+
+    if (normalizeLocalTicketEventImagePath($path) !== '') {
+        return true;
+    }
+
+    return isSupportedGalleryLinkUrl($path);
+}
+
+function isManagedTicketManualEventImagePath(string $path): bool {
+    return normalizeLocalTicketEventImagePath($path) !== '';
+}
+
+function deleteManagedTicketManualEventImage(string $path): void {
+    $path = trim($path);
+    if (!isManagedTicketManualEventImagePath($path)) {
+        return;
+    }
+
+    $candidate = realpath(dirname(__DIR__) . '/' . ltrim($path, '/'));
+    $uploadsRoot = realpath(dirname(__DIR__) . '/uploads/tickets');
+    if ($candidate === false || $uploadsRoot === false) {
+        return;
+    }
+
+    if ($candidate !== $uploadsRoot && str_starts_with($candidate, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+        deleteUploadedFile($candidate);
+    }
+}
+
 /**
  * @param array<string, mixed> $event
  * @return array{
@@ -332,7 +409,7 @@ function saveGalleryWatermarkSettings(array $settings): void {
  */
 function normalizeTicketManualEvent(array $event): array {
     $photoUrl = trim(stringValue($event['photo_url'] ?? ''));
-    if ($photoUrl !== '' && !isSupportedGalleryLinkUrl($photoUrl)) {
+    if ($photoUrl !== '' && !isSupportedTicketManualEventImagePath($photoUrl)) {
         $photoUrl = '';
     }
 

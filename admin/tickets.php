@@ -10,7 +10,8 @@ requireAdmin();
 
 $manualEventErrors = [];
 $embedCode = getSetting('tickets_embed_code', '');
-$manualEventFormState = getTicketManualEvents();
+$storedManualEvents = getTicketManualEvents();
+$manualEventFormState = $storedManualEvents;
 if ($manualEventFormState === []) {
     $manualEventFormState[] = normalizeTicketManualEvent([]);
 }
@@ -26,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $eventCosts = postStringList('manual_event_cost');
     $eventPhotos = postStringList('manual_event_photo_url');
     $eventBookings = postStringList('manual_event_booking_url');
+    $existingEventPhotos = postStringList('manual_event_existing_photo_url');
+    $uploadedTicketImages = [];
 
     $manualEventFormState = [];
     $manualEventsToSave = [];
@@ -36,17 +39,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         count($eventTimes),
         count($eventCosts),
         count($eventPhotos),
-        count($eventBookings)
+        count($eventBookings),
+        count($existingEventPhotos)
     );
 
     for ($i = 0; $i < $rowCount; $i++) {
+        $existingPhotoPath = trim($existingEventPhotos[$i] ?? '');
+        $imageUpload = uploadedFileAtIndex('manual_event_photo_upload', $i);
+        $hasUpload = hasUploadedFile($imageUpload);
+        $finalPhotoPath = $existingPhotoPath;
+
+        if ($imageUpload !== null && $hasUpload) {
+            $upload = handleFileUpload(
+                $imageUpload,
+                __DIR__ . '/../uploads/tickets',
+                ALLOWED_IMAGE_TYPES
+            );
+            if (!$upload['success']) {
+                $manualEventErrors[] = 'Manual event #' . ($i + 1) . ' image upload failed: ' . $upload['error'];
+            } else {
+                $finalPhotoPath = '/uploads/tickets/' . $upload['filename'];
+                $uploadedTicketImages[] = $finalPhotoPath;
+            }
+        } else {
+            $eventPhotoUrl = trim($eventPhotos[$i] ?? '');
+            if ($eventPhotoUrl !== '') {
+                $finalPhotoPath = $eventPhotoUrl;
+            }
+        }
+
         $rawEvent = [
             'name' => trim($eventNames[$i] ?? ''),
             'description' => trim($eventDescriptions[$i] ?? ''),
             'date' => trim($eventDates[$i] ?? ''),
             'time' => trim($eventTimes[$i] ?? ''),
             'cost' => trim($eventCosts[$i] ?? ''),
-            'photo_url' => trim($eventPhotos[$i] ?? ''),
+            'photo_url' => $finalPhotoPath,
             'booking_url' => trim($eventBookings[$i] ?? ''),
         ];
 
@@ -88,10 +116,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $hasErrors = true;
         }
         if ($rawEvent['photo_url'] === '') {
-            $manualEventErrors[] = 'Manual event #' . $eventNumber . ' needs a photo URL.';
+            $manualEventErrors[] = 'Manual event #' . $eventNumber . ' needs a photo URL or uploaded image.';
             $hasErrors = true;
         } elseif ($normalizedEvent['photo_url'] === '') {
-            $manualEventErrors[] = 'Manual event #' . $eventNumber . ' must use a valid HTTPS photo URL.';
+            $manualEventErrors[] = 'Manual event #' . $eventNumber . ' must use a valid HTTPS photo URL or a valid uploaded image.';
             $hasErrors = true;
         }
         if ($rawEvent['booking_url'] !== '' && $normalizedEvent['booking_url'] === '') {
@@ -107,8 +135,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($manualEventErrors)) {
         setSetting('tickets_embed_code', $embedCode);
         saveTicketManualEvents($manualEventsToSave);
+
+        $savedManagedPaths = [];
+        foreach ($manualEventsToSave as $event) {
+            if (isManagedTicketManualEventImagePath($event['photo_url'])) {
+                $savedManagedPaths[] = $event['photo_url'];
+            }
+        }
+        foreach ($storedManualEvents as $event) {
+            $storedPhotoPath = $event['photo_url'];
+            if (
+                isManagedTicketManualEventImagePath($storedPhotoPath)
+                && !in_array($storedPhotoPath, $savedManagedPaths, true)
+            ) {
+                deleteManagedTicketManualEventImage($storedPhotoPath);
+            }
+        }
+
         flashMessage('success', 'Ticket settings updated successfully.');
         redirect('/admin/tickets.php');
+    }
+
+    foreach ($uploadedTicketImages as $uploadedTicketImage) {
+        deleteManagedTicketManualEventImage($uploadedTicketImage);
     }
 
     if ($manualEventFormState === []) {
@@ -139,7 +188,7 @@ include __DIR__ . '/../includes/header.php';
           </div>
         <?php endif; ?>
 
-        <form method="POST" action="/admin/tickets.php">
+        <form method="POST" action="/admin/tickets.php" enctype="multipart/form-data">
           <?= csrfField() ?>
 
           <div class="form-group">
@@ -175,9 +224,23 @@ include __DIR__ . '/../includes/header.php';
                     </div>
                     <div class="form-group">
                       <label class="form-label">Photo URL</label>
-                      <input type="url" name="manual_event_photo_url[]" class="form-control" value="<?= e($manualEvent['photo_url']) ?>" placeholder="https://...">
+                      <input type="url" name="manual_event_photo_url[]" class="form-control" value="<?= e(isManagedTicketManualEventImagePath($manualEvent['photo_url']) ? '' : $manualEvent['photo_url']) ?>" placeholder="https://...">
+                      <input type="hidden" name="manual_event_existing_photo_url[]" value="<?= e($manualEvent['photo_url']) ?>">
+                      <div class="form-hint">Use an HTTPS image URL or upload a local image below.</div>
                     </div>
                   </div>
+
+                  <div class="form-group">
+                    <label class="form-label">Photo Upload</label>
+                    <input type="file" name="manual_event_photo_upload[]" class="form-control" accept="image/*">
+                    <div class="form-hint">Upload a JPG, PNG, GIF, or WebP image. If you upload a file, it will be used instead of the photo URL.</div>
+                  </div>
+
+                  <?php if ($manualEvent['photo_url'] !== ''): ?>
+                    <div class="merch-admin-image-preview mb-2 js-ticket-image-preview">
+                      <img src="<?= e($manualEvent['photo_url']) ?>" alt="<?= e($manualEvent['name'] !== '' ? $manualEvent['name'] : 'Ticket event preview') ?>" class="merch-admin-thumb-lg">
+                    </div>
+                  <?php endif; ?>
 
                   <div class="form-group">
                     <label class="form-label">Description</label>
@@ -260,6 +323,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const clone = firstCard.cloneNode(true);
+    clone.querySelectorAll('.js-ticket-image-preview').forEach((preview) => {
+      preview.remove();
+    });
     clone.querySelectorAll('input, textarea').forEach((field) => {
       field.value = '';
     });
