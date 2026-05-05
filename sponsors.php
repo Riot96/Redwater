@@ -56,7 +56,7 @@ $tiers = getSponsorTiers();
               <span><?= e($tier['name']) ?></span> Sponsors
             </h3>
 
-            <div class="sponsor-grid" style="grid-template-columns: repeat(<?= $cols ?>, 1fr);">
+            <div class="sponsor-grid" style="--sponsor-cols: <?= $cols ?>;">
 
               <?php if (empty($tierSponsors)): ?>
                 <!-- Show 2 placeholder cards when no sponsors -->
