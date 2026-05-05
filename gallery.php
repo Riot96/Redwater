@@ -191,7 +191,7 @@ $items = getGalleryItems(true);
       <div class="gallery-share-preview">
         <div class="gallery-share-preview-label">Ready to share</div>
         <div id="gallery-share-item-title" class="gallery-share-item-title">This gallery item</div>
-        <div id="gallery-share-item-url" class="gallery-share-item-url"></div>
+        <input id="gallery-share-item-url" class="gallery-share-item-url" type="text" value="" readonly aria-label="Share URL" spellcheck="false">
       </div>
       <div class="gallery-share-actions">
         <a id="gallery-share-email" class="btn btn-outline btn-sm" href="#">Email</a>

@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', function () {
       currentShareUrl = shareData.url;
 
       shareItemTitle.textContent = shareData.title || 'This gallery item';
-      shareItemUrl.textContent = shareData.url;
+      shareItemUrl.value = shareData.url;
       shareEmail.href = 'mailto:?subject=' + encodeURIComponent(shareData.subject) + '&body=' + encodeURIComponent((shareData.text ? shareData.text + '\n\n' : '') + shareData.url);
       shareFacebook.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareData.url);
       shareX.href = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(shareData.url) + '&text=' + encodeURIComponent(shareData.text || shareData.subject);
@@ -288,8 +288,18 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!copied) throw new Error('Failed to copy URL to clipboard');
         setShareStatus('Link copied to clipboard.', false);
       } catch (error) {
+        shareItemUrl.focus();
+        shareItemUrl.select();
         setShareStatus('Unable to copy the link automatically. Please copy it manually from the field above.', true);
       }
+    });
+
+    shareItemUrl.addEventListener('focus', function () {
+      shareItemUrl.select();
+    });
+
+    shareItemUrl.addEventListener('click', function () {
+      shareItemUrl.select();
     });
 
     shareModal.querySelectorAll('[data-gallery-share-close]').forEach(function (button) {
