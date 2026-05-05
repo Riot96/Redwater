@@ -1710,6 +1710,56 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
 }
 
 /* ── Tickets embed ───────────────────────────────────────────────────────── */
+.tickets-manual-grid {
+  margin-bottom: 0;
+}
+.tickets-event-card {
+  height: 100%;
+}
+.tickets-event-image {
+  background: var(--bg-card2);
+}
+.tickets-event-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.tickets-event-meta-item {
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255,255,255,0.03);
+}
+.tickets-event-meta-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.tickets-event-description {
+  white-space: normal;
+}
+.tickets-admin-event-list {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.tickets-admin-event-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.tickets-admin-event-header h5 {
+  margin: 0;
+  font-size: 1rem;
+}
 .tickets-embed-wrap {
   min-height: 600px;
   background: var(--bg-card);
@@ -1728,6 +1778,12 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
   padding: 3rem;
   gap: 1rem;
   color: var(--text-dim);
+}
+
+@media (max-width: 640px) {
+  .tickets-event-meta {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ── Pagination ──────────────────────────────────────────────────────────── */

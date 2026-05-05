@@ -179,7 +179,7 @@ The site will display the logo in the navigation and footer automatically. If no
 Log in as admin and visit the **Admin Dashboard** to configure:
 
 - **Contact Settings** — Phone, email, address, map embed, social media links, hero text, about text
-- **Tickets** — Paste your HauntPay embed code
+- **Tickets** — Paste your HauntPay embed code and add manual ticket events
 - **Policies** — Add your policy text and/or image
 - **Sponsors** — Create tiers and add sponsors
 - **Merch** — Configure PayPal-backed merch items with photos, per-product SEO fields, variants, shipping, local pickup, and cart checkout
@@ -213,7 +213,7 @@ For PayPal sandbox testing, use the email for a PayPal Developer sandbox busines
 ├── admin/                 Admin interface (admin users only)
 │   ├── index.php          Dashboard
 │   ├── profile.php        Admin profile
-│   ├── tickets.php        Edit HauntPay embed
+│   ├── tickets.php        Edit ticket embed and manual events
 │   ├── policies.php       Edit policies
 │   ├── gallery.php        Manage gallery & approvals
 │   ├── sponsors.php       Manage sponsors & tiers

@@ -12,6 +12,7 @@ $seoDescription = 'Purchase tickets for RedWater Entertainment events including 
 include __DIR__ . '/includes/header.php';
 
 $embedCode = getSetting('tickets_embed_code', '');
+$manualEvents = getTicketManualEvents();
 ?>
 
 <main class="page-wrapper">
@@ -25,11 +26,58 @@ $embedCode = getSetting('tickets_embed_code', '');
   <section class="section-sm">
     <div class="container">
 
+      <?php if ($manualEvents !== []): ?>
+        <div class="text-center mb-2">
+          <h2>Featured Events</h2>
+          <p class="text-muted mt-1">Reserve your spot for special events that are listed outside of our HauntPay ticket feed.</p>
+        </div>
+
+        <div class="features-grid tickets-manual-grid">
+          <?php foreach ($manualEvents as $event): ?>
+            <article class="feature-card tickets-event-card">
+              <img src="<?= e($event['photo_url']) ?>" alt="<?= e($event['name']) ?>" class="feature-card-image tickets-event-image" loading="lazy">
+              <div class="feature-card-body">
+                <div class="tickets-event-meta">
+                  <div class="tickets-event-meta-item">
+                    <span class="tickets-event-meta-label">Date</span>
+                    <strong><?= e($event['date']) ?></strong>
+                  </div>
+                  <div class="tickets-event-meta-item">
+                    <span class="tickets-event-meta-label">Time</span>
+                    <strong><?= e($event['time']) ?></strong>
+                  </div>
+                  <div class="tickets-event-meta-item">
+                    <span class="tickets-event-meta-label">Cost</span>
+                    <strong><?= e($event['cost']) ?></strong>
+                  </div>
+                </div>
+
+                <h3><?= e($event['name']) ?></h3>
+                <p class="tickets-event-description"><?= nl2br(e($event['description'])) ?></p>
+
+                <?php if ($event['booking_url'] !== ''): ?>
+                  <a href="<?= e($event['booking_url']) ?>" class="btn btn-primary btn-sm mt-2" target="_blank" rel="noopener noreferrer">Book This Event</a>
+                <?php endif; ?>
+              </div>
+            </article>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+
       <?php if (!empty($embedCode)): ?>
+        <?php if ($manualEvents !== []): ?>
+          <div class="divider"></div>
+        <?php endif; ?>
+
+        <div class="text-center mb-2">
+          <h2>HauntPay Events</h2>
+          <p class="text-muted mt-1">Browse the live HauntPay event feed for current ticket availability.</p>
+        </div>
+
         <div class="tickets-embed-wrap">
           <?= $embedCode /* Admin-controlled, stored securely in DB */ ?>
         </div>
-      <?php else: ?>
+      <?php elseif ($manualEvents === []): ?>
         <div class="tickets-embed-wrap">
           <div class="tickets-placeholder">
             <span style="font-size:4rem;">🎟️</span>
@@ -38,7 +86,7 @@ $embedCode = getSetting('tickets_embed_code', '');
             <a href="/contact.php" class="btn btn-secondary">Contact Us</a>
             <?php if (isAdmin()): ?>
               <div class="mt-3">
-                <a href="/admin/tickets.php" class="btn btn-outline btn-sm">⚙️ Configure Embed Code</a>
+                <a href="/admin/tickets.php" class="btn btn-outline btn-sm">⚙️ Configure Ticket Settings</a>
               </div>
             <?php endif; ?>
           </div>
@@ -47,7 +95,7 @@ $embedCode = getSetting('tickets_embed_code', '');
 
       <?php if (isAdmin()): ?>
         <div class="mt-2 text-center">
-          <a href="/admin/tickets.php" class="btn btn-outline btn-sm">⚙️ Edit Embed Code</a>
+          <a href="/admin/tickets.php" class="btn btn-outline btn-sm">⚙️ Edit Ticket Settings</a>
         </div>
       <?php endif; ?>
 
