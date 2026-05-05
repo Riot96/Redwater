@@ -29,10 +29,37 @@ function requestString(array $source, string $key, string $default = ''): string
     return stringValue($value, $default);
 }
 
+/**
+ * @param array<string, mixed> $source
+ * @return list<string>
+ */
+function requestStringList(array $source, string $key): array {
+    $value = $source[$key] ?? [];
+    if (!is_array($value)) {
+        return [];
+    }
+
+    $normalized = [];
+    foreach ($value as $item) {
+        $normalized[] = stringValue($item);
+    }
+
+    return $normalized;
+}
+
 function postString(string $key, string $default = ''): string {
     /** @var array<string, mixed> $post */
     $post = $_POST;
     return requestString($post, $key, $default);
+}
+
+/**
+ * @return list<string>
+ */
+function postStringList(string $key): array {
+    /** @var array<string, mixed> $post */
+    $post = $_POST;
+    return requestStringList($post, $key);
 }
 
 function getString(string $key, string $default = ''): string {
@@ -289,6 +316,122 @@ function getGalleryWatermarkSettings(): array {
 function saveGalleryWatermarkSettings(array $settings): void {
     $json = json_encode(normalizeGalleryWatermarkSettings($settings), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     setSetting('gallery_watermark_settings', is_string($json) ? $json : '{}');
+}
+
+/**
+ * @param array<string, mixed> $event
+ * @return array{
+ *   name: string,
+ *   description: string,
+ *   date: string,
+ *   time: string,
+ *   cost: string,
+ *   photo_url: string,
+ *   booking_url: string
+ * }
+ */
+function normalizeTicketManualEvent(array $event): array {
+    $photoUrl = trim(stringValue($event['photo_url'] ?? ''));
+    if ($photoUrl !== '' && !isSupportedGalleryLinkUrl($photoUrl)) {
+        $photoUrl = '';
+    }
+
+    $bookingUrl = trim(stringValue($event['booking_url'] ?? ''));
+    if ($bookingUrl !== '' && !isSupportedGalleryLinkUrl($bookingUrl)) {
+        $bookingUrl = '';
+    }
+
+    return [
+        'name' => trim(stringValue($event['name'] ?? '')),
+        'description' => trim(stringValue($event['description'] ?? '')),
+        'date' => trim(stringValue($event['date'] ?? '')),
+        'time' => trim(stringValue($event['time'] ?? '')),
+        'cost' => trim(stringValue($event['cost'] ?? '')),
+        'photo_url' => $photoUrl,
+        'booking_url' => $bookingUrl,
+    ];
+}
+
+/**
+ * @param array{
+ *   name: string,
+ *   description: string,
+ *   date: string,
+ *   time: string,
+ *   cost: string,
+ *   photo_url: string,
+ *   booking_url: string
+ * } $event
+ */
+function ticketManualEventIsComplete(array $event): bool {
+    return $event['name'] !== ''
+        && $event['description'] !== ''
+        && $event['date'] !== ''
+        && $event['time'] !== ''
+        && $event['cost'] !== ''
+        && $event['photo_url'] !== '';
+}
+
+/**
+ * @return list<array{
+ *   name: string,
+ *   description: string,
+ *   date: string,
+ *   time: string,
+ *   cost: string,
+ *   photo_url: string,
+ *   booking_url: string
+ * }>
+ */
+function getTicketManualEvents(): array {
+    $raw = trim(getSetting('tickets_manual_events', '[]'));
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $events = [];
+    foreach ($decoded as $event) {
+        if (!is_array($event)) {
+            continue;
+        }
+
+        /** @var array<string, mixed> $event */
+        $normalized = normalizeTicketManualEvent($event);
+        if (!ticketManualEventIsComplete($normalized)) {
+            continue;
+        }
+
+        $events[] = $normalized;
+    }
+
+    return $events;
+}
+
+/**
+ * @param list<array{
+ *   name: string,
+ *   description: string,
+ *   date: string,
+ *   time: string,
+ *   cost: string,
+ *   photo_url: string,
+ *   booking_url: string
+ * }> $events
+ */
+function saveTicketManualEvents(array $events): void {
+    $normalized = [];
+    foreach ($events as $event) {
+        $normalizedEvent = normalizeTicketManualEvent($event);
+        if (!ticketManualEventIsComplete($normalizedEvent)) {
+            continue;
+        }
+
+        $normalized[] = $normalizedEvent;
+    }
+
+    $json = json_encode($normalized, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    setSetting('tickets_manual_events', is_string($json) ? $json : '[]');
 }
 
 /**
