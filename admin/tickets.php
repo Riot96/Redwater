@@ -137,9 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($hasErrors && $uploadedPhotoPath !== '') {
-            if ($eventPhotoUrl !== '') {
-                $formPhotoPath = $eventPhotoUrl;
-            }
+            $formPhotoPath = $eventPhotoUrl !== '' ? $eventPhotoUrl : $existingPhotoPath;
             $rawEvent['photo_url'] = $formPhotoPath;
         }
 
