@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $upload = handleFileUpload(
                 $watermarkImage,
                 __DIR__ . '/../uploads/watermarks',
-                defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp']
+                ALLOWED_IMAGE_TYPES
             );
             if (!$upload['success']) {
                 flashMessage('error', 'Watermark image upload failed: ' . $upload['error']);
@@ -110,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($newWatermarkImagePath !== '') {
                 deleteManagedGalleryWatermarkImage($newWatermarkImagePath);
             }
-            flashMessage('error', 'Enable gallery watermarking only after adding watermark text, a watermark image, or both.');
+            flashMessage('error', 'Please add watermark text, a watermark image, or both before enabling gallery watermarking.');
             redirect('/admin/contact.php');
         }
 
@@ -431,7 +431,7 @@ include __DIR__ . '/../includes/header.php';
           <div class="form-group">
             <label class="form-label">Watermark Image</label>
             <input type="file" name="gallery_watermark_image" class="form-control" accept="image/*">
-            <div class="form-hint">Optional. Upload a PNG, JPG, GIF, or WebP logo to place above the text watermark.</div>
+            <div class="form-hint">Optional. Upload a PNG, JPG, GIF, or WebP logo to place above the text watermark. Maximum file size: <?= e(formatBytes(MAX_UPLOAD_SIZE)) ?>.</div>
           </div>
           <?php if ($galleryWatermarkSettings['image_path'] !== ''): ?>
             <div class="form-group">

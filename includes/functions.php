@@ -327,6 +327,24 @@ function galleryWatermarkFontPath(): string {
 }
 
 /**
+ * Converts a normalized opacity value (0.0 transparent through 1.0 opaque)
+ * into GD's alpha range, where 0 is opaque and 127 is fully transparent.
+ *
+ * @return int<0, 127>
+ */
+function galleryWatermarkGdAlpha(float $opacity): int {
+    return max(0, min(127, (int) round((1 - $opacity) * 127)));
+}
+
+/**
+ * @return int<0, 127>
+ */
+function galleryWatermarkShadowAlpha(int $alpha): int {
+    $offset = defined('GALLERY_WATERMARK_SHADOW_ALPHA_OFFSET') ? (int) GALLERY_WATERMARK_SHADOW_ALPHA_OFFSET : 5;
+    return max(0, min(127, $alpha + $offset));
+}
+
+/**
  * @param array{
  *   enabled: bool,
  *   text: string,
@@ -367,6 +385,8 @@ function applyGalleryWatermarkWithImagick(string $imagePath, array $settings): a
     $sequence = new Imagick($imagePath);
     $sequence = $sequence->coalesceImages();
     $watermarkSource = null;
+    $imageOpacity = defined('GALLERY_WATERMARK_IMAGE_OPACITY') ? (float) GALLERY_WATERMARK_IMAGE_OPACITY : 0.45;
+    $textOpacity = defined('GALLERY_WATERMARK_TEXT_OPACITY') ? (float) GALLERY_WATERMARK_TEXT_OPACITY : 0.35;
 
     if ($settings['image_path'] !== '') {
         $watermarkSourcePath = dirname(__DIR__) . '/' . ltrim($settings['image_path'], '/');
@@ -398,7 +418,7 @@ function applyGalleryWatermarkWithImagick(string $imagePath, array $settings): a
             $targetWidth = max(1, (int) round($watermarkWidth * $scaleRatio));
             $targetHeight = max(1, (int) round($watermarkHeight * $scaleRatio));
             $watermark->resizeImage($targetWidth, $targetHeight, Imagick::FILTER_LANCZOS, 1, true);
-            $watermark->evaluateImage(Imagick::EVALUATE_MULTIPLY, 0.45, Imagick::CHANNEL_ALPHA);
+            $watermark->evaluateImage(Imagick::EVALUATE_MULTIPLY, $imageOpacity, Imagick::CHANNEL_ALPHA);
             $frame->compositeImage($watermark, Imagick::COMPOSITE_OVER, $rightX - $targetWidth, $baselineY - $targetHeight);
             $baselineY -= $targetHeight + $gap;
             $watermark->clear();
@@ -408,7 +428,7 @@ function applyGalleryWatermarkWithImagick(string $imagePath, array $settings): a
         if ($settings['text'] !== '') {
             $draw = new ImagickDraw();
             $draw->setGravity(Imagick::GRAVITY_NORTHWEST);
-            $draw->setFillColor(new ImagickPixel('rgba(255,255,255,0.35)'));
+            $draw->setFillColor(new ImagickPixel('rgba(255,255,255,' . $textOpacity . ')'));
             $fontPath = galleryWatermarkFontPath();
             if ($fontPath !== '') {
                 $draw->setFont($fontPath);
@@ -459,6 +479,8 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
         return ['success' => false, 'applied' => false, 'error' => 'Image watermarking is not available on this server.'];
     }
 
+    $imageAlpha = galleryWatermarkGdAlpha(defined('GALLERY_WATERMARK_IMAGE_OPACITY') ? (float) GALLERY_WATERMARK_IMAGE_OPACITY : 0.45);
+    $textAlpha = galleryWatermarkGdAlpha(defined('GALLERY_WATERMARK_TEXT_OPACITY') ? (float) GALLERY_WATERMARK_TEXT_OPACITY : 0.35);
     $imageInfo = @getimagesize($imagePath);
     if (!is_array($imageInfo)) {
         return ['success' => false, 'applied' => false, 'error' => 'The uploaded file is not a supported image.'];
@@ -522,7 +544,7 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
                         }
                         imagefill($overlay, 0, 0, $transparent);
                         imagecopyresampled($overlay, $watermark, 0, 0, 0, 0, $targetWidth, $targetHeight, $watermarkWidth, $watermarkHeight);
-                        imagefilter($overlay, IMG_FILTER_COLORIZE, 0, 0, 0, 70);
+                        imagefilter($overlay, IMG_FILTER_COLORIZE, 0, 0, 0, $imageAlpha);
                         imagealphablending($image, true);
                         imagecopy($image, $overlay, $rightX - $targetWidth, $baselineY - $targetHeight, 0, 0, $targetWidth, $targetHeight);
                         $baselineY -= $targetHeight + $gap;
@@ -544,11 +566,11 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
                 $textHeight = (int) abs(($bbox[5] ?? 0) - ($bbox[1] ?? 0));
                 $textX = max($margin, $rightX - $textWidth);
                 $textY = max($margin + $textHeight, $baselineY);
-                $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, 90);
+                $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, galleryWatermarkShadowAlpha($textAlpha));
                 if ($shadowColor === false) {
                     $shadowColor = 0;
                 }
-                $textColor = imagecolorallocatealpha($image, 255, 255, 255, 85);
+                $textColor = imagecolorallocatealpha($image, 255, 255, 255, $textAlpha);
                 if ($textColor === false) {
                     $textColor = 0;
                 }
@@ -561,11 +583,11 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
             $textHeight = imagefontheight($font);
             $textX = max($margin, $rightX - $textWidth);
             $textY = max($margin, $baselineY - $textHeight);
-            $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, 90);
+            $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, galleryWatermarkShadowAlpha($textAlpha));
             if ($shadowColor === false) {
                 $shadowColor = 0;
             }
-            $textColor = imagecolorallocatealpha($image, 255, 255, 255, 85);
+            $textColor = imagecolorallocatealpha($image, 255, 255, 255, $textAlpha);
             if ($textColor === false) {
                 $textColor = 0;
             }

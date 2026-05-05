@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $watermark = applyGalleryWatermark($upload['path']);
                     if (!$watermark['success']) {
                         deleteUploadedFile($upload['path']);
-                        flashMessage('error', 'Upload failed: ' . stringValue($watermark['error'] ?? 'Unable to apply the gallery watermark.'));
+                        flashMessage('error', 'Upload failed: ' . stringValue($watermark['error'] ?? 'Unable to apply the gallery watermark. Please check your watermark settings or try again.'));
                         redirect('/member/gallery.php');
                     }
                 }
