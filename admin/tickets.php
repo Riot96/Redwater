@@ -32,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $manualEventFormState = [];
     $manualEventsToSave = [];
+    $eventNumber = 0;
     $rowCount = max(
         count($eventNames),
         count($eventDescriptions),
@@ -94,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             continue;
         }
 
-        $eventNumber = count($manualEventFormState) + 1;
+        $eventNumber++;
         $normalizedEvent = normalizeTicketManualEvent($rawEvent);
         $hasErrors = false;
 
