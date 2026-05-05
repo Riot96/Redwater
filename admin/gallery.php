@@ -69,6 +69,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flashMessage('error', 'Upload failed: ' . $upload['error']);
                 redirect('/admin/gallery.php');
             }
+            if ($type === 'photo') {
+                $watermark = applyGalleryWatermark($upload['path']);
+                if (!$watermark['success']) {
+                    deleteUploadedFile($upload['path']);
+                    flashMessage('error', 'Upload failed: ' . stringValue($watermark['error'] ?? 'Unable to apply the gallery watermark. Please check your watermark settings or try again.'));
+                    redirect('/admin/gallery.php');
+                }
+            }
             $filePath = 'uploads/gallery/' . $upload['filename'];
         }
 

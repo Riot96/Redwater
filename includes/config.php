@@ -34,6 +34,9 @@ defined('MAIL_FROM_NAME') || define('MAIL_FROM_NAME', 'RedWater Entertainment');
 defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
 defined('ALLOWED_IMAGE_TYPES')|| define('ALLOWED_IMAGE_TYPES', ['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 defined('ALLOWED_VIDEO_TYPES')|| define('ALLOWED_VIDEO_TYPES', ['video/mp4', 'video/webm', 'video/ogg']);
+defined('GALLERY_WATERMARK_IMAGE_OPACITY') || define('GALLERY_WATERMARK_IMAGE_OPACITY', 0.45);
+defined('GALLERY_WATERMARK_TEXT_OPACITY') || define('GALLERY_WATERMARK_TEXT_OPACITY', 0.35);
+defined('GALLERY_WATERMARK_SHADOW_ALPHA_OFFSET') || define('GALLERY_WATERMARK_SHADOW_ALPHA_OFFSET', 5);
 defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
 defined('RAFFLE_ENTRY_MAX_COUNT') || define('RAFFLE_ENTRY_MAX_COUNT', 5000);
 defined('RAFFLE_ENTRY_MAX_BYTES') || define('RAFFLE_ENTRY_MAX_BYTES', 1024 * 1024);
@@ -546,6 +549,7 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('home_hero_heading', 'Experience the Fear'),
 ('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
 ('home_about_text', 'RedWater Entertainment is Highlands County''s premier entertainment organization. We are best known for our spine-chilling "Red Water Haunted Homestead" each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
+('gallery_watermark_settings', '{"enabled":false,"text":"","image_path":""}'),
 ('merch_store_settings', '{"paypal_email":"","paypal_currency":"USD","paypal_use_sandbox":false,"shipping_notice":"","pickup_notice":""}'),
 ('merch_catalog', '[]'),
 ('social_facebook', ''),
