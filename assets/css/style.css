@@ -894,7 +894,7 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   color: var(--text-muted);
 }
 .gallery-share-status.error {
-  color: #ff8d8d;
+  color: var(--red);
 }
 
 /* Tags */

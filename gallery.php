@@ -184,7 +184,7 @@ $items = getGalleryItems(true);
   <div class="modal gallery-share-modal" role="dialog" aria-modal="true" aria-labelledby="gallery-share-modal-title" aria-describedby="gallery-share-modal-description">
     <div class="modal-header">
       <div id="gallery-share-modal-title" class="modal-title">Share Gallery Item</div>
-      <button type="button" class="modal-close" data-gallery-share-close aria-label="Close share options">&times;</button>
+      <button type="button" class="modal-close" data-gallery-share-close aria-label="Close share options"><span aria-hidden="true">&times;</span></button>
     </div>
     <div class="modal-body">
       <p id="gallery-share-modal-description" class="text-muted">Choose how you want to share this gallery item.</p>
