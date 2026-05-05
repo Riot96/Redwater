@@ -47,7 +47,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $existingPhotoPath = trim($existingEventPhotos[$i] ?? '');
         $imageUpload = uploadedFileAtIndex('manual_event_photo_upload', $i);
         $hasUpload = hasUploadedFile($imageUpload);
+        $eventPhotoUrl = trim($eventPhotos[$i] ?? '');
         $finalPhotoPath = $existingPhotoPath;
+        $formPhotoPath = $existingPhotoPath;
+        $uploadedPhotoPath = '';
         $eventUploadError = '';
 
         if ($imageUpload !== null && $hasUpload) {
@@ -60,13 +63,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $eventUploadError = $upload['error'];
             } else {
                 $finalPhotoPath = '/uploads/tickets/' . $upload['filename'];
-                $uploadedTicketImages[] = $finalPhotoPath;
+                $uploadedPhotoPath = $finalPhotoPath;
+                $uploadedTicketImages[] = $uploadedPhotoPath;
             }
-        } else {
-            $eventPhotoUrl = trim($eventPhotos[$i] ?? '');
-            if ($eventPhotoUrl !== '') {
-                $finalPhotoPath = $eventPhotoUrl;
-            }
+        }
+
+        if (!$hasUpload && $eventPhotoUrl !== '') {
+            $finalPhotoPath = $eventPhotoUrl;
         }
 
         $rawEvent = [
@@ -91,8 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             continue;
         }
 
-        $manualEventFormState[] = $rawEvent;
-        $eventNumber = count($manualEventFormState);
+        $eventNumber = count($manualEventFormState) + 1;
         $normalizedEvent = normalizeTicketManualEvent($rawEvent);
         $hasErrors = false;
 
@@ -132,6 +134,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $manualEventErrors[] = 'Manual event #' . $eventNumber . ' booking link must be a valid HTTPS URL.';
             $hasErrors = true;
         }
+
+        if ($hasErrors && $uploadedPhotoPath !== '') {
+            if ($eventPhotoUrl !== '') {
+                $formPhotoPath = $eventPhotoUrl;
+            }
+            $rawEvent['photo_url'] = $formPhotoPath;
+        }
+
+        $manualEventFormState[] = $rawEvent;
 
         if (!$hasErrors) {
             $manualEventsToSave[] = $normalizedEvent;
@@ -311,14 +322,21 @@ document.addEventListener('DOMContentLoaded', () => {
       button.onclick = () => {
         const cards = list.querySelectorAll('.tickets-admin-event');
         if (cards.length === 1) {
-          cards[0].querySelectorAll('input, textarea').forEach((field) => {
-            field.value = '';
-          });
+          resetTicketEventCard(cards[0]);
           return;
         }
 
         button.closest('.tickets-admin-event')?.remove();
       };
+    });
+  };
+
+  const resetTicketEventCard = (card) => {
+    card.querySelectorAll('input, textarea').forEach((field) => {
+      field.value = '';
+    });
+    card.querySelectorAll('.js-ticket-image-preview').forEach((preview) => {
+      preview.remove();
     });
   };
 
@@ -329,12 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const clone = firstCard.cloneNode(true);
-    clone.querySelectorAll('.js-ticket-image-preview').forEach((preview) => {
-      preview.remove();
-    });
-    clone.querySelectorAll('input, textarea').forEach((field) => {
-      field.value = '';
-    });
+    resetTicketEventCard(clone);
     list.appendChild(clone);
     bindRemoveButtons();
   });
