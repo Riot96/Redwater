@@ -262,7 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
           url: url,
           title: title,
           text: buildShareText(title, description),
-          subject: title ? 'Check out this image: ' + title : 'Check out this image!',
+          subject: title ? 'Check out this gallery item: ' + title : 'Check out this gallery item!',
         };
 
         if (typeof navigator.share === 'function') {
@@ -285,7 +285,7 @@ document.addEventListener('DOMContentLoaded', function () {
     shareCopy.addEventListener('click', async function () {
       try {
         const copied = await copyShareUrl();
-        if (!copied) throw new Error('copy failed');
+        if (!copied) throw new Error('Failed to copy URL to clipboard');
         setShareStatus('Link copied to clipboard.', false);
       } catch (error) {
         setShareStatus('Unable to copy the link automatically. Please copy it manually from the field above.', true);
