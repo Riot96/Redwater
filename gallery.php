@@ -62,6 +62,9 @@ $items = getGalleryItems(true);
             $linkLabel = !empty($item['title'])
                 ? 'Open linked ' . ($isVideo ? 'video' : 'photo') . ': ' . stringValue($item['title'])
                 : 'Open external ' . ($isVideo ? 'video' : 'photo') . ' link';
+            $shareLabel = !empty($item['title'])
+                ? 'Share ' . stringValue($item['title'])
+                : 'Share this ' . ($isVideo ? 'video' : 'image');
             $dataSrc    = '';
             if ($isLinked) {
                 $dataSrc = '';
@@ -71,6 +74,14 @@ $items = getGalleryItems(true);
                 $dataSrc = getVideoEmbedUrl($videoUrl);
             } else {
                 $dataSrc = '/' . ltrim($filePath, '/');
+            }
+            $shareUrl = '';
+            if ($isLinked) {
+                $shareUrl = $linkUrl;
+            } elseif ($isEmbed && isSupportedVideoUrl($videoUrl)) {
+                $shareUrl = $videoUrl;
+            } elseif ($dataSrc !== '') {
+                $shareUrl = $dataSrc;
             }
             $tags = parseTags($tagsText);
             ?>
@@ -123,6 +134,20 @@ $items = getGalleryItems(true);
               <?php if ($isLinked): ?>
                 <div class="gallery-item-type-badge gallery-item-type-badge-link">Link</div>
               <?php endif; ?>
+              <?php if ($shareUrl !== ''): ?>
+                <button type="button"
+                        class="gallery-share-btn<?= $isLinked ? ' gallery-share-btn-linked' : '' ?>"
+                        data-gallery-share
+                        data-share-url="<?= e($shareUrl) ?>"
+                        data-share-title="<?= e($item['title'] ?? '') ?>"
+                        data-share-description="<?= e($item['description'] ?? '') ?>"
+                        aria-label="<?= e($shareLabel) ?>">
+                  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M18 16a3 3 0 0 0-2.39 1.18l-6.96-3.48a3.14 3.14 0 0 0 0-1.4l6.96-3.48A3 3 0 1 0 15 7a3.14 3.14 0 0 0 .07.62L8.11 11.1a3 3 0 1 0 0 1.8l6.96 3.48A3.14 3.14 0 0 0 15 17a3 3 0 1 0 3-3z" fill="currentColor"/>
+                  </svg>
+                  <span>Share</span>
+                </button>
+              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
@@ -152,6 +177,30 @@ $items = getGalleryItems(true);
   <div class="lightbox-inner">
     <div id="lightbox-media"></div>
     <div id="lightbox-info" class="lightbox-info"></div>
+  </div>
+</div>
+
+<div id="gallery-share-modal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal gallery-share-modal" role="dialog" aria-modal="true" aria-labelledby="gallery-share-modal-title" aria-describedby="gallery-share-modal-description">
+    <div class="modal-header">
+      <div id="gallery-share-modal-title" class="modal-title">Share Gallery Item</div>
+      <button type="button" class="modal-close" data-gallery-share-close aria-label="Close share options"><span aria-hidden="true">&times;</span></button>
+    </div>
+    <div class="modal-body">
+      <p id="gallery-share-modal-description" class="text-muted">Choose how you want to share this gallery item.</p>
+      <div class="gallery-share-preview">
+        <div class="gallery-share-preview-label">Ready to share</div>
+        <div id="gallery-share-item-title" class="gallery-share-item-title">This gallery item</div>
+        <input id="gallery-share-item-url" class="gallery-share-item-url" type="text" value="" readonly aria-label="Share URL" spellcheck="false">
+      </div>
+      <div class="gallery-share-actions">
+        <a id="gallery-share-email" class="btn btn-outline btn-sm" href="#">Email</a>
+        <a id="gallery-share-facebook" class="btn btn-outline btn-sm" href="#" target="_blank" rel="noopener noreferrer">Facebook</a>
+        <a id="gallery-share-x" class="btn btn-outline btn-sm" href="#" target="_blank" rel="noopener noreferrer">X / Twitter</a>
+        <button type="button" id="gallery-share-copy" class="btn btn-secondary btn-sm">Copy Link</button>
+      </div>
+      <p id="gallery-share-status" class="gallery-share-status" role="status" aria-live="polite"></p>
+    </div>
   </div>
 </div>
 

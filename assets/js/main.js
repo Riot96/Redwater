@@ -167,6 +167,157 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  // ── Gallery Sharing ───────────────────────────────────────────────────────
+  const shareModal = document.getElementById('gallery-share-modal');
+  const shareStatus = document.getElementById('gallery-share-status');
+  const shareItemTitle = document.getElementById('gallery-share-item-title');
+  const shareItemUrl = document.getElementById('gallery-share-item-url');
+  const shareEmail = document.getElementById('gallery-share-email');
+  const shareFacebook = document.getElementById('gallery-share-facebook');
+  const shareX = document.getElementById('gallery-share-x');
+  const shareCopy = document.getElementById('gallery-share-copy');
+
+  if (shareModal && shareStatus && shareItemTitle && shareItemUrl && shareEmail && shareFacebook && shareX && shareCopy) {
+    let activeShareTrigger = null;
+    let currentShareUrl = '';
+
+    function normalizeShareUrl(rawUrl) {
+      if (!rawUrl) return '';
+      try {
+        const url = new URL(rawUrl, window.location.origin + '/');
+        return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : '';
+      } catch (error) {
+        return '';
+      }
+    }
+
+    function buildShareText(title, description) {
+      return [title, description].filter(Boolean).join(' — ');
+    }
+
+    function setShareStatus(message, isError) {
+      shareStatus.textContent = message;
+      shareStatus.classList.toggle('error', Boolean(isError));
+    }
+
+    function openShareModal(trigger, shareData) {
+      activeShareTrigger = trigger;
+      currentShareUrl = shareData.url;
+
+      shareItemTitle.textContent = shareData.title || 'This gallery item';
+      shareItemUrl.value = shareData.url;
+      shareEmail.href = 'mailto:?subject=' + encodeURIComponent(shareData.subject) + '&body=' + encodeURIComponent((shareData.text ? shareData.text + '\n\n' : '') + shareData.url);
+      shareFacebook.href = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareData.url);
+      shareX.href = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(shareData.url) + '&text=' + encodeURIComponent(shareData.text || shareData.subject);
+      setShareStatus('', false);
+
+      shareModal.classList.add('open');
+      shareModal.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+      shareEmail.focus();
+    }
+
+    function closeShareModal() {
+      if (!shareModal.classList.contains('open')) return;
+      shareModal.classList.remove('open');
+      shareModal.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+      setShareStatus('', false);
+      if (activeShareTrigger) activeShareTrigger.focus();
+    }
+
+    async function copyShareUrl() {
+      if (!currentShareUrl) return false;
+
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(currentShareUrl);
+        return true;
+      }
+
+      const helper = document.createElement('textarea');
+      helper.value = currentShareUrl;
+      helper.setAttribute('readonly', '');
+      helper.style.position = 'absolute';
+      helper.style.left = '-9999px';
+      document.body.appendChild(helper);
+      helper.select();
+      const copied = document.execCommand('copy');
+      document.body.removeChild(helper);
+      return copied;
+    }
+
+    document.querySelectorAll('[data-gallery-share]').forEach(function (button) {
+      button.addEventListener('click', async function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const title = (button.dataset.shareTitle || '').trim();
+        const description = (button.dataset.shareDescription || '').trim();
+        const url = normalizeShareUrl(button.dataset.shareUrl || '');
+        if (!url) {
+          return;
+        }
+
+        const shareData = {
+          url: url,
+          title: title,
+          text: buildShareText(title, description),
+          subject: title ? 'Check out this gallery item: ' + title : 'Check out this gallery item!',
+        };
+
+        if (typeof navigator.share === 'function') {
+          try {
+            await navigator.share({
+              title: shareData.title || undefined,
+              text: shareData.text || undefined,
+              url: shareData.url,
+            });
+            return;
+          } catch (error) {
+            if (error && error.name === 'AbortError') return;
+          }
+        }
+
+        openShareModal(button, shareData);
+      });
+    });
+
+    shareCopy.addEventListener('click', async function () {
+      try {
+        const copied = await copyShareUrl();
+        if (!copied) throw new Error('Failed to copy URL to clipboard');
+        setShareStatus('Link copied to clipboard.', false);
+      } catch (error) {
+        shareItemUrl.focus();
+        shareItemUrl.select();
+        setShareStatus('Unable to copy the link automatically. Please copy it manually from the field above.', true);
+      }
+    });
+
+    shareItemUrl.addEventListener('focus', function () {
+      shareItemUrl.select();
+    });
+
+    shareModal.querySelectorAll('[data-gallery-share-close]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        closeShareModal();
+      });
+    });
+
+    shareModal.addEventListener('click', function (event) {
+      if (event.target === shareModal) {
+        closeShareModal();
+      }
+    });
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && shareModal.classList.contains('open')) {
+        event.preventDefault();
+        closeShareModal();
+      }
+    });
+  }
+
   // ── Modals ────────────────────────────────────────────────────────────────
   document.querySelectorAll('[data-modal-open]').forEach(function (trigger) {
     trigger.addEventListener('click', function () {
