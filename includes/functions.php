@@ -205,6 +205,392 @@ function deleteUploadedFile(string $path): void {
 }
 
 // ─── Gallery Helpers ──────────────────────────────────────────────────────────
+function normalizeLocalGalleryWatermarkImagePath(string $path): string {
+    $normalized = trim($path);
+    if ($normalized === '') {
+        return '';
+    }
+    if (preg_match('/[\x00-\x1F\x7F\\\\]/', $normalized) === 1 || str_contains($normalized, '..')) {
+        return '';
+    }
+    if (preg_match('#^/uploads/watermarks/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i', $normalized) !== 1) {
+        return '';
+    }
+
+    return $normalized;
+}
+
+function isManagedGalleryWatermarkImagePath(string $path): bool {
+    return normalizeLocalGalleryWatermarkImagePath($path) !== '';
+}
+
+function deleteManagedGalleryWatermarkImage(string $path): void {
+    $path = trim($path);
+    if (!isManagedGalleryWatermarkImagePath($path)) {
+        return;
+    }
+
+    $candidate = realpath(dirname(__DIR__) . '/' . ltrim($path, '/'));
+    $uploadsRoot = realpath(dirname(__DIR__) . '/uploads/watermarks');
+    if ($candidate === false || $uploadsRoot === false) {
+        return;
+    }
+
+    if ($candidate !== $uploadsRoot && str_starts_with($candidate, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+        deleteUploadedFile($candidate);
+    }
+}
+
+/**
+ * @param array<string, mixed> $settings
+ * @return array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * }
+ */
+function normalizeGalleryWatermarkSettings(array $settings): array {
+    return [
+        'enabled' => !empty($settings['enabled']),
+        'text' => trim(stringValue($settings['text'] ?? '')),
+        'image_path' => normalizeLocalGalleryWatermarkImagePath(stringValue($settings['image_path'] ?? '')),
+    ];
+}
+
+/**
+ * @return array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * }
+ */
+function getGalleryWatermarkSettings(): array {
+    $raw = trim(getSetting('gallery_watermark_settings', ''));
+    if ($raw === '') {
+        return normalizeGalleryWatermarkSettings([]);
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded)) {
+        return normalizeGalleryWatermarkSettings([]);
+    }
+
+    /** @var array<string, mixed> $decoded */
+    return normalizeGalleryWatermarkSettings($decoded);
+}
+
+/**
+ * @param array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * } $settings
+ */
+function saveGalleryWatermarkSettings(array $settings): void {
+    $json = json_encode(normalizeGalleryWatermarkSettings($settings), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    setSetting('gallery_watermark_settings', is_string($json) ? $json : '{}');
+}
+
+/**
+ * @param array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * } $settings
+ */
+function galleryWatermarkHasContent(array $settings): bool {
+    return $settings['text'] !== '' || $settings['image_path'] !== '';
+}
+
+function galleryWatermarkFontPath(): string {
+    static $fontPath = null;
+    if (is_string($fontPath)) {
+        return $fontPath;
+    }
+
+    $candidates = [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+    ];
+
+    foreach ($candidates as $candidate) {
+        if (is_readable($candidate)) {
+            $fontPath = $candidate;
+            return $fontPath;
+        }
+    }
+
+    $fontPath = '';
+    return $fontPath;
+}
+
+/**
+ * @param array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * }|null $settings
+ * @return array{success: bool, applied: bool, error?: string}
+ */
+function applyGalleryWatermark(string $imagePath, ?array $settings = null): array {
+    $settings = $settings !== null ? normalizeGalleryWatermarkSettings($settings) : getGalleryWatermarkSettings();
+    if (!$settings['enabled'] || !galleryWatermarkHasContent($settings)) {
+        return ['success' => true, 'applied' => false];
+    }
+
+    if (!is_file($imagePath)) {
+        return ['success' => false, 'applied' => false, 'error' => 'The uploaded image could not be found for watermarking.'];
+    }
+
+    if (class_exists('Imagick')) {
+        try {
+            return applyGalleryWatermarkWithImagick($imagePath, $settings);
+        } catch (Throwable $e) {
+            error_log('Gallery watermark Imagick processing failed: ' . $e->getMessage());
+        }
+    }
+
+    return applyGalleryWatermarkWithGd($imagePath, $settings);
+}
+
+/**
+ * @param array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * } $settings
+ * @return array{success: bool, applied: bool, error?: string}
+ */
+function applyGalleryWatermarkWithImagick(string $imagePath, array $settings): array {
+    $sequence = new Imagick($imagePath);
+    $sequence = $sequence->coalesceImages();
+    $watermarkSource = null;
+
+    if ($settings['image_path'] !== '') {
+        $watermarkSourcePath = dirname(__DIR__) . '/' . ltrim($settings['image_path'], '/');
+        if (is_file($watermarkSourcePath)) {
+            $watermarkSource = new Imagick($watermarkSourcePath);
+            if ($watermarkSource->getNumberImages() > 1) {
+                $watermarkSource->setIteratorIndex(0);
+            }
+        }
+    }
+
+    foreach ($sequence as $frame) {
+        $width = (int) $frame->getImageWidth();
+        $height = (int) $frame->getImageHeight();
+        $margin = max(12, (int) floor(min($width, $height) * 0.03));
+        $gap = max(8, (int) floor($margin / 2));
+        $baselineY = $height - $margin;
+        $rightX = $width - $margin;
+
+        if ($watermarkSource instanceof Imagick) {
+            $watermark = clone $watermarkSource;
+            $watermarkWidth = (int) $watermark->getImageWidth();
+            $watermarkHeight = (int) $watermark->getImageHeight();
+            $scaleRatio = min(
+                1,
+                ($width * 0.22) / max(1, $watermarkWidth),
+                ($height * 0.18) / max(1, $watermarkHeight)
+            );
+            $targetWidth = max(1, (int) round($watermarkWidth * $scaleRatio));
+            $targetHeight = max(1, (int) round($watermarkHeight * $scaleRatio));
+            $watermark->resizeImage($targetWidth, $targetHeight, Imagick::FILTER_LANCZOS, 1, true);
+            $watermark->evaluateImage(Imagick::EVALUATE_MULTIPLY, 0.45, Imagick::CHANNEL_ALPHA);
+            $frame->compositeImage($watermark, Imagick::COMPOSITE_OVER, $rightX - $targetWidth, $baselineY - $targetHeight);
+            $baselineY -= $targetHeight + $gap;
+            $watermark->clear();
+            $watermark->destroy();
+        }
+
+        if ($settings['text'] !== '') {
+            $draw = new ImagickDraw();
+            $draw->setGravity(Imagick::GRAVITY_NORTHWEST);
+            $draw->setFillColor(new ImagickPixel('rgba(255,255,255,0.35)'));
+            $fontPath = galleryWatermarkFontPath();
+            if ($fontPath !== '') {
+                $draw->setFont($fontPath);
+            }
+            $draw->setFontSize(max(14, min(42, (int) round($width * 0.035))));
+            $metrics = $frame->queryFontMetrics($draw, $settings['text']);
+            $textWidth = (int) ceil($metrics['textWidth']);
+            $textHeight = (int) ceil($metrics['textHeight']);
+            $textX = max($margin, $rightX - $textWidth);
+            $textY = max($margin + $textHeight, $baselineY);
+            $frame->annotateImage($draw, $textX, $textY, 0, $settings['text']);
+        }
+
+        $frame->setImagePage($width, $height, 0, 0);
+    }
+
+    $written = $sequence->writeImages($imagePath, true);
+    if (!$written) {
+        $sequence->clear();
+        $sequence->destroy();
+        if ($watermarkSource instanceof Imagick) {
+            $watermarkSource->clear();
+            $watermarkSource->destroy();
+        }
+        return ['success' => false, 'applied' => false, 'error' => 'Unable to save the watermarked image.'];
+    }
+
+    $sequence->clear();
+    $sequence->destroy();
+    if ($watermarkSource instanceof Imagick) {
+        $watermarkSource->clear();
+        $watermarkSource->destroy();
+    }
+
+    return ['success' => true, 'applied' => true];
+}
+
+/**
+ * @param array{
+ *   enabled: bool,
+ *   text: string,
+ *   image_path: string
+ * } $settings
+ * @return array{success: bool, applied: bool, error?: string}
+ */
+function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array {
+    if (!function_exists('getimagesize')) {
+        return ['success' => false, 'applied' => false, 'error' => 'Image watermarking is not available on this server.'];
+    }
+
+    $imageInfo = @getimagesize($imagePath);
+    if (!is_array($imageInfo)) {
+        return ['success' => false, 'applied' => false, 'error' => 'The uploaded file is not a supported image.'];
+    }
+
+    $mime = stringValue($imageInfo['mime']);
+    $image = match ($mime) {
+        'image/jpeg' => function_exists('imagecreatefromjpeg') ? @imagecreatefromjpeg($imagePath) : false,
+        'image/png' => function_exists('imagecreatefrompng') ? @imagecreatefrompng($imagePath) : false,
+        'image/gif' => function_exists('imagecreatefromgif') ? @imagecreatefromgif($imagePath) : false,
+        'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($imagePath) : false,
+        default => false,
+    };
+
+    if ($image === false) {
+        return ['success' => false, 'applied' => false, 'error' => 'The uploaded image format is not supported for watermarking.'];
+    }
+
+    imagealphablending($image, true);
+    imagesavealpha($image, true);
+
+    $width = (int) imagesx($image);
+    $height = (int) imagesy($image);
+    $margin = max(12, (int) floor(min($width, $height) * 0.03));
+    $gap = max(8, (int) floor($margin / 2));
+    $baselineY = $height - $margin;
+    $rightX = $width - $margin;
+
+    if ($settings['image_path'] !== '') {
+        $watermarkSourcePath = dirname(__DIR__) . '/' . ltrim($settings['image_path'], '/');
+        if (is_file($watermarkSourcePath)) {
+            $watermarkInfo = @getimagesize($watermarkSourcePath);
+            if (is_array($watermarkInfo)) {
+                $watermarkMime = stringValue($watermarkInfo['mime']);
+                $watermark = match ($watermarkMime) {
+                    'image/jpeg' => function_exists('imagecreatefromjpeg') ? @imagecreatefromjpeg($watermarkSourcePath) : false,
+                    'image/png' => function_exists('imagecreatefrompng') ? @imagecreatefrompng($watermarkSourcePath) : false,
+                    'image/gif' => function_exists('imagecreatefromgif') ? @imagecreatefromgif($watermarkSourcePath) : false,
+                    'image/webp' => function_exists('imagecreatefromwebp') ? @imagecreatefromwebp($watermarkSourcePath) : false,
+                    default => false,
+                };
+                if ($watermark !== false) {
+                    imagealphablending($watermark, true);
+                    imagesavealpha($watermark, true);
+                    $watermarkWidth = (int) imagesx($watermark);
+                    $watermarkHeight = (int) imagesy($watermark);
+                    $scaleRatio = min(
+                        1,
+                        ($width * 0.22) / max(1, $watermarkWidth),
+                        ($height * 0.18) / max(1, $watermarkHeight)
+                    );
+                    $targetWidth = max(1, (int) round($watermarkWidth * $scaleRatio));
+                    $targetHeight = max(1, (int) round($watermarkHeight * $scaleRatio));
+                    $overlay = imagecreatetruecolor($targetWidth, $targetHeight);
+                    if ($overlay !== false) {
+                        imagealphablending($overlay, false);
+                        imagesavealpha($overlay, true);
+                        $transparent = imagecolorallocatealpha($overlay, 0, 0, 0, 127);
+                        if ($transparent === false) {
+                            $transparent = 0;
+                        }
+                        imagefill($overlay, 0, 0, $transparent);
+                        imagecopyresampled($overlay, $watermark, 0, 0, 0, 0, $targetWidth, $targetHeight, $watermarkWidth, $watermarkHeight);
+                        imagefilter($overlay, IMG_FILTER_COLORIZE, 0, 0, 0, 70);
+                        imagealphablending($image, true);
+                        imagecopy($image, $overlay, $rightX - $targetWidth, $baselineY - $targetHeight, 0, 0, $targetWidth, $targetHeight);
+                        $baselineY -= $targetHeight + $gap;
+                        imagedestroy($overlay);
+                    }
+                    imagedestroy($watermark);
+                }
+            }
+        }
+    }
+
+    if ($settings['text'] !== '') {
+        $fontPath = galleryWatermarkFontPath();
+        if ($fontPath !== '' && function_exists('imagettftext') && function_exists('imagettfbbox')) {
+            $fontSize = max(14, min(42, (int) round($width * 0.035)));
+            $bbox = imagettfbbox($fontSize, 0, $fontPath, $settings['text']);
+            if (is_array($bbox)) {
+                $textWidth = (int) abs(($bbox[4] ?? 0) - ($bbox[0] ?? 0));
+                $textHeight = (int) abs(($bbox[5] ?? 0) - ($bbox[1] ?? 0));
+                $textX = max($margin, $rightX - $textWidth);
+                $textY = max($margin + $textHeight, $baselineY);
+                $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, 90);
+                if ($shadowColor === false) {
+                    $shadowColor = 0;
+                }
+                $textColor = imagecolorallocatealpha($image, 255, 255, 255, 85);
+                if ($textColor === false) {
+                    $textColor = 0;
+                }
+                imagettftext($image, $fontSize, 0, $textX + 2, $textY + 2, $shadowColor, $fontPath, $settings['text']);
+                imagettftext($image, $fontSize, 0, $textX, $textY, $textColor, $fontPath, $settings['text']);
+            }
+        } else {
+            $font = 5;
+            $textWidth = imagefontwidth($font) * strlen($settings['text']);
+            $textHeight = imagefontheight($font);
+            $textX = max($margin, $rightX - $textWidth);
+            $textY = max($margin, $baselineY - $textHeight);
+            $shadowColor = imagecolorallocatealpha($image, 0, 0, 0, 90);
+            if ($shadowColor === false) {
+                $shadowColor = 0;
+            }
+            $textColor = imagecolorallocatealpha($image, 255, 255, 255, 85);
+            if ($textColor === false) {
+                $textColor = 0;
+            }
+            imagestring($image, $font, $textX + 1, $textY + 1, $settings['text'], $shadowColor);
+            imagestring($image, $font, $textX, $textY, $settings['text'], $textColor);
+        }
+    }
+
+    $written = match ($mime) {
+        'image/jpeg' => function_exists('imagejpeg') ? imagejpeg($image, $imagePath, 90) : false,
+        'image/png' => function_exists('imagepng') ? imagepng($image, $imagePath, 6) : false,
+        'image/gif' => function_exists('imagegif') ? imagegif($image, $imagePath) : false,
+        'image/webp' => function_exists('imagewebp') ? imagewebp($image, $imagePath, 90) : false,
+        default => false,
+    };
+
+    imagedestroy($image);
+
+    if (!$written) {
+        return ['success' => false, 'applied' => false, 'error' => 'Unable to save the watermarked image.'];
+    }
+
+    return ['success' => true, 'applied' => true];
+}
+
 /**
  * @return list<array<string, mixed>>
  */

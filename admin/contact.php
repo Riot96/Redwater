@@ -71,6 +71,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         foreach ($fields as $field) {
             setSetting($field, trim(postString($field)));
         }
+
+        $galleryWatermarkSettings = getGalleryWatermarkSettings();
+        $currentWatermarkImagePath = $galleryWatermarkSettings['image_path'];
+        $newWatermarkImagePath = '';
+        $watermarkImage = uploadedFile('gallery_watermark_image');
+        $hasWatermarkUpload = hasUploadedFile($watermarkImage);
+
+        if ($hasWatermarkUpload) {
+            assert($watermarkImage !== null);
+            $upload = handleFileUpload(
+                $watermarkImage,
+                __DIR__ . '/../uploads/watermarks',
+                defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp']
+            );
+            if (!$upload['success']) {
+                flashMessage('error', 'Watermark image upload failed: ' . $upload['error']);
+                redirect('/admin/contact.php');
+            }
+            $newWatermarkImagePath = '/uploads/watermarks/' . $upload['filename'];
+        }
+
+        $removeWatermarkImage = postString('gallery_watermark_remove_image') === '1';
+        $finalWatermarkImagePath = $currentWatermarkImagePath;
+        if ($newWatermarkImagePath !== '') {
+            $finalWatermarkImagePath = $newWatermarkImagePath;
+        } elseif ($removeWatermarkImage) {
+            $finalWatermarkImagePath = '';
+        }
+
+        $galleryWatermarkSettings = normalizeGalleryWatermarkSettings([
+            'enabled' => postBool('gallery_watermark_enabled'),
+            'text' => trim(postString('gallery_watermark_text')),
+            'image_path' => $finalWatermarkImagePath,
+        ]);
+
+        if ($galleryWatermarkSettings['enabled'] && !galleryWatermarkHasContent($galleryWatermarkSettings)) {
+            if ($newWatermarkImagePath !== '') {
+                deleteManagedGalleryWatermarkImage($newWatermarkImagePath);
+            }
+            flashMessage('error', 'Enable gallery watermarking only after adding watermark text, a watermark image, or both.');
+            redirect('/admin/contact.php');
+        }
+
+        if ($currentWatermarkImagePath !== '' && $currentWatermarkImagePath !== $finalWatermarkImagePath) {
+            deleteManagedGalleryWatermarkImage($currentWatermarkImagePath);
+        }
+
+        saveGalleryWatermarkSettings($galleryWatermarkSettings);
         flashMessage('success', 'Settings saved successfully.');
         redirect('/admin/contact.php');
     }
@@ -266,6 +314,7 @@ $messagesStmt = $db->query('SELECT * FROM contact_submissions ORDER BY created_a
 assert($messagesStmt instanceof PDOStatement);
 /** @var list<array<string, mixed>> $messages */
 $messages = array_values($messagesStmt->fetchAll());
+$galleryWatermarkSettings = getGalleryWatermarkSettings();
 
 $pageTitle = 'Contact Settings';
 include __DIR__ . '/../includes/header.php';
@@ -286,7 +335,7 @@ include __DIR__ . '/../includes/header.php';
     <div class="card mb-3">
       <div class="card-body">
         <h3 style="font-size:1rem;margin-bottom:1.5rem;">Site Settings</h3>
-        <form method="POST" action="/admin/contact.php">
+        <form method="POST" action="/admin/contact.php" enctype="multipart/form-data">
           <?= csrfField() ?>
           <input type="hidden" name="action" value="save_settings">
 
@@ -364,6 +413,37 @@ include __DIR__ . '/../includes/header.php';
             <label class="form-label">Pinterest URL</label>
             <input type="url" name="social_pinterest" class="form-control" value="<?= e(getSetting('social_pinterest')) ?>">
           </div>
+
+          <div class="divider"></div>
+          <h4 style="margin-bottom:1rem;font-size:0.95rem;">Gallery Watermarking</h4>
+          <div class="form-group">
+            <label class="form-check">
+              <input type="checkbox" name="gallery_watermark_enabled" value="1" <?= $galleryWatermarkSettings['enabled'] ? 'checked' : '' ?>>
+              Automatically watermark uploaded gallery photos
+            </label>
+            <div class="form-hint">Watermarks are applied server-side to new member and admin photo uploads before they are saved in the gallery.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Watermark Text</label>
+            <input type="text" name="gallery_watermark_text" class="form-control" value="<?= e($galleryWatermarkSettings['text']) ?>" placeholder="RedWater Entertainment">
+            <div class="form-hint">Optional. Text is rendered semi-transparently near the bottom-right corner.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Watermark Image</label>
+            <input type="file" name="gallery_watermark_image" class="form-control" accept="image/*">
+            <div class="form-hint">Optional. Upload a PNG, JPG, GIF, or WebP logo to place above the text watermark.</div>
+          </div>
+          <?php if ($galleryWatermarkSettings['image_path'] !== ''): ?>
+            <div class="form-group">
+              <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+                <img src="<?= e($galleryWatermarkSettings['image_path']) ?>" alt="Current gallery watermark" style="max-width:220px;max-height:80px;border:1px solid var(--border);border-radius:8px;padding:0.5rem;background:rgba(255,255,255,0.04);">
+                <label class="form-check" style="margin:0;">
+                  <input type="checkbox" name="gallery_watermark_remove_image" value="1">
+                  Remove current watermark image
+                </label>
+              </div>
+            </div>
+          <?php endif; ?>
 
           <button type="submit" class="btn btn-primary">Save Settings</button>
         </form>
