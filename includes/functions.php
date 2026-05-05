@@ -354,6 +354,7 @@ function galleryWatermarkSourcePath(string $configuredPath): string {
 }
 
 function isAnimatedGifFile(string $path): bool {
+    $chunkSize = 1024 * 100;
     $stream = @fopen($path, 'rb');
     if (!is_resource($stream)) {
         return false;
@@ -361,10 +362,11 @@ function isAnimatedGifFile(string $path): bool {
 
     $frames = 0;
     while (!feof($stream) && $frames < 2) {
-        $chunk = fread($stream, 1024 * 100);
+        $chunk = fread($stream, $chunkSize);
         if ($chunk === false || $chunk === '') {
             break;
         }
+        // Match a GIF Graphics Control Extension followed by an image or extension block.
         $matches = preg_match_all('#\x00\x21\xF9\x04.{4}\x00[\x2C\x21]#s', $chunk, $unusedMatches);
         if (is_int($matches)) {
             $frames += $matches;
@@ -576,7 +578,7 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings, string 
 
     $mime = stringValue($imageInfo['mime']);
     if (isAnimatedGalleryImageFile($imagePath, $mime)) {
-        return ['success' => false, 'applied' => false, 'error' => 'Animated GIF and WebP uploads require Imagick to preserve animation during watermarking.'];
+        return ['success' => false, 'applied' => false, 'error' => 'Animated GIF and WebP files cannot be watermarked on this server. Please contact your administrator or upload a static image.'];
     }
 
     $image = match ($mime) {
