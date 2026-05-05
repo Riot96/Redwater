@@ -344,6 +344,86 @@ function galleryWatermarkShadowAlpha(int $alpha): int {
     return max(0, min(127, $alpha + $offset));
 }
 
+function galleryWatermarkSourcePath(string $configuredPath): string {
+    $normalizedPath = normalizeLocalGalleryWatermarkImagePath($configuredPath);
+    if ($normalizedPath === '') {
+        return '';
+    }
+
+    return dirname(__DIR__) . '/' . ltrim($normalizedPath, '/');
+}
+
+function isAnimatedGifFile(string $path): bool {
+    $stream = @fopen($path, 'rb');
+    if (!is_resource($stream)) {
+        return false;
+    }
+
+    $frames = 0;
+    while (!feof($stream) && $frames < 2) {
+        $chunk = fread($stream, 1024 * 100);
+        if ($chunk === false || $chunk === '') {
+            break;
+        }
+        $matches = preg_match_all('#\x00\x21\xF9\x04.{4}\x00[\x2C\x21]#s', $chunk, $unusedMatches);
+        if (is_int($matches)) {
+            $frames += $matches;
+        }
+    }
+
+    fclose($stream);
+    return $frames > 1;
+}
+
+function isAnimatedWebpFile(string $path): bool {
+    $stream = @fopen($path, 'rb');
+    if (!is_resource($stream)) {
+        return false;
+    }
+
+    $header = fread($stream, 12);
+    if (!is_string($header) || strlen($header) < 12 || substr($header, 0, 4) !== 'RIFF' || substr($header, 8, 4) !== 'WEBP') {
+        fclose($stream);
+        return false;
+    }
+
+    while (!feof($stream)) {
+        $chunkHeader = fread($stream, 8);
+        if (!is_string($chunkHeader) || strlen($chunkHeader) < 8) {
+            break;
+        }
+
+        $chunkType = substr($chunkHeader, 0, 4);
+        $chunkSizeData = unpack('Vsize', substr($chunkHeader, 4, 4));
+        $chunkSize = is_array($chunkSizeData) ? (int) ($chunkSizeData['size'] ?? 0) : 0;
+
+        if ($chunkType === 'ANIM' || $chunkType === 'ANMF') {
+            fclose($stream);
+            return true;
+        }
+
+        if ($chunkSize < 0) {
+            break;
+        }
+
+        $seekBytes = $chunkSize + ($chunkSize % 2);
+        if (fseek($stream, $seekBytes, SEEK_CUR) !== 0) {
+            break;
+        }
+    }
+
+    fclose($stream);
+    return false;
+}
+
+function isAnimatedGalleryImageFile(string $path, string $mime): bool {
+    return match ($mime) {
+        'image/gif' => isAnimatedGifFile($path),
+        'image/webp' => isAnimatedWebpFile($path),
+        default => false,
+    };
+}
+
 /**
  * @param array{
  *   enabled: bool,
@@ -362,15 +442,20 @@ function applyGalleryWatermark(string $imagePath, ?array $settings = null): arra
         return ['success' => false, 'applied' => false, 'error' => 'The uploaded image could not be found for watermarking.'];
     }
 
+    $watermarkSourcePath = galleryWatermarkSourcePath($settings['image_path']);
+    if ($settings['image_path'] !== '' && !is_file($watermarkSourcePath) && $settings['text'] === '') {
+        return ['success' => false, 'applied' => false, 'error' => 'The configured watermark image is missing. Please update your watermark settings and try again.'];
+    }
+
     if (class_exists('Imagick')) {
         try {
-            return applyGalleryWatermarkWithImagick($imagePath, $settings);
+            return applyGalleryWatermarkWithImagick($imagePath, $settings, $watermarkSourcePath);
         } catch (Throwable $e) {
             error_log('Gallery watermark Imagick processing failed: ' . $e->getMessage());
         }
     }
 
-    return applyGalleryWatermarkWithGd($imagePath, $settings);
+    return applyGalleryWatermarkWithGd($imagePath, $settings, $watermarkSourcePath);
 }
 
 /**
@@ -381,20 +466,23 @@ function applyGalleryWatermark(string $imagePath, ?array $settings = null): arra
  * } $settings
  * @return array{success: bool, applied: bool, error?: string}
  */
-function applyGalleryWatermarkWithImagick(string $imagePath, array $settings): array {
+function applyGalleryWatermarkWithImagick(string $imagePath, array $settings, string $watermarkSourcePath = ''): array {
     $sequence = new Imagick($imagePath);
     $sequence = $sequence->coalesceImages();
     $watermarkSource = null;
     $imageOpacity = defined('GALLERY_WATERMARK_IMAGE_OPACITY') ? (float) GALLERY_WATERMARK_IMAGE_OPACITY : 0.45;
     $textOpacity = defined('GALLERY_WATERMARK_TEXT_OPACITY') ? (float) GALLERY_WATERMARK_TEXT_OPACITY : 0.35;
 
-    if ($settings['image_path'] !== '') {
-        $watermarkSourcePath = dirname(__DIR__) . '/' . ltrim($settings['image_path'], '/');
+    if ($watermarkSourcePath !== '') {
         if (is_file($watermarkSourcePath)) {
             $watermarkSource = new Imagick($watermarkSourcePath);
             if ($watermarkSource->getNumberImages() > 1) {
                 $watermarkSource->setIteratorIndex(0);
             }
+        } elseif ($settings['text'] === '') {
+            $sequence->clear();
+            $sequence->destroy();
+            return ['success' => false, 'applied' => false, 'error' => 'The configured watermark image is missing. Please update your watermark settings and try again.'];
         }
     }
 
@@ -474,7 +562,7 @@ function applyGalleryWatermarkWithImagick(string $imagePath, array $settings): a
  * } $settings
  * @return array{success: bool, applied: bool, error?: string}
  */
-function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array {
+function applyGalleryWatermarkWithGd(string $imagePath, array $settings, string $watermarkSourcePath = ''): array {
     if (!function_exists('getimagesize')) {
         return ['success' => false, 'applied' => false, 'error' => 'Image watermarking is not available on this server.'];
     }
@@ -487,6 +575,10 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
     }
 
     $mime = stringValue($imageInfo['mime']);
+    if (isAnimatedGalleryImageFile($imagePath, $mime)) {
+        return ['success' => false, 'applied' => false, 'error' => 'Animated GIF and WebP uploads require Imagick to preserve animation during watermarking.'];
+    }
+
     $image = match ($mime) {
         'image/jpeg' => function_exists('imagecreatefromjpeg') ? @imagecreatefromjpeg($imagePath) : false,
         'image/png' => function_exists('imagecreatefrompng') ? @imagecreatefrompng($imagePath) : false,
@@ -509,8 +601,7 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
     $baselineY = $height - $margin;
     $rightX = $width - $margin;
 
-    if ($settings['image_path'] !== '') {
-        $watermarkSourcePath = dirname(__DIR__) . '/' . ltrim($settings['image_path'], '/');
+    if ($watermarkSourcePath !== '') {
         if (is_file($watermarkSourcePath)) {
             $watermarkInfo = @getimagesize($watermarkSourcePath);
             if (is_array($watermarkInfo)) {
@@ -552,7 +643,13 @@ function applyGalleryWatermarkWithGd(string $imagePath, array $settings): array 
                     }
                     imagedestroy($watermark);
                 }
+            } elseif ($settings['text'] === '') {
+                imagedestroy($image);
+                return ['success' => false, 'applied' => false, 'error' => 'The configured watermark image could not be loaded. Please update your watermark settings and try again.'];
             }
+        } elseif ($settings['text'] === '') {
+            imagedestroy($image);
+            return ['success' => false, 'applied' => false, 'error' => 'The configured watermark image is missing. Please update your watermark settings and try again.'];
         }
     }
 

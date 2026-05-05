@@ -68,8 +68,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    'social_facebook', 'social_instagram', 'social_tiktok', 'social_youtube', 'social_pinterest',
                    'site_name', 'site_tagline',
                    'home_hero_heading', 'home_hero_subheading', 'home_about_text'];
+        $settingValues = [];
         foreach ($fields as $field) {
-            setSetting($field, trim(postString($field)));
+            $settingValues[$field] = trim(postString($field));
         }
 
         $galleryWatermarkSettings = getGalleryWatermarkSettings();
@@ -77,6 +78,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newWatermarkImagePath = '';
         $watermarkImage = uploadedFile('gallery_watermark_image');
         $hasWatermarkUpload = hasUploadedFile($watermarkImage);
+        $removeWatermarkImage = postString('gallery_watermark_remove_image') === '1';
+        $willHaveWatermarkImage = $hasWatermarkUpload || ($currentWatermarkImagePath !== '' && !$removeWatermarkImage);
+        $watermarkText = trim(postString('gallery_watermark_text'));
+        $watermarkEnabled = postBool('gallery_watermark_enabled');
+
+        if ($watermarkEnabled && $watermarkText === '' && !$willHaveWatermarkImage) {
+            flashMessage('error', 'Please add watermark text, a watermark image, or both before enabling gallery watermarking.');
+            redirect('/admin/contact.php');
+        }
 
         if ($hasWatermarkUpload) {
             assert($watermarkImage !== null);
@@ -92,7 +102,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $newWatermarkImagePath = '/uploads/watermarks/' . $upload['filename'];
         }
 
-        $removeWatermarkImage = postString('gallery_watermark_remove_image') === '1';
         $finalWatermarkImagePath = $currentWatermarkImagePath;
         if ($newWatermarkImagePath !== '') {
             $finalWatermarkImagePath = $newWatermarkImagePath;
@@ -101,24 +110,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $galleryWatermarkSettings = normalizeGalleryWatermarkSettings([
-            'enabled' => postBool('gallery_watermark_enabled'),
-            'text' => trim(postString('gallery_watermark_text')),
+            'enabled' => $watermarkEnabled,
+            'text' => $watermarkText,
             'image_path' => $finalWatermarkImagePath,
         ]);
 
-        if ($galleryWatermarkSettings['enabled'] && !galleryWatermarkHasContent($galleryWatermarkSettings)) {
+        try {
+            $db->beginTransaction();
+            foreach ($settingValues as $field => $value) {
+                setSetting($field, $value);
+            }
+            saveGalleryWatermarkSettings($galleryWatermarkSettings);
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
             if ($newWatermarkImagePath !== '') {
                 deleteManagedGalleryWatermarkImage($newWatermarkImagePath);
             }
-            flashMessage('error', 'Please add watermark text, a watermark image, or both before enabling gallery watermarking.');
+            error_log('Failed to save site settings: ' . $e->getMessage());
+            flashMessage('error', 'Unable to save settings right now. Please try again.');
             redirect('/admin/contact.php');
         }
 
         if ($currentWatermarkImagePath !== '' && $currentWatermarkImagePath !== $finalWatermarkImagePath) {
             deleteManagedGalleryWatermarkImage($currentWatermarkImagePath);
         }
-
-        saveGalleryWatermarkSettings($galleryWatermarkSettings);
         flashMessage('success', 'Settings saved successfully.');
         redirect('/admin/contact.php');
     }
