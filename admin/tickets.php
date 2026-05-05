@@ -48,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $imageUpload = uploadedFileAtIndex('manual_event_photo_upload', $i);
         $hasUpload = hasUploadedFile($imageUpload);
         $finalPhotoPath = $existingPhotoPath;
+        $eventUploadError = '';
 
         if ($imageUpload !== null && $hasUpload) {
             $upload = handleFileUpload(
@@ -56,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ALLOWED_IMAGE_TYPES
             );
             if (!$upload['success']) {
-                $manualEventErrors[] = 'Manual event #' . ($i + 1) . ' image upload failed: ' . $upload['error'];
+                $eventUploadError = $upload['error'];
             } else {
                 $finalPhotoPath = '/uploads/tickets/' . $upload['filename'];
                 $uploadedTicketImages[] = $finalPhotoPath;
@@ -94,6 +95,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $eventNumber = count($manualEventFormState);
         $normalizedEvent = normalizeTicketManualEvent($rawEvent);
         $hasErrors = false;
+
+        if ($eventUploadError !== '') {
+            $manualEventErrors[] = 'Manual event #' . $eventNumber . ' image upload failed: ' . $eventUploadError;
+            $hasErrors = true;
+        }
 
         if ($rawEvent['name'] === '') {
             $manualEventErrors[] = 'Manual event #' . $eventNumber . ' needs a name.';
