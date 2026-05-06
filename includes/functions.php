@@ -1508,7 +1508,7 @@ function sendMailUsingSmtp(string $toEmail, string $subject, string $body, array
         }
 
         if (($smtpUsername === '') !== ($smtpPassword === '')) {
-            error_log('SMTP authentication failed: username or password missing.');
+            error_log('SMTP configuration error: both username and password must be provided together or both must be empty.');
             return false;
         }
 
