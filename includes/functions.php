@@ -363,7 +363,9 @@ function validateTurnstileSubmissionResult(string $action): array {
         }
 
         if ($wasSuccessful) {
-            error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $verifiedAction . '". IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
+            $safeVerifiedAction = preg_replace('/[^\P{C}\t]/u', '', $verifiedAction);
+            $safeVerifiedAction = is_string($safeVerifiedAction) ? substr($safeVerifiedAction, 0, 120) : '';
+            error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $safeVerifiedAction . '". IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
             return [
                 'success' => false,
                 'reason' => 'invalid',
