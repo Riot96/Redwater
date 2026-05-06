@@ -23,11 +23,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($password !== $password2) {
         $error = 'Passwords do not match.';
     } else {
-        $result = resetPassword($token, $password);
-        if ($result['success']) {
-            $done = true;
-        } else {
-            $error = $result['error'];
+        $error = validateTurnstileSubmission('reset_password');
+        if ($error === '') {
+            $result = resetPassword($token, $password);
+            if ($result['success']) {
+                $done = true;
+            } else {
+                $error = $result['error'];
+            }
         }
     }
     // Re-validate for display
@@ -77,6 +80,7 @@ include __DIR__ . '/includes/header.php';
             <input type="password" id="password2" name="password2" class="form-control"
                    autocomplete="new-password" required minlength="8">
           </div>
+          <?= renderTurnstileWidget('reset_password') ?>
           <button type="submit" class="btn btn-primary w-full">Reset Password</button>
         </form>
       <?php endif; ?>

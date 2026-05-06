@@ -57,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $entryError = 'Please enter a valid email address or leave the field blank.';
         }
+    } else {
+        $entryError = validateTurnstileSubmission('raffle_entry');
     }
 
     if ($entryError === '') {
@@ -171,14 +173,15 @@ include __DIR__ . '/includes/header.php';
                     <div class="form-hint"><?= $emailRequired ? 'A valid email address is required to enter this raffle.' : 'Optional, but helpful if you need to contact the winner directly.' ?></div>
                   </div>
                 <?php endif; ?>
-                <label class="raffle-checkbox">
-                  <input type="checkbox" name="newsletter_opt_in" value="1" <?= $entryValues['newsletter_opt_in'] ? 'checked' : '' ?>>
-                  <span><?= e($raffleSettings['opt_in_label']) ?></span>
-                </label>
-                <div class="mt-2">
-                  <button type="submit" class="btn btn-primary">Submit Entry</button>
-                </div>
-              </form>
+                 <label class="raffle-checkbox">
+                   <input type="checkbox" name="newsletter_opt_in" value="1" <?= $entryValues['newsletter_opt_in'] ? 'checked' : '' ?>>
+                   <span><?= e($raffleSettings['opt_in_label']) ?></span>
+                 </label>
+                 <?= renderTurnstileWidget('raffle_entry') ?>
+                 <div class="mt-2">
+                   <button type="submit" class="btn btn-primary">Submit Entry</button>
+                 </div>
+               </form>
             <?php endif; ?>
           </div>
         </div>

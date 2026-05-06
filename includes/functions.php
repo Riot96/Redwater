@@ -191,6 +191,144 @@ function renderFlashMessages(): string {
     return $html;
 }
 
+/**
+ * @return array{
+ *   enabled: bool,
+ *   site_key: string,
+ *   secret_key: string,
+ *   configured: bool
+ * }
+ */
+function getTurnstileSettings(): array {
+    $siteKey = trim(getSetting('turnstile_site_key'));
+    $secretKey = trim(getSetting('turnstile_secret_key'));
+
+    return [
+        'enabled' => getSetting('turnstile_enabled', '0') === '1',
+        'site_key' => $siteKey,
+        'secret_key' => $secretKey,
+        'configured' => $siteKey !== '' && $secretKey !== '',
+    ];
+}
+
+function renderTurnstileWidget(string $action): string {
+    $settings = getTurnstileSettings();
+    if (!$settings['enabled']) {
+        return '';
+    }
+
+    if ($settings['site_key'] === '') {
+        return '<div class="alert alert-warning">Human verification is temporarily unavailable right now. Please try again later.</div>';
+    }
+
+    static $scriptIncluded = false;
+
+    $html = '';
+    if (!$scriptIncluded) {
+        $html .= '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+        $scriptIncluded = true;
+    }
+
+    $html .= '<div class="form-group">';
+    $html .= '<div class="cf-turnstile" data-sitekey="' . e($settings['site_key']) . '" data-action="' . e($action) . '" data-theme="auto"></div>';
+    $html .= '<div class="form-hint">Please complete the security check before submitting.</div>';
+    $html .= '</div>';
+
+    return $html;
+}
+
+/**
+ * @param mixed $decoded
+ * @return list<string>
+ */
+function turnstileErrorCodes(mixed $decoded): array {
+    if (!is_array($decoded) || !isset($decoded['error-codes']) || !is_array($decoded['error-codes'])) {
+        return [];
+    }
+
+    $codes = [];
+    foreach ($decoded['error-codes'] as $code) {
+        if (is_string($code) && $code !== '') {
+            $codes[] = $code;
+        }
+    }
+
+    return $codes;
+}
+
+/**
+ * @param list<string> $errorCodes
+ */
+function turnstileVerificationMessage(array $errorCodes): string {
+    if (in_array('missing-input-response', $errorCodes, true)) {
+        return 'Please complete the security check before submitting the form.';
+    }
+
+    if (in_array('timeout-or-duplicate', $errorCodes, true)) {
+        return 'The security check expired. Please complete it again and resubmit the form.';
+    }
+
+    if (in_array('invalid-input-response', $errorCodes, true)) {
+        return 'The security check response was invalid. Please try again.';
+    }
+
+    return 'We could not verify the security check. Please try again.';
+}
+
+function validateTurnstileSubmission(string $action): string {
+    $settings = getTurnstileSettings();
+    if (!$settings['enabled']) {
+        return '';
+    }
+
+    if (!$settings['configured']) {
+        return 'Human verification is temporarily unavailable right now. Please try again later.';
+    }
+
+    $token = trim(postString('cf-turnstile-response'));
+    if ($token === '') {
+        return 'Please complete the security check before submitting the form.';
+    }
+
+    $payload = [
+        'secret' => $settings['secret_key'],
+        'response' => $token,
+    ];
+    $remoteIp = trim(serverString('REMOTE_ADDR'));
+    if ($remoteIp !== '') {
+        $payload['remoteip'] = $remoteIp;
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
+            'content' => http_build_query($payload),
+            'timeout' => 10,
+        ],
+    ]);
+
+    $response = @file_get_contents('https://challenges.cloudflare.com/turnstile/v0/siteverify', false, $context);
+    if ($response === false) {
+        error_log('Cloudflare Turnstile verification request failed for action "' . $action . '".');
+        return 'We could not verify the security check. Please try again.';
+    }
+
+    $decoded = json_decode($response, true);
+    if (is_array($decoded) && !empty($decoded['success'])) {
+        return '';
+    }
+
+    $errorCodes = turnstileErrorCodes($decoded);
+    if ($errorCodes !== []) {
+        error_log('Cloudflare Turnstile rejected action "' . $action . '" with codes: ' . implode(', ', $errorCodes));
+    } else {
+        error_log('Cloudflare Turnstile returned an unexpected response for action "' . $action . '".');
+    }
+
+    return turnstileVerificationMessage($errorCodes);
+}
+
 // ─── File Upload Helpers ───────────────────────────────────────────────────────
 /**
  * @param array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int} $file

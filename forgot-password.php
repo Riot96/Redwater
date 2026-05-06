@@ -18,12 +18,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
-        $token = generatePasswordResetToken($email);
-        if ($token) {
-            sendPasswordResetEmail($email, $token);
+        $error = validateTurnstileSubmission('forgot_password');
+        if ($error === '') {
+            $token = generatePasswordResetToken($email);
+            if ($token) {
+                sendPasswordResetEmail($email, $token);
+            }
+            // Always show success to prevent email enumeration
+            $sent = true;
         }
-        // Always show success to prevent email enumeration
-        $sent = true;
     }
 }
 
@@ -58,6 +61,7 @@ include __DIR__ . '/includes/header.php';
             <input type="email" id="email" name="email" class="form-control"
                    value="<?= e(postString('email')) ?>" autocomplete="email" required autofocus>
           </div>
+          <?= renderTurnstileWidget('forgot_password') ?>
           <button type="submit" class="btn btn-primary w-full">Send Reset Link</button>
         </form>
         <div class="auth-footer">
