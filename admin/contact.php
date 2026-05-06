@@ -74,6 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $galleryWatermarkSettings = getGalleryWatermarkSettings();
+        $turnstileEnabled = postBool('turnstile_enabled');
+        $turnstileSiteKey = trim(postString('turnstile_site_key'));
+        $turnstileSecretKey = trim(postString('turnstile_secret_key'));
         $currentWatermarkImagePath = $galleryWatermarkSettings['image_path'];
         $newWatermarkImagePath = '';
         $watermarkImage = uploadedFile('gallery_watermark_image');
@@ -85,6 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($watermarkEnabled && $watermarkText === '' && !$willHaveWatermarkImage) {
             flashMessage('error', 'Please add watermark text, a watermark image, or both before enabling gallery watermarking.');
+            redirect('/admin/contact.php');
+        }
+
+        if ($turnstileEnabled && ($turnstileSiteKey === '' || $turnstileSecretKey === '')) {
+            flashMessage('error', 'Enter both the Cloudflare Turnstile site key and secret key before enabling Turnstile protection.');
             redirect('/admin/contact.php');
         }
 
@@ -120,6 +128,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($settingValues as $field => $value) {
                 setSetting($field, $value);
             }
+            setSetting('turnstile_enabled', $turnstileEnabled ? '1' : '0');
+            setSetting('turnstile_site_key', $turnstileSiteKey);
+            setSetting('turnstile_secret_key', $turnstileSecretKey);
             saveGalleryWatermarkSettings($galleryWatermarkSettings);
             $db->commit();
         } catch (Throwable $e) {
@@ -333,6 +344,7 @@ assert($messagesStmt instanceof PDOStatement);
 /** @var list<array<string, mixed>> $messages */
 $messages = array_values($messagesStmt->fetchAll());
 $galleryWatermarkSettings = getGalleryWatermarkSettings();
+$turnstileSettings = getTurnstileSettings();
 
 $pageTitle = 'Contact Settings';
 include __DIR__ . '/../includes/header.php';
@@ -431,6 +443,29 @@ include __DIR__ . '/../includes/header.php';
             <label class="form-label">Pinterest URL</label>
             <input type="url" name="social_pinterest" class="form-control" value="<?= e(getSetting('social_pinterest')) ?>">
           </div>
+
+          <div class="divider"></div>
+          <h4 style="margin-bottom:1rem;font-size:0.95rem;">Cloudflare Turnstile</h4>
+          <div class="form-group">
+            <label class="form-check">
+              <input type="checkbox" name="turnstile_enabled" value="1" <?= $turnstileSettings['enabled'] ? 'checked' : '' ?>>
+              Enable Turnstile protection on public-facing submission forms
+            </label>
+            <div class="form-hint">When enabled, public forms such as contact, raffle, login, password reset, and checkout prompts must pass a Cloudflare Turnstile challenge before the server accepts the submission.</div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Turnstile Site Key</label>
+              <input type="text" name="turnstile_site_key" class="form-control" value="<?= e($turnstileSettings['site_key']) ?>" autocomplete="off" placeholder="0x4AAAA...">
+              <div class="form-hint">Copy this from Cloudflare Turnstile widget settings. It is safe to expose in public forms.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Turnstile Secret Key</label>
+              <input type="password" name="turnstile_secret_key" class="form-control" value="<?= e($turnstileSettings['secret_key']) ?>" autocomplete="new-password" placeholder="0x4AAAA...">
+              <div class="form-hint">Keep this secret. The backend uses it to verify Turnstile responses with Cloudflare.</div>
+            </div>
+          </div>
+          <div class="form-hint">Get keys from <a href="https://developers.cloudflare.com/turnstile/" target="_blank" rel="noopener">Cloudflare Turnstile</a>, then save them here before enabling the protection toggle.</div>
 
           <div class="divider"></div>
           <h4 style="margin-bottom:1rem;font-size:0.95rem;">Gallery Watermarking</h4>

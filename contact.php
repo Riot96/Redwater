@@ -139,6 +139,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             if ($errors === []) {
+                $turnstileError = validateTurnstileSubmission('contact_volunteer');
+                if ($turnstileError !== '') {
+                    $errors['general'] = $turnstileError;
+                }
+            }
+
+            if ($errors === []) {
                 $db = getDb();
                 $volunteerColumns = $getTableColumns($db, 'volunteers');
                 $contactSubmissionColumns = $getTableColumns($db, 'contact_submissions');
@@ -261,6 +268,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!$inquiryValues['privacy_consent']) {
                 $errors['privacy_consent'] = 'Please confirm that we may store your details to respond.';
+            }
+
+            if ($errors === []) {
+                $turnstileError = validateTurnstileSubmission('contact_inquiry');
+                if ($turnstileError !== '') {
+                    $errors['general'] = $turnstileError;
+                }
             }
 
             if ($errors === []) {
@@ -416,6 +430,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
             <div class="card">
               <div class="card-body">
                 <h3 style="margin-bottom:1rem;">General Inquiry</h3>
+                <?php if ($activeForm === 'inquiry' && isset($errors['general'])): ?><div class="alert alert-error" style="margin-bottom:1rem;"><?= e($errors['general']) ?></div><?php endif; ?>
                 <form method="POST" action="/contact.php?form=inquiry">
                   <?= csrfField() ?>
                   <input type="hidden" name="form_type" value="inquiry">
@@ -469,6 +484,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                     </label>
                     <?php if ($activeForm === 'inquiry' && isset($errors['privacy_consent'])): ?><div class="form-error"><?= e($errors['privacy_consent']) ?></div><?php endif; ?>
                   </div>
+                  <?= renderTurnstileWidget('contact_inquiry') ?>
                   <button type="submit" class="btn btn-primary">Send Message</button>
                 </form>
               </div>
@@ -477,6 +493,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
             <div class="card">
               <div class="card-body">
                 <h3 style="margin-bottom:1rem;">Volunteer Sign-Up</h3>
+                <?php if ($activeForm === 'volunteer' && isset($errors['general'])): ?><div class="alert alert-error" style="margin-bottom:1rem;"><?= e($errors['general']) ?></div><?php endif; ?>
                 <form method="POST" action="/contact.php?form=volunteer">
                   <?= csrfField() ?>
                   <input type="hidden" name="form_type" value="volunteer">
@@ -535,6 +552,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                     </label>
                     <?php if ($activeForm === 'volunteer' && isset($errors['privacy_consent'])): ?><div class="form-error"><?= e($errors['privacy_consent']) ?></div><?php endif; ?>
                   </div>
+                  <?= renderTurnstileWidget('contact_volunteer') ?>
                   <button type="submit" class="btn btn-primary">Sign Up to Volunteer</button>
                 </form>
               </div>

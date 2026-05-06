@@ -17,6 +17,11 @@ if (isLoggedIn()) {
 
 $error  = '';
 $next   = getString('next');
+$turnstileResult = [
+    'success' => true,
+    'reason' => 'disabled',
+    'message' => '',
+];
 // Validate next URL to prevent open redirect
 if (!empty($next) && (!str_starts_with($next, '/') || str_starts_with($next, '//'))) {
     $next = '';
@@ -26,16 +31,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $email    = trim(postString('email'));
     $password = trim(postString('password'));
-    $result   = loginUser($email, $password);
-    if ($result['success']) {
-        $user = currentUser();
-        assert($user !== null);
-        if (!empty($next)) {
-            redirect($next);
-        }
-        redirect($user['role'] === 'admin' ? '/admin/' : '/member/');
+    if ($email === '' || $password === '') {
+        $error = 'Email address and password are required.';
     } else {
-        $error = $result['error'];
+        $turnstileResult = validateTurnstileSubmissionResult('login');
+        $error = $turnstileResult['message'];
+    }
+
+    if ($error === '') {
+        $result = loginUser($email, $password);
+        if ($result['success']) {
+            $user = currentUser();
+            assert($user !== null);
+            if (!empty($next)) {
+                redirect($next);
+            }
+            redirect($user['role'] === 'admin' ? '/admin/' : '/member/');
+        } else {
+            $error = $result['error'];
+        }
+    } elseif (in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)) {
+        usleep(TURNSTILE_ADMIN_RECOVERY_DELAY_MICROSECONDS);
+        $authResult = authenticateUserCredentials($email, $password);
+        if ($authResult['success']) {
+            if (stringValue($authResult['user']['role'] ?? '') === 'admin') {
+                establishAuthenticatedSession($authResult['user']);
+                error_log('Admin login bypassed Cloudflare Turnstile due to unavailable verification. IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
+                flashMessage('warning', 'Cloudflare Turnstile is unavailable, so this admin sign-in skipped the human verification step. Review the Turnstile settings after signing in.');
+                if (!empty($next)) {
+                    redirect($next);
+                }
+                redirect('/admin/');
+            }
+
+            $error = 'Human verification is temporarily unavailable right now. Please try again later.';
+        }
     }
 }
 
@@ -67,12 +97,13 @@ include __DIR__ . '/includes/header.php';
           <input type="email" id="email" name="email" class="form-control"
                  value="<?= e($_POST['email'] ?? '') ?>" autocomplete="email" required autofocus>
         </div>
-        <div class="form-group">
-          <label class="form-label" for="password">Password</label>
-          <input type="password" id="password" name="password" class="form-control"
-                 autocomplete="current-password" required>
-        </div>
-        <button type="submit" class="btn btn-primary w-full">Sign In</button>
+       <div class="form-group">
+         <label class="form-label" for="password">Password</label>
+         <input type="password" id="password" name="password" class="form-control"
+                autocomplete="current-password" required>
+       </div>
+       <?= renderTurnstileWidget('login') ?>
+       <button type="submit" class="btn btn-primary w-full">Sign In</button>
       </form>
 
       <div class="auth-footer">

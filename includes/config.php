@@ -40,6 +40,7 @@ defined('GALLERY_WATERMARK_SHADOW_ALPHA_OFFSET') || define('GALLERY_WATERMARK_SH
 defined('MERCH_CHECKOUT_MAX_QUANTITY') || define('MERCH_CHECKOUT_MAX_QUANTITY', 25);
 defined('RAFFLE_ENTRY_MAX_COUNT') || define('RAFFLE_ENTRY_MAX_COUNT', 5000);
 defined('RAFFLE_ENTRY_MAX_BYTES') || define('RAFFLE_ENTRY_MAX_BYTES', 1024 * 1024);
+defined('TURNSTILE_ADMIN_RECOVERY_DELAY_MICROSECONDS') || define('TURNSTILE_ADMIN_RECOVERY_DELAY_MICROSECONDS', 500000);
 
 // ─── Session Settings ─────────────────────────────────────────────────────────
 defined('SESSION_LIFETIME') || define('SESSION_LIFETIME', 3600 * 8);
@@ -550,6 +551,9 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
 ('home_about_text', 'RedWater Entertainment is Highlands County''s premier entertainment organization. We are best known for our spine-chilling "Red Water Haunted Homestead" each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
 ('gallery_watermark_settings', '{"enabled":false,"text":"","image_path":""}'),
+('turnstile_enabled', '0'),
+('turnstile_site_key', ''),
+('turnstile_secret_key', ''),
 ('merch_store_settings', '{"paypal_email":"","paypal_currency":"USD","paypal_use_sandbox":false,"shipping_notice":"","pickup_notice":""}'),
 ('merch_catalog', '[]'),
 ('social_facebook', ''),

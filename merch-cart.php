@@ -64,6 +64,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirectWithMessage('/merch-cart.php', 'error', 'Remove unavailable items before checking out.');
         }
 
+        $turnstileError = validateTurnstileSubmission('merch_checkout');
+        if ($turnstileError !== '') {
+            redirectWithMessage('/merch-cart.php', 'error', $turnstileError);
+        }
+
         $attemptId = merchGenerateCheckoutAttemptId();
         $payload = buildMerchPaypalCheckoutPayload($cartState['checkoutItems'], $storeSettings, $attemptId);
         $logResult = logMerchPaypalCheckoutAttempt($attemptId, $payload, $storeSettings);
@@ -114,6 +119,7 @@ function renderMerchCartCheckoutForm(array $checkoutItems, array $storeSettings)
     <form method="post" action="/merch-cart.php" class="merch-cart-checkout-form">
       <?= csrfField() ?>
       <input type="hidden" name="action" value="checkout">
+      <?= renderTurnstileWidget('merch_checkout') ?>
       <button type="submit" class="btn btn-primary w-full">Checkout with PayPal</button>
       <p class="merch-checkout-note">This cart uses PayPal Standard, so only the store email is required for checkout. Each checkout attempt is logged on the server, then a review page shows the target PayPal account and endpoint before you continue.</p>
     </form>

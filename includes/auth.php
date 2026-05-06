@@ -123,9 +123,9 @@ function requireMemberOrAdmin(): void {
 
 // ─── Login / Logout ───────────────────────────────────────────────────────────
 /**
- * @return array{success: true}|array{success: false, error: string}
+ * @return array{success: true, user: array<string, mixed>}|array{success: false, error: string}
  */
-function loginUser(string $email, string $password): array {
+function authenticateUserCredentials(string $email, string $password): array {
     $db = getDb();
     $stmt = $db->prepare('SELECT * FROM users WHERE email = ? LIMIT 1');
     $stmt->execute([strtolower(trim($email))]);
@@ -139,6 +139,13 @@ function loginUser(string $email, string $password): array {
         return ['success' => false, 'error' => 'Your account has been deactivated. Please contact an administrator.'];
     }
 
+    return ['success' => true, 'user' => $user];
+}
+
+/**
+ * @param array<string, mixed> $user
+ */
+function establishAuthenticatedSession(array $user): void {
     initSession();
     session_regenerate_id(true);
     $_SESSION['user'] = [
@@ -149,6 +156,18 @@ function loginUser(string $email, string $password): array {
         'is_active'       => (bool)$user['is_active'],
         'bypass_approval' => (bool)$user['bypass_approval'],
     ];
+}
+
+/**
+ * @return array{success: true}|array{success: false, error: string}
+ */
+function loginUser(string $email, string $password): array {
+    $authResult = authenticateUserCredentials($email, $password);
+    if (!$authResult['success']) {
+        return $authResult;
+    }
+
+    establishAuthenticatedSession($authResult['user']);
 
     return ['success' => true];
 }
