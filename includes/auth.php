@@ -290,21 +290,15 @@ function sendPasswordResetEmail(string $email, string $token): bool {
     $host = serverString('HTTP_HOST', 'localhost');
     $siteUrl = defined('SITE_URL') ? SITE_URL : 'http://' . $host;
     $resetUrl = $siteUrl . '/reset-password.php?token=' . urlencode($token);
-    $fromName = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'RedWater Entertainment';
-    $from = defined('MAIL_FROM') ? MAIL_FROM : 'noreply@' . $host;
 
-    $subject = 'Password Reset - ' . $fromName;
+    $subject = 'Password Reset - ' . buildDefaultMailFromName();
     $message = "Hello,\n\nYou requested a password reset for your RedWater Entertainment account.\n\n";
     $message .= "Click the link below to reset your password (valid for 1 hour):\n";
     $message .= $resetUrl . "\n\n";
     $message .= "If you did not request this, you can safely ignore this email.\n\n";
     $message .= "— The RedWater Entertainment Team";
 
-    $headers = "From: {$fromName} <{$from}>\r\n";
-    $headers .= "Reply-To: {$from}\r\n";
-    $headers .= "X-Mailer: PHP/" . phpversion();
-
-    return @mail($email, $subject, $message, $headers);
+    return sendSiteMail($email, $subject, $message);
 }
 
 // ─── Refresh session user data ────────────────────────────────────────────────

@@ -1394,29 +1394,210 @@ function sanitizeMailHeaderValue(string $value): string {
     return trim(str_replace(["\r", "\n"], '', $value));
 }
 
+function buildDefaultMailFromAddress(): string {
+    $host = serverString('HTTP_HOST', 'localhost');
+    $fallbackHost = $host !== '' ? $host : 'localhost';
+    $from = defined('MAIL_FROM') ? stringValue(MAIL_FROM, 'noreply@' . $fallbackHost) : 'noreply@' . $fallbackHost;
+
+    return filter_var($from, FILTER_VALIDATE_EMAIL) ? $from : 'noreply@localhost';
+}
+
+function buildDefaultMailFromName(): string {
+    $fallbackSiteName = defined('SITE_NAME') ? stringValue(SITE_NAME, 'RedWater Entertainment') : 'RedWater Entertainment';
+    return sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, $fallbackSiteName) : $fallbackSiteName);
+}
+
+/**
+ * @param resource $socket
+ * @param list<int> $expectedCodes
+ */
+function readSmtpResponse($socket, array $expectedCodes, string $context): bool {
+    $response = '';
+
+    while (($line = fgets($socket)) !== false) {
+        $response .= $line;
+        if (preg_match('/^\d{3}\s/', $line) === 1) {
+            break;
+        }
+    }
+
+    if ($response === '') {
+        error_log('SMTP ' . $context . ' failed: empty response.');
+        return false;
+    }
+
+    $code = (int)substr($response, 0, 3);
+    if (!in_array($code, $expectedCodes, true)) {
+        error_log('SMTP ' . $context . ' failed: ' . sanitizeMailHeaderValue(trim($response)));
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @param resource $socket
+ * @param list<int> $expectedCodes
+ */
+function smtpCommand($socket, string $command, array $expectedCodes, string $context): bool {
+    if (fwrite($socket, $command . "\r\n") === false) {
+        error_log('SMTP ' . $context . ' failed: could not write command.');
+        return false;
+    }
+
+    return readSmtpResponse($socket, $expectedCodes, $context);
+}
+
+/**
+ * @param array<string, string> $headers
+ */
+function sendMailUsingSmtp(string $toEmail, string $subject, string $body, array $headers, string $fromEmail): bool {
+    $smtpHost = defined('SMTP_HOST') ? trim(stringValue(SMTP_HOST)) : '';
+    if ($smtpHost === '') {
+        return false;
+    }
+
+    $smtpPort = defined('SMTP_PORT') ? intValue(SMTP_PORT, 587) : 587;
+    $smtpTimeout = defined('SMTP_TIMEOUT') ? max(1, intValue(SMTP_TIMEOUT, 15)) : 15;
+    $smtpEncryption = strtolower(defined('SMTP_ENCRYPTION') ? stringValue(SMTP_ENCRYPTION, 'tls') : 'tls');
+    $smtpUsername = defined('SMTP_USERNAME') ? stringValue(SMTP_USERNAME) : '';
+    $smtpPassword = defined('SMTP_PASSWORD') ? stringValue(SMTP_PASSWORD) : '';
+    $transportHost = $smtpEncryption === 'ssl' ? 'ssl://' . $smtpHost : $smtpHost;
+
+    $socket = @stream_socket_client(
+        $transportHost . ':' . $smtpPort,
+        $errorNumber,
+        $errorMessage,
+        $smtpTimeout
+    );
+
+    if (!is_resource($socket)) {
+        error_log('SMTP connection failed: ' . sanitizeMailHeaderValue($errorMessage ?? '') . ' (' . $errorNumber . ')');
+        return false;
+    }
+
+    stream_set_timeout($socket, $smtpTimeout);
+
+    $clientHost = sanitizeMailHeaderValue(parse_url(defined('SITE_URL') ? stringValue(SITE_URL) : '', PHP_URL_HOST) ?: serverString('HTTP_HOST', 'localhost'));
+    if ($clientHost === '') {
+        $clientHost = 'localhost';
+    }
+
+    try {
+        if (!readSmtpResponse($socket, [220], 'connect')) {
+            return false;
+        }
+
+        if (!smtpCommand($socket, 'EHLO ' . $clientHost, [250], 'EHLO')) {
+            return false;
+        }
+
+        if ($smtpEncryption === 'tls') {
+            if (!smtpCommand($socket, 'STARTTLS', [220], 'STARTTLS')) {
+                return false;
+            }
+
+            if (@stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT) !== true) {
+                error_log('SMTP STARTTLS failed.');
+                return false;
+            }
+
+            if (!smtpCommand($socket, 'EHLO ' . $clientHost, [250], 'EHLO after STARTTLS')) {
+                return false;
+            }
+        }
+
+        if (($smtpUsername === '') !== ($smtpPassword === '')) {
+            error_log('SMTP configuration error: both username and password must be provided together or both must be empty.');
+            return false;
+        }
+
+        if ($smtpUsername !== '' && $smtpPassword !== '') {
+            if (!smtpCommand($socket, 'AUTH LOGIN', [334], 'AUTH LOGIN')) {
+                return false;
+            }
+
+            if (!smtpCommand($socket, base64_encode($smtpUsername), [334], 'SMTP username')) {
+                return false;
+            }
+
+            if (!smtpCommand($socket, base64_encode($smtpPassword), [235], 'SMTP password')) {
+                return false;
+            }
+        }
+
+        if (!smtpCommand($socket, 'MAIL FROM:<' . sanitizeMailHeaderValue($fromEmail) . '>', [250], 'MAIL FROM')) {
+            return false;
+        }
+
+        if (!smtpCommand($socket, 'RCPT TO:<' . sanitizeMailHeaderValue($toEmail) . '>', [250, 251], 'RCPT TO')) {
+            return false;
+        }
+
+        if (!smtpCommand($socket, 'DATA', [354], 'DATA')) {
+            return false;
+        }
+
+        $messageLines = [];
+        foreach ($headers as $name => $value) {
+            $messageLines[] = sanitizeMailHeaderValue($name) . ': ' . sanitizeMailHeaderValue($value);
+        }
+
+        $normalizedBody = preg_replace("/\r\n|\r|\n/", "\r\n", $body);
+        if ($normalizedBody === null) {
+            $normalizedBody = $body;
+        }
+
+        $message = implode("\r\n", $messageLines) . "\r\n\r\n" . preg_replace('/^\./m', '..', $normalizedBody) . "\r\n.";
+        if (fwrite($socket, $message . "\r\n") === false) {
+            error_log('SMTP DATA failed: could not write message body.');
+            return false;
+        }
+
+        if (!readSmtpResponse($socket, [250], 'message body')) {
+            return false;
+        }
+
+        smtpCommand($socket, 'QUIT', [221], 'QUIT');
+        return true;
+    } finally {
+        fclose($socket);
+    }
+}
+
+/**
+ * @param array<string, string> $headers
+ */
+function deliverMailMessage(string $toEmail, string $subject, string $body, array $headers, string $fromEmail): bool {
+    if (defined('SMTP_HOST') && trim(stringValue(SMTP_HOST)) !== '') {
+        return sendMailUsingSmtp($toEmail, $subject, $body, $headers, $fromEmail);
+    }
+
+    $headerLines = [];
+    foreach ($headers as $name => $value) {
+        $headerLines[] = sanitizeMailHeaderValue($name) . ': ' . sanitizeMailHeaderValue($value);
+    }
+
+    return @mail($toEmail, sanitizeMailHeaderValue($subject), $body, implode("\r\n", $headerLines));
+}
+
 function sendSiteMail(string $toEmail, string $subject, string $body, string $replyToEmail = '', string $replyToName = ''): bool {
     if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
 
-    $host = serverString('HTTP_HOST', 'localhost');
-    $fallbackFrom = 'noreply@' . ($host !== '' ? $host : 'localhost');
-    $from = defined('MAIL_FROM') ? stringValue(MAIL_FROM, $fallbackFrom) : $fallbackFrom;
-    if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
-        $from = 'noreply@localhost';
-    }
-
-    $fallbackSiteName = defined('SITE_NAME') ? stringValue(SITE_NAME, 'RedWater Entertainment') : 'RedWater Entertainment';
-    $fromName = sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, $fallbackSiteName) : $fallbackSiteName);
-    $safeSubject = sanitizeMailHeaderValue($subject);
-    $headers = 'From: ' . $fromName . ' <' . $from . '>';
+    $from = buildDefaultMailFromAddress();
+    $headers = [
+        'From' => buildDefaultMailFromName() . ' <' . $from . '>',
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/plain; charset=UTF-8',
+    ];
 
     if (filter_var($replyToEmail, FILTER_VALIDATE_EMAIL)) {
-        $safeReplyToName = sanitizeMailHeaderValue($replyToName);
-        $headers .= "\r\nReply-To: " . $safeReplyToName . ' <' . sanitizeMailHeaderValue($replyToEmail) . '>';
+        $headers['Reply-To'] = sanitizeMailHeaderValue($replyToName) . ' <' . sanitizeMailHeaderValue($replyToEmail) . '>';
     }
 
-    return @mail($toEmail, $safeSubject, $body, $headers);
+    return deliverMailMessage($toEmail, $subject, $body, $headers, $from);
 }
 
 function logVolunteerAudit(PDO $db, ?int $volunteerId, string $volunteerName, ?int $actorUserId, string $action, string $details = ''): void {
