@@ -9,6 +9,20 @@
  * IMPORTANT: Never commit real credentials to version control.
  */
 
+function configEnvString(string $key, string $default = ''): string {
+    $value = getenv($key);
+    if ($value === false) {
+        $value = $_ENV[$key] ?? $_SERVER[$key] ?? null;
+    }
+
+    return is_scalar($value) ? trim((string)$value) : $default;
+}
+
+function configEnvInt(string $key, int $default): int {
+    $value = configEnvString($key, (string)$default);
+    return is_numeric($value) ? (int)$value : $default;
+}
+
 // ─── Load local overrides (constants only) ────────────────────────────────────
 if (file_exists(__DIR__ . '/config.local.php') && !defined('_RW_LOCAL_LOADED')) {
     define('_RW_LOCAL_LOADED', true);
@@ -23,12 +37,18 @@ defined('DB_PASS')    || define('DB_PASS',    'CHANGE_ME_STRONG_PASSWORD');
 defined('DB_CHARSET') || define('DB_CHARSET', 'utf8mb4');
 
 // ─── Site Settings ────────────────────────────────────────────────────────────
-defined('SITE_URL')   || define('SITE_URL',  'https://yourdomain.com');
-defined('SITE_NAME')  || define('SITE_NAME', 'RedWater Entertainment');
+defined('SITE_URL')   || define('SITE_URL',  configEnvString('SITE_URL', 'https://yourdomain.com'));
+defined('SITE_NAME')  || define('SITE_NAME', configEnvString('SITE_NAME', 'RedWater Entertainment'));
 
 // ─── Email Settings ───────────────────────────────────────────────────────────
-defined('MAIL_FROM')      || define('MAIL_FROM',      'noreply@yourdomain.com');
-defined('MAIL_FROM_NAME') || define('MAIL_FROM_NAME', 'RedWater Entertainment');
+defined('MAIL_FROM')        || define('MAIL_FROM',        configEnvString('MAIL_FROM', 'noreply@yourdomain.com'));
+defined('MAIL_FROM_NAME')   || define('MAIL_FROM_NAME',   configEnvString('MAIL_FROM_NAME', 'RedWater Entertainment'));
+defined('SMTP_HOST')        || define('SMTP_HOST',        configEnvString('SMTP_HOST', ''));
+defined('SMTP_PORT')        || define('SMTP_PORT',        configEnvInt('SMTP_PORT', 587));
+defined('SMTP_USERNAME')    || define('SMTP_USERNAME',    configEnvString('SMTP_USERNAME', ''));
+defined('SMTP_PASSWORD')    || define('SMTP_PASSWORD',    configEnvString('SMTP_PASSWORD', ''));
+defined('SMTP_ENCRYPTION')  || define('SMTP_ENCRYPTION',  strtolower(configEnvString('SMTP_ENCRYPTION', 'tls')));
+defined('SMTP_TIMEOUT')     || define('SMTP_TIMEOUT',     configEnvInt('SMTP_TIMEOUT', 15));
 
 // ─── Upload Settings ──────────────────────────────────────────────────────────
 defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
