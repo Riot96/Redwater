@@ -29,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($email === '' || $password === '') {
         $error = 'Email address and password are required.';
     } else {
-        $error = validateTurnstileSubmission('login');
+        $turnstileResult = validateTurnstileSubmissionResult('login');
+        $error = $turnstileResult['message'];
     }
 
     if ($error === '') {
@@ -43,6 +44,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             redirect($user['role'] === 'admin' ? '/admin/' : '/member/');
         } else {
             $error = $result['error'];
+        }
+    } elseif (isset($turnstileResult)
+        && in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)
+    ) {
+        $result = loginUser($email, $password);
+        if ($result['success']) {
+            $user = currentUser();
+            assert($user !== null);
+
+            if ($user['role'] === 'admin') {
+                flashMessage('warning', 'Cloudflare Turnstile is unavailable, so this admin sign-in skipped the human verification step. Review the Turnstile settings after signing in.');
+                if (!empty($next)) {
+                    redirect($next);
+                }
+                redirect('/admin/');
+            }
+
+            logoutUser();
         }
     }
 }

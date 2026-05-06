@@ -260,6 +260,12 @@ function turnstileErrorCodes(mixed $decoded): array {
  * @param list<string> $errorCodes
  */
 function turnstileVerificationMessage(array $errorCodes): string {
+    if (in_array('missing-input-secret', $errorCodes, true)
+        || in_array('invalid-input-secret', $errorCodes, true)
+        || in_array('sitekey-secret-mismatch', $errorCodes, true)) {
+        return 'Human verification is temporarily unavailable right now. Please try again later.';
+    }
+
     if (in_array('missing-input-response', $errorCodes, true)) {
         return 'Please complete the security check before submitting the form.';
     }
@@ -275,19 +281,38 @@ function turnstileVerificationMessage(array $errorCodes): string {
     return 'We could not verify the security check. Please try again.';
 }
 
-function validateTurnstileSubmission(string $action): string {
+/**
+ * @return array{
+ *   success: bool,
+ *   reason: 'verified'|'disabled'|'missing'|'invalid'|'unavailable'|'misconfigured',
+ *   message: string
+ * }
+ */
+function validateTurnstileSubmissionResult(string $action): array {
     $settings = getTurnstileSettings();
     if (!$settings['enabled']) {
-        return '';
+        return [
+            'success' => true,
+            'reason' => 'disabled',
+            'message' => '',
+        ];
     }
 
     if (!$settings['configured']) {
-        return 'Human verification is temporarily unavailable right now. Please try again later.';
+        return [
+            'success' => false,
+            'reason' => 'misconfigured',
+            'message' => 'Human verification is temporarily unavailable right now. Please try again later.',
+        ];
     }
 
     $token = trim(postString('cf-turnstile-response'));
     if ($token === '') {
-        return 'Please complete the security check before submitting the form.';
+        return [
+            'success' => false,
+            'reason' => 'missing',
+            'message' => 'Please complete the security check before submitting the form.',
+        ];
     }
 
     $payload = [
@@ -311,12 +336,30 @@ function validateTurnstileSubmission(string $action): string {
     $response = @file_get_contents('https://challenges.cloudflare.com/turnstile/v0/siteverify', false, $context);
     if ($response === false) {
         error_log('Cloudflare Turnstile verification request failed for action "' . $action . '".');
-        return 'We could not verify the security check. Please try again.';
+        return [
+            'success' => false,
+            'reason' => 'unavailable',
+            'message' => 'Human verification is temporarily unavailable right now. Please try again later.',
+        ];
     }
 
     $decoded = json_decode($response, true);
     if (is_array($decoded) && !empty($decoded['success'])) {
-        return '';
+        $verifiedAction = trim(stringValue($decoded['action'] ?? ''));
+        if ($verifiedAction !== $action) {
+            error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $verifiedAction . '".');
+            return [
+                'success' => false,
+                'reason' => 'invalid',
+                'message' => 'The security check response was invalid. Please try again.',
+            ];
+        }
+
+        return [
+            'success' => true,
+            'reason' => 'verified',
+            'message' => '',
+        ];
     }
 
     $errorCodes = turnstileErrorCodes($decoded);
@@ -326,7 +369,21 @@ function validateTurnstileSubmission(string $action): string {
         error_log('Cloudflare Turnstile returned an unexpected response for action "' . $action . '".');
     }
 
-    return turnstileVerificationMessage($errorCodes);
+    $message = turnstileVerificationMessage($errorCodes);
+    $reason = $message === 'Human verification is temporarily unavailable right now. Please try again later.'
+        ? 'misconfigured'
+        : 'invalid';
+
+    return [
+        'success' => false,
+        'reason' => $reason,
+        'message' => $message,
+    ];
+}
+
+function validateTurnstileSubmission(string $action): string {
+    $result = validateTurnstileSubmissionResult($action);
+    return $result['message'];
 }
 
 // ─── File Upload Helpers ───────────────────────────────────────────────────────
