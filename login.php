@@ -18,6 +18,11 @@ if (isLoggedIn()) {
 $error  = '';
 $next   = getString('next');
 $turnstileBlockedLogin = false;
+$turnstileResult = [
+    'success' => true,
+    'reason' => 'disabled',
+    'message' => '',
+];
 // Validate next URL to prevent open redirect
 if (!empty($next) && (!str_starts_with($next, '/') || str_starts_with($next, '//'))) {
     $next = '';
@@ -48,7 +53,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = $result['error'];
         }
     } elseif ($turnstileBlockedLogin
-        && isset($turnstileResult)
         && in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)
     ) {
         $result = loginUser($email, $password);

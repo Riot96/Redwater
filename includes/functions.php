@@ -351,9 +351,17 @@ function validateTurnstileSubmissionResult(string $action): array {
     }
 
     $decoded = json_decode($response, true);
-    if (is_array($decoded) && !empty($decoded['success'])) {
+    if (is_array($decoded)) {
         $verifiedAction = trim(stringValue($decoded['action'] ?? ''));
-        if ($verifiedAction !== $action) {
+        if (!empty($decoded['success']) && $verifiedAction === $action) {
+            return [
+                'success' => true,
+                'reason' => 'verified',
+                'message' => '',
+            ];
+        }
+
+        if (!empty($decoded['success'])) {
             error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $verifiedAction . '".');
             return [
                 'success' => false,
@@ -361,12 +369,6 @@ function validateTurnstileSubmissionResult(string $action): array {
                 'message' => 'The security check response was invalid. Please try again.',
             ];
         }
-
-        return [
-            'success' => true,
-            'reason' => 'verified',
-            'message' => '',
-        ];
     }
 
     $errorCodes = turnstileErrorCodes($decoded);
