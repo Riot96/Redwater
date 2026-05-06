@@ -362,8 +362,7 @@ function validateTurnstileSubmissionResult(string $action): array {
         }
 
         if (($decoded['success'] ?? false) === true) {
-            $sessionId = session_status() === PHP_SESSION_ACTIVE ? session_id() : 'none';
-            error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $verifiedAction . '". IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; session: ' . $sessionId . '; time: ' . gmdate('c') . '.');
+            error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $verifiedAction . '". IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
             return [
                 'success' => false,
                 'reason' => 'invalid',

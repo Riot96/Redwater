@@ -51,10 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = $result['error'];
         }
     } elseif (in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)) {
+        usleep(500000);
         $authResult = authenticateUserCredentials($email, $password);
         if ($authResult['success']) {
             if (stringValue($authResult['user']['role'] ?? '') === 'admin') {
                 establishAuthenticatedSession($authResult['user']);
+                error_log('Admin login bypassed Cloudflare Turnstile due to unavailable verification. IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
                 flashMessage('warning', 'Cloudflare Turnstile is unavailable, so this admin sign-in skipped the human verification step. Review the Turnstile settings after signing in.');
                 if (!empty($next)) {
                     redirect($next);
@@ -62,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 redirect('/admin/');
             }
 
-            $error = 'Human verification is temporarily unavailable right now, so only administrators can sign in until the Turnstile settings are fixed.';
+            $error = 'Human verification is temporarily unavailable right now. Please try again later.';
         }
     }
 }
