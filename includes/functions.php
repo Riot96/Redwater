@@ -1507,12 +1507,12 @@ function sendMailUsingSmtp(string $toEmail, string $subject, string $body, array
             }
         }
 
-        if ($smtpUsername !== '' || $smtpPassword !== '') {
-            if ($smtpUsername === '' || $smtpPassword === '') {
-                error_log('SMTP authentication failed: username or password missing.');
-                return false;
-            }
+        if (($smtpUsername === '') !== ($smtpPassword === '')) {
+            error_log('SMTP authentication failed: username or password missing.');
+            return false;
+        }
 
+        if ($smtpUsername !== '' && $smtpPassword !== '') {
             if (!smtpCommand($socket, 'AUTH LOGIN', [334], 'AUTH LOGIN')) {
                 return false;
             }

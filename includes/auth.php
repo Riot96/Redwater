@@ -298,7 +298,7 @@ function sendPasswordResetEmail(string $email, string $token): bool {
     $message .= "If you did not request this, you can safely ignore this email.\n\n";
     $message .= "— The RedWater Entertainment Team";
 
-    return sendSiteMail($email, $subject, $message, buildDefaultMailFromAddress(), buildDefaultMailFromName());
+    return sendSiteMail($email, $subject, $message);
 }
 
 // ─── Refresh session user data ────────────────────────────────────────────────
