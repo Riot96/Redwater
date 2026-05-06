@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = $result['error'];
         }
     } elseif (in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)) {
-        usleep(500000);
+        usleep(TURNSTILE_ADMIN_RECOVERY_DELAY_MICROSECONDS);
         $authResult = authenticateUserCredentials($email, $password);
         if ($authResult['success']) {
             if (stringValue($authResult['user']['role'] ?? '') === 'admin') {
