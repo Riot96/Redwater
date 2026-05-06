@@ -353,7 +353,7 @@ function validateTurnstileSubmissionResult(string $action): array {
     $decoded = json_decode($response, true);
     if (is_array($decoded)) {
         $verifiedAction = trim(stringValue($decoded['action'] ?? ''));
-        if (!empty($decoded['success']) && $verifiedAction === $action) {
+        if (($decoded['success'] ?? false) === true && $verifiedAction === $action) {
             return [
                 'success' => true,
                 'reason' => 'verified',
@@ -361,7 +361,7 @@ function validateTurnstileSubmissionResult(string $action): array {
             ];
         }
 
-        if (!empty($decoded['success'])) {
+        if (($decoded['success'] ?? false) === true) {
             error_log('Cloudflare Turnstile action mismatch. Expected "' . $action . '" but received "' . $verifiedAction . '".');
             return [
                 'success' => false,

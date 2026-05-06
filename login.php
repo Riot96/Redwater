@@ -17,7 +17,6 @@ if (isLoggedIn()) {
 
 $error  = '';
 $next   = getString('next');
-$turnstileBlockedLogin = false;
 $turnstileResult = [
     'success' => true,
     'reason' => 'disabled',
@@ -37,7 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $turnstileResult = validateTurnstileSubmissionResult('login');
         $error = $turnstileResult['message'];
-        $turnstileBlockedLogin = $error !== '';
     }
 
     if ($error === '') {
@@ -52,9 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = $result['error'];
         }
-    } elseif ($turnstileBlockedLogin
-        && in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)
-    ) {
+    } elseif (in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)) {
         $result = loginUser($email, $password);
         if ($result['success']) {
             $user = currentUser();
