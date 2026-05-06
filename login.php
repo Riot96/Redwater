@@ -17,6 +17,7 @@ if (isLoggedIn()) {
 
 $error  = '';
 $next   = getString('next');
+$turnstileBlockedLogin = false;
 // Validate next URL to prevent open redirect
 if (!empty($next) && (!str_starts_with($next, '/') || str_starts_with($next, '//'))) {
     $next = '';
@@ -31,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $turnstileResult = validateTurnstileSubmissionResult('login');
         $error = $turnstileResult['message'];
+        $turnstileBlockedLogin = $error !== '';
     }
 
     if ($error === '') {
@@ -45,7 +47,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $error = $result['error'];
         }
-    } elseif (isset($turnstileResult)
+    } elseif ($turnstileBlockedLogin
+        && isset($turnstileResult)
         && in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)
     ) {
         $result = loginUser($email, $password);
@@ -62,6 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             logoutUser();
+            $error = 'Human verification is temporarily unavailable right now, so only administrators can sign in until the Turnstile settings are fixed.';
         }
     }
 }

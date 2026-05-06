@@ -259,10 +259,17 @@ function turnstileErrorCodes(mixed $decoded): array {
 /**
  * @param list<string> $errorCodes
  */
-function turnstileVerificationMessage(array $errorCodes): string {
-    if (in_array('missing-input-secret', $errorCodes, true)
+function turnstileHasConfigurationErrorCodes(array $errorCodes): bool {
+    return in_array('missing-input-secret', $errorCodes, true)
         || in_array('invalid-input-secret', $errorCodes, true)
-        || in_array('sitekey-secret-mismatch', $errorCodes, true)) {
+        || in_array('sitekey-secret-mismatch', $errorCodes, true);
+}
+
+/**
+ * @param list<string> $errorCodes
+ */
+function turnstileVerificationMessage(array $errorCodes): string {
+    if (turnstileHasConfigurationErrorCodes($errorCodes)) {
         return 'Human verification is temporarily unavailable right now. Please try again later.';
     }
 
@@ -370,9 +377,7 @@ function validateTurnstileSubmissionResult(string $action): array {
     }
 
     $message = turnstileVerificationMessage($errorCodes);
-    $reason = $message === 'Human verification is temporarily unavailable right now. Please try again later.'
-        ? 'misconfigured'
-        : 'invalid';
+    $reason = turnstileHasConfigurationErrorCodes($errorCodes) ? 'misconfigured' : 'invalid';
 
     return [
         'success' => false,
