@@ -245,9 +245,9 @@ function generatePasswordResetToken(string $email): ?string {
     $token = 'rw' . sprintf('%010d', time()) . bin2hex(random_bytes(26));
 
     $stmt = $db->prepare(
-        'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL ' . PASSWORD_RESET_TOKEN_LIFETIME . ' SECOND) WHERE email = ?'
+        'UPDATE users SET reset_token = ?, reset_token_expires = FROM_UNIXTIME(UNIX_TIMESTAMP(UTC_TIMESTAMP()) + ?) WHERE email = ?'
     );
-    $stmt->execute([$token, $email]);
+    $stmt->execute([$token, PASSWORD_RESET_TOKEN_LIFETIME, $email]);
 
     return $token;
 }
@@ -294,7 +294,8 @@ function validatePasswordResetToken(string $token): ?array {
         ];
     }
 
-    $resetTokenExpires = stringValue($user['reset_token_expires'] ?? '');
+    $resetTokenExpiresValue = $user['reset_token_expires'] ?? '';
+    $resetTokenExpires = is_scalar($resetTokenExpiresValue) ? trim((string)$resetTokenExpiresValue) : '';
     $resetTokenExpiresTimestamp = strtotime($resetTokenExpires);
     if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
         return null;
