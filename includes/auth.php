@@ -240,10 +240,11 @@ function generatePasswordResetToken(string $email): ?string {
     }
 
     $token = bin2hex(random_bytes(32));
-    $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
 
-    $stmt = $db->prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?');
-    $stmt->execute([$token, $expires, $email]);
+    $stmt = $db->prepare(
+        'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 1 HOUR) WHERE email = ?'
+    );
+    $stmt->execute([$token, $email]);
 
     return $token;
 }
