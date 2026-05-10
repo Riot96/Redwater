@@ -302,12 +302,14 @@ function validatePasswordResetToken(string $token): ?array {
         return null;
     }
 
+    $validatedUser = [
+        'id' => $user['id'],
+        'email' => $user['email'],
+        'display_name' => $user['display_name'],
+    ];
+
     if (isCurrentPasswordResetToken($token)) {
-        return [
-            'id' => $user['id'],
-            'email' => $user['email'],
-            'display_name' => $user['display_name'],
-        ];
+        return $validatedUser;
     }
 
     $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
@@ -320,11 +322,7 @@ function validatePasswordResetToken(string $token): ?array {
         return null;
     }
 
-    return [
-        'id' => $user['id'],
-        'email' => $user['email'],
-        'display_name' => $user['display_name'],
-    ];
+    return $validatedUser;
 }
 
 /**
