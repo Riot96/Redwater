@@ -9,6 +9,62 @@
  * IMPORTANT: Never commit real credentials to version control.
  */
 
+function loadConfigDotEnv(): void {
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+
+    $loaded = true;
+    $dotenvPath = dirname(__DIR__) . '/.env';
+    if (!is_file($dotenvPath) || !is_readable($dotenvPath)) {
+        return;
+    }
+
+    $lines = file($dotenvPath, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $trimmedLine = trim($line);
+        if ($trimmedLine === '' || str_starts_with($trimmedLine, '#')) {
+            continue;
+        }
+
+        if (str_starts_with($trimmedLine, 'export ')) {
+            $trimmedLine = trim(substr($trimmedLine, 7));
+        }
+
+        $separatorPosition = strpos($trimmedLine, '=');
+        if ($separatorPosition === false) {
+            continue;
+        }
+
+        $key = trim(substr($trimmedLine, 0, $separatorPosition));
+        if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) {
+            continue;
+        }
+
+        if (getenv($key) !== false || array_key_exists($key, $_ENV) || array_key_exists($key, $_SERVER)) {
+            continue;
+        }
+
+        $value = trim(substr($trimmedLine, $separatorPosition + 1));
+        $valueLength = strlen($value);
+        if (
+            $valueLength >= 2
+            && (($value[0] === '"' && $value[$valueLength - 1] === '"') || ($value[0] === "'" && $value[$valueLength - 1] === "'"))
+        ) {
+            $value = substr($value, 1, -1);
+        }
+
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
 function configEnvString(string $key, string $default = ''): string {
     $value = getenv($key);
     if ($value === false) {
@@ -22,6 +78,8 @@ function configEnvInt(string $key, int $default): int {
     $value = configEnvString($key, (string)$default);
     return is_numeric($value) ? (int)$value : $default;
 }
+
+loadConfigDotEnv();
 
 // ─── Load local overrides (constants only) ────────────────────────────────────
 if (file_exists(__DIR__ . '/config.local.php') && !defined('_RW_LOCAL_LOADED')) {

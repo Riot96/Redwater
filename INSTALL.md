@@ -47,8 +47,9 @@ reference snapshot or manual recovery fallback.
 
    RedWater now also reads `SITE_URL`, `SITE_NAME`, `MAIL_FROM`, `MAIL_FROM_NAME`,
    `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_ENCRYPTION`,
-   and `SMTP_TIMEOUT` from environment variables, so SMTP credentials do not need
-   to live in version-controlled PHP files.
+   and `SMTP_TIMEOUT` from environment variables. It will automatically load
+   those values from a root-level `.env` file when present, so SMTP credentials
+   do not need to live in version-controlled PHP files.
 
    **Generate a strong APP_KEY:**
    ```bash
@@ -146,7 +147,14 @@ are omitted, the site falls back to PHP's built-in `mail()` function.
 ### 3. Add the required environment variables
 
 Use your host, web server, or PHP-FPM pool to define environment variables, or
-copy `.env.example` as a reference when configuring them elsewhere:
+copy `.env.example` to a root-level `.env` file:
+
+```bash
+cp .env.example .env
+
+```
+
+Then edit `.env` (or your host environment) with your real values:
 
 ```bash
 SITE_URL=https://redwaterhaunt.com
@@ -181,6 +189,8 @@ variables.
   on port `587` are allowed by your host/firewall.
 - **Mail not arriving**: verify Mailjet domain authentication, inspect Mailjet's
   message activity logs, and confirm the `MAIL_FROM` mailbox exists.
+- **`.env` settings not applying**: make sure the file is named exactly `.env`
+  in the project root (next to `index.php`) and that the web server can read it.
 - **Fallback behavior**: if `SMTP_HOST` is blank, RedWater uses PHP `mail()`
   instead of Mailjet SMTP.
 
