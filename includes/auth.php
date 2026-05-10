@@ -3,7 +3,7 @@
  * RedWater Entertainment - Authentication Functions
  */
 
-if (!defined('DB_HOST')) {
+if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
     require_once __DIR__ . '/config.php';
 }
 
@@ -308,24 +308,24 @@ function requestHostWithoutPort(string $host): string {
     return $host;
 }
 
+function isValidPasswordResetHost(string $host): bool {
+    if ($host === '') {
+        return false;
+    }
+
+    return filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+        || filter_var($host, FILTER_VALIDATE_IP) !== false;
+}
+
 function isAllowedPasswordResetHost(string $requestHost, string $configuredHost): bool {
     $normalizedRequestHost = strtolower(trim($requestHost, '.'));
     $normalizedConfiguredHost = strtolower(trim($configuredHost, '.'));
 
-    if ($normalizedRequestHost === '' || $normalizedConfiguredHost === '') {
-        return false;
-    }
-
     if (
-        filter_var($normalizedRequestHost, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
-        && filter_var($normalizedRequestHost, FILTER_VALIDATE_IP) === false
-    ) {
-        return false;
-    }
-
-    if (
-        filter_var($normalizedConfiguredHost, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
-        && filter_var($normalizedConfiguredHost, FILTER_VALIDATE_IP) === false
+        $normalizedRequestHost === ''
+        || $normalizedConfiguredHost === ''
+        || !isValidPasswordResetHost($normalizedRequestHost)
+        || !isValidPasswordResetHost($normalizedConfiguredHost)
     ) {
         return false;
     }
@@ -335,11 +335,12 @@ function isAllowedPasswordResetHost(string $requestHost, string $configuredHost)
 }
 
 function buildPasswordResetSiteUrl(): string {
-    $requestHost = serverString('HTTP_HOST', 'localhost');
-    $requestHostWithoutPort = requestHostWithoutPort($requestHost);
+    $rawRequestHost = serverString('HTTP_HOST', 'localhost');
+    $requestHostWithoutPort = requestHostWithoutPort($rawRequestHost);
+    $requestHost = isValidPasswordResetHost($requestHostWithoutPort) ? $rawRequestHost : 'localhost';
+    $requestHostWithoutPort = isValidPasswordResetHost($requestHostWithoutPort) ? $requestHostWithoutPort : 'localhost';
     $requestSiteUrl = (requestUsesHttps() ? 'https' : 'http') . '://' . $requestHost;
     $configuredSiteUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
-    $placeholderSiteUrl = defined('DEFAULT_PLACEHOLDER_SITE_URL') ? DEFAULT_PLACEHOLDER_SITE_URL : 'https://yourdomain.com';
     $configuredHost = null;
     if ($configuredSiteUrl !== '' && is_string(parse_url($configuredSiteUrl, PHP_URL_SCHEME))) {
         $parsedConfiguredHost = parse_url($configuredSiteUrl, PHP_URL_HOST);
@@ -356,7 +357,7 @@ function buildPasswordResetSiteUrl(): string {
         return $requestSiteUrl;
     }
 
-    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== $placeholderSiteUrl) {
+    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== DEFAULT_PLACEHOLDER_SITE_URL) {
         return $configuredSiteUrl;
     }
 

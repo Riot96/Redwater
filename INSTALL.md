@@ -193,7 +193,7 @@ variables.
   on port `587` are allowed by your host/firewall.
 - **Mail not arriving**: verify Mailjet domain authentication, inspect Mailjet's
   message activity logs, and confirm the `MAIL_FROM` mailbox exists.
-- **Reset Link Opens the Wrong Host**: password reset emails stay on the current
+- **Reset link opens the wrong host**: password reset emails stay on the current
   request host when it matches `SITE_URL` or one of its subdomains. If your dev
   or staging site uses a different domain entirely, set `SITE_URL` for that
   environment to the correct hostname.
