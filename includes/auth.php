@@ -286,9 +286,8 @@ function resetPassword(string $token, string $newPassword): array {
 }
 
 function requestUsesHttps(): bool {
-    $forwardedProtoParts = explode(',', serverString('HTTP_X_FORWARDED_PROTO'));
-    $forwardedProto = strtolower(trim($forwardedProtoParts[0]));
-    if ($forwardedProto === 'https') {
+    $requestScheme = strtolower(serverString('REQUEST_SCHEME'));
+    if ($requestScheme === 'https') {
         return true;
     }
 
@@ -335,7 +334,10 @@ function isAllowedPasswordResetHost(string $requestHost, string $configuredHost)
 }
 
 function buildPasswordResetSiteUrl(): string {
-    $rawRequestHost = serverString('HTTP_HOST', 'localhost');
+    $rawRequestHost = serverString('SERVER_NAME');
+    if ($rawRequestHost === '') {
+        $rawRequestHost = serverString('HTTP_HOST', 'localhost');
+    }
     $rawRequestHostWithoutPort = requestHostWithoutPort($rawRequestHost);
     $requestHostIsValid = isValidPasswordResetHost($rawRequestHostWithoutPort);
     $requestHost = $requestHostIsValid ? $rawRequestHost : 'localhost';
@@ -362,7 +364,6 @@ function buildPasswordResetSiteUrl(): string {
         return $configuredSiteUrl;
     }
 
-    error_log('Password reset email is using the request host fallback because SITE_URL is unset or still at the default placeholder value for this environment.');
     return $requestSiteUrl;
 }
 
