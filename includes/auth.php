@@ -8,11 +8,11 @@ if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
 }
 
 // Password reset links remain valid for one hour from issuance.
-defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 3600);
+defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 60 * 60);
 // Allow a small future skew so slightly fast app servers do not invalidate brand-new tokens.
-defined('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE') || define('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE', 300);
+defined('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE') || define('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE', 5 * 60);
 // Prefix marks self-validating password reset tokens that embed their issue timestamp.
-defined('PASSWORD_RESET_TOKEN_PREFIX') || define('PASSWORD_RESET_TOKEN_PREFIX', 'rw');
+defined('PASSWORD_RESET_TOKEN_PREFIX') || define('PASSWORD_RESET_TOKEN_PREFIX', 'pr');
 // Ten decimal digits preserve Unix timestamps through the year 2286 within a fixed-width token.
 defined('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS') || define('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS', 10);
 // Random suffix keeps the overall token at 64 characters while preserving strong entropy.
@@ -311,11 +311,11 @@ function validatePasswordResetToken(string $token): ?array {
     }
 
     $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
-    if ($resetTokenExpiresValue !== null && !is_string($resetTokenExpiresValue)) {
+    if ($resetTokenExpiresValue === null || !is_string($resetTokenExpiresValue)) {
         return null;
     }
 
-    $resetTokenExpiresTimestamp = strtotime($resetTokenExpiresValue ?? '');
+    $resetTokenExpiresTimestamp = strtotime($resetTokenExpiresValue);
     if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
         return null;
     }
