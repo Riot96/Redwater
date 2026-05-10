@@ -314,7 +314,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
                         $body .= "Newsletter Opt-In: " . ($inquiryValues['newsletter_opt_in'] ? 'Yes' : 'No') . "\n";
                         if ($inquiryValues['newsletter_opt_in']) {
-                            $body .= "Mailjet Newsletter Sync: " . ($newsletterSync['success'] ? 'Subscribed' : 'Pending / Failed (' . $newsletterSync['status'] . ')') . "\n";
+                            $body .= "Mailjet Newsletter Sync: " . ($newsletterSync['success'] ? 'Subscribed' : 'Failed (' . $newsletterSync['status'] . ')') . "\n";
                         }
                         $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
                         $body .= "Message:\n{$inquiryValues['message']}\n";
@@ -348,6 +348,7 @@ $phone = getSetting('contact_phone');
 $cEmail = getSetting('contact_email');
 $address = getSetting('contact_address');
 $mapEmbed = getSetting('contact_map_embed');
+$newsletterSignupSiteName = getSetting('site_name', 'RedWater Entertainment');
 $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
 ?>
 
@@ -493,7 +494,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                   <div class="form-group">
                     <label class="form-check">
                       <input type="checkbox" name="newsletter_opt_in" value="1" <?= $inquiryValues['newsletter_opt_in'] ? 'checked' : '' ?>>
-                      I want to receive the RedWater newsletter by email.
+                      I want to receive the <?= e($newsletterSignupSiteName) ?> newsletter by email.
                     </label>
                     <div class="form-hint">Optional. We will use this email address for occasional newsletter and event updates.</div>
                   </div>

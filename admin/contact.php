@@ -664,7 +664,7 @@ include __DIR__ . '/../includes/header.php';
                   <td><?= e(ucfirst(stringValue($msg['preferred_contact_method'] ?? 'email'))) ?></td>
                   <td><?= e($msg['subject'] ?: '—') ?></td>
                   <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($msg['message']) ?>"><?= e($msg['message']) ?></td>
-                  <td><?= !empty($msg['newsletter_opt_in']) ? 'Yes' : 'No' ?></td>
+                  <td><?= $hasNewsletterOptInColumn ? (!empty($msg['newsletter_opt_in']) ? 'Yes' : 'No') : '—' ?></td>
                   <td><?= e($msg['location_address'] ?: '—') ?></td>
                   <td><?= formatDateOrFallback($msg['created_at'] ?? null, 'M j, Y g:ia') ?></td>
                   <td><span class="status-badge <?= $msg['is_read'] ? 'status-approved' : 'status-pending' ?>"><?= $msg['is_read'] ? 'Read' : 'New' ?></span></td>
