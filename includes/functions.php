@@ -1627,7 +1627,7 @@ function syncMailjetContactToNewsletterList(string $email): array {
     }
 
     $apiKey = defined('SMTP_USERNAME') ? trim(stringValue(SMTP_USERNAME)) : '';
-    $apiSecret = defined('SMTP_PASSWORD') ? stringValue(SMTP_PASSWORD) : '';
+    $apiSecret = defined('SMTP_PASSWORD') ? trim(stringValue(SMTP_PASSWORD)) : '';
     if ($apiKey === '' || $apiSecret === '') {
         return [
             'attempted' => false,

@@ -528,19 +528,19 @@ include __DIR__ . '/../includes/header.php';
 
     <?php if ($showInquiryForm): ?>
       <?php
-      $inquiryFormValues = [
-          'id' => intValue($editMessage['id'] ?? null),
-          'name' => stringValue($editMessage['name'] ?? ''),
-          'email' => stringValue($editMessage['email'] ?? ''),
-          'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
-          'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
+       $inquiryFormValues = [
+           'id' => intValue($editMessage['id'] ?? null),
+           'name' => stringValue($editMessage['name'] ?? ''),
+           'email' => stringValue($editMessage['email'] ?? ''),
+           'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
+           'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
            'location_address' => stringValue($editMessage['location_address'] ?? ''),
            'subject' => stringValue($editMessage['subject'] ?? ''),
            'message' => stringValue($editMessage['message'] ?? ''),
            'newsletter_opt_in' => !empty($editMessage['newsletter_opt_in']),
            'converted_volunteer_id' => intValue($editMessage['converted_volunteer_id'] ?? null),
            'is_read' => !empty($editMessage['is_read']),
-        ];
+       ];
        ?>
       <div class="card mb-3" id="inquiry-form">
         <div class="card-body">
