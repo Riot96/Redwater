@@ -242,7 +242,7 @@ function generatePasswordResetToken(string $email): ?string {
     $token = bin2hex(random_bytes(32));
 
     $stmt = $db->prepare(
-        'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(NOW(), INTERVAL 1 HOUR) WHERE email = ?'
+        'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR) WHERE email = ?'
     );
     $stmt->execute([$token, $email]);
 
@@ -256,7 +256,7 @@ function validatePasswordResetToken(string $token): ?array {
     if (empty($token)) return null;
     $db = getDb();
     $stmt = $db->prepare(
-        'SELECT id, email, display_name FROM users WHERE reset_token = ? AND reset_token_expires > NOW()'
+        'SELECT id, email, display_name FROM users WHERE reset_token = ? AND reset_token_expires > UTC_TIMESTAMP()'
     );
     $stmt->execute([$token]);
     /** @var array{id: int, email: string, display_name: string}|false $user */
