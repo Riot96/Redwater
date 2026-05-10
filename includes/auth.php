@@ -7,6 +7,9 @@ if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
     require_once __DIR__ . '/config.php';
 }
 
+defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 3600);
+defined('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE') || define('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE', 300);
+
 // ─── Session Init ─────────────────────────────────────────────────────────────
 function initSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
@@ -239,10 +242,10 @@ function generatePasswordResetToken(string $email): ?string {
         return null; // Don't reveal whether email exists
     }
 
-    $token = 'rw' . str_pad(dechex(time()), 8, '0', STR_PAD_LEFT) . bin2hex(random_bytes(27));
+    $token = 'rw' . sprintf('%010d', time()) . bin2hex(random_bytes(26));
 
     $stmt = $db->prepare(
-        'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR) WHERE email = ?'
+        'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL ' . PASSWORD_RESET_TOKEN_LIFETIME . ' SECOND) WHERE email = ?'
     );
     $stmt->execute([$token, $email]);
 
@@ -250,21 +253,21 @@ function generatePasswordResetToken(string $email): ?string {
 }
 
 function isCurrentPasswordResetToken(string $token): bool {
-    if (!preg_match('/^rw([0-9a-f]{8})([0-9a-f]{54})$/', $token, $matches)) {
+    if (!preg_match('/^rw([0-9]{10})([0-9a-f]{52})$/', $token, $matches)) {
         return false;
     }
 
-    $issuedAt = hexdec($matches[1]);
+    $issuedAt = (int)$matches[1];
     if ($issuedAt <= 0) {
         return false;
     }
 
     $now = time();
-    if ($issuedAt > $now + 300) {
+    if ($issuedAt > $now + PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE) {
         return false;
     }
 
-    return ($now - $issuedAt) <= 3600;
+    return ($now - $issuedAt) <= PASSWORD_RESET_TOKEN_LIFETIME;
 }
 
 /**
