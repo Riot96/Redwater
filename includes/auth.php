@@ -285,11 +285,80 @@ function resetPassword(string $token, string $newPassword): array {
     return ['success' => true];
 }
 
+function requestUsesHttps(): bool {
+    $forwardedProtoParts = explode(',', serverString('HTTP_X_FORWARDED_PROTO'));
+    $forwardedProto = strtolower(trim($forwardedProtoParts[0]));
+    if ($forwardedProto === 'https') {
+        return true;
+    }
+
+    $https = strtolower(serverString('HTTPS'));
+    return $https !== '' && $https !== 'off';
+}
+
+function requestHostWithoutPort(string $host): string {
+    if (preg_match('/^\[([0-9A-Fa-f:.]+)\](?::\d+)?$/', $host, $ipv6Matches) === 1) {
+        return $ipv6Matches[1];
+    }
+
+    if (preg_match('/^([^:]+)(?::\d+)?$/', $host, $hostMatches) === 1) {
+        return $hostMatches[1];
+    }
+
+    return $host;
+}
+
+function isAllowedPasswordResetHost(string $requestHost, string $configuredHost): bool {
+    $normalizedRequestHost = strtolower(trim($requestHost, '.'));
+    $normalizedConfiguredHost = strtolower(trim($configuredHost, '.'));
+
+    if ($normalizedRequestHost === '' || $normalizedConfiguredHost === '') {
+        return false;
+    }
+
+    if (
+        filter_var($normalizedRequestHost, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
+        && filter_var($normalizedRequestHost, FILTER_VALIDATE_IP) === false
+    ) {
+        return false;
+    }
+
+    if (
+        filter_var($normalizedConfiguredHost, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
+        && filter_var($normalizedConfiguredHost, FILTER_VALIDATE_IP) === false
+    ) {
+        return false;
+    }
+
+    return $normalizedRequestHost === $normalizedConfiguredHost
+        || str_ends_with($normalizedRequestHost, '.' . $normalizedConfiguredHost);
+}
+
+function buildPasswordResetSiteUrl(): string {
+    $requestHost = serverString('HTTP_HOST', 'localhost');
+    $requestHostWithoutPort = requestHostWithoutPort($requestHost);
+    $requestSiteUrl = (requestUsesHttps() ? 'https' : 'http') . '://' . $requestHost;
+    $configuredSiteUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
+    $configuredHost = parse_url($configuredSiteUrl, PHP_URL_HOST);
+
+    if (
+        $configuredSiteUrl !== ''
+        && is_string($configuredHost)
+        && isAllowedPasswordResetHost($requestHostWithoutPort, $configuredHost)
+    ) {
+        return $requestSiteUrl;
+    }
+
+    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== 'https://yourdomain.com') {
+        return $configuredSiteUrl;
+    }
+
+    return $requestSiteUrl;
+}
+
 // ─── Send password reset email ────────────────────────────────────────────────
 function sendPasswordResetEmail(string $email, string $token): bool {
-    $host = serverString('HTTP_HOST', 'localhost');
-    $siteUrl = defined('SITE_URL') ? SITE_URL : 'http://' . $host;
-    $resetUrl = $siteUrl . '/reset-password.php?token=' . urlencode($token);
+    $resetUrl = buildPasswordResetSiteUrl() . '/reset-password.php?token=' . urlencode($token);
 
     $subject = 'Password Reset - ' . buildDefaultMailFromName();
     $message = "Hello,\n\nYou requested a password reset for your RedWater Entertainment account.\n\n";

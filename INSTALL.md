@@ -177,6 +177,10 @@ variables.
 
 1. Request a password reset from `/forgot-password.php`.
 2. Confirm the message arrives from the `MAIL_FROM` address you configured.
+   - If you test from a dev or staging subdomain of your main site domain, the
+     password reset link will stay on that current subdomain.
+   - If you test from a completely different hostname, update `SITE_URL` for
+     that environment.
 3. Submit the contact or volunteer form and confirm the admin notification is
    received.
 4. If a message lands in spam, confirm your SPF/DKIM records are passing in
@@ -189,6 +193,10 @@ variables.
   on port `587` are allowed by your host/firewall.
 - **Mail not arriving**: verify Mailjet domain authentication, inspect Mailjet's
   message activity logs, and confirm the `MAIL_FROM` mailbox exists.
+- **Reset link opens the wrong host**: password reset emails stay on the current
+  request host when it matches `SITE_URL` or one of its subdomains. If your dev
+  or staging site uses a different domain entirely, set `SITE_URL` for that
+  environment to the correct hostname.
 - **`.env` settings not applying**: make sure the file is named exactly `.env`
   in the project root (next to `index.php`) and that the web server can read it.
 - **Fallback behavior**: if `SMTP_HOST` is blank, RedWater uses PHP `mail()`
