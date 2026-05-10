@@ -299,9 +299,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($errors === []) {
-                    $newsletterSync = null;
+                    $newsletterSyncStatusLine = '';
                     if ($inquiryValues['newsletter_opt_in']) {
                         $newsletterSync = syncMailjetContactToNewsletterList($inquiryValues['email']);
+                        $newsletterSyncStatusLine = "Mailjet Newsletter Sync: "
+                            . ($newsletterSync['success'] ? 'Subscribed' : 'Failed (' . $newsletterSync['status'] . ')');
                     }
 
                     $adminEmail = getSetting('contact_email');
@@ -313,8 +315,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $body .= "Preferred Contact: " . ucfirst($inquiryValues['preferred_contact_method']) . "\n";
                         $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
                         $body .= "Newsletter Opt-In: " . ($inquiryValues['newsletter_opt_in'] ? 'Yes' : 'No') . "\n";
-                        if ($inquiryValues['newsletter_opt_in']) {
-                            $body .= "Mailjet Newsletter Sync: " . ($newsletterSync['success'] ? 'Subscribed' : 'Failed (' . $newsletterSync['status'] . ')') . "\n";
+                        if ($newsletterSyncStatusLine !== '') {
+                            $body .= $newsletterSyncStatusLine . "\n";
                         }
                         $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
                         $body .= "Message:\n{$inquiryValues['message']}\n";
