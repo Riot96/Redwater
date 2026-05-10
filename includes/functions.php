@@ -1601,6 +1601,16 @@ function sendSiteMail(string $toEmail, string $subject, string $body, string $re
 }
 
 /**
+ * Syncs an opted-in inquiry email address to the configured Mailjet newsletter list.
+ *
+ * Status meanings:
+ * - invalid_email: the provided address was not a valid email
+ * - list_not_configured: no Mailjet list ID has been configured
+ * - credentials_missing: no Mailjet API credentials were available
+ * - subscribed: Mailjet accepted the contact subscription request
+ * - request_failed: the Mailjet request could not be completed successfully
+ *
+ * @param string $email Email address from the inquiry form opt-in.
  * @return array{
  *   attempted: bool,
  *   success: bool,
@@ -1626,8 +1636,8 @@ function syncMailjetContactToNewsletterList(string $email): array {
         ];
     }
 
-    $apiKey = defined('SMTP_USERNAME') ? trim(stringValue(SMTP_USERNAME)) : '';
-    $apiSecret = defined('SMTP_PASSWORD') ? trim(stringValue(SMTP_PASSWORD)) : '';
+    $apiKey = defined('MAILJET_API_KEY') ? trim(stringValue(MAILJET_API_KEY)) : '';
+    $apiSecret = defined('MAILJET_API_SECRET') ? trim(stringValue(MAILJET_API_SECRET)) : '';
     if ($apiKey === '' || $apiSecret === '') {
         return [
             'attempted' => false,
@@ -1638,6 +1648,7 @@ function syncMailjetContactToNewsletterList(string $email): array {
 
     $payload = json_encode([
         'Email' => $normalizedEmail,
+        // addforce adds the contact to the list even if they were previously removed.
         'Action' => 'addforce',
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($payload)) {
@@ -1662,9 +1673,9 @@ function syncMailjetContactToNewsletterList(string $email): array {
     ]);
 
     $response = @file_get_contents('https://api.mailjet.com/v3/REST/contactslist/' . $listId . '/managecontact', false, $context);
-    $responseHeaders = $http_response_header;
+    $httpResponseHeader = $http_response_header;
     $statusCode = 0;
-    if (isset($responseHeaders[0]) && preg_match('/\s(\d{3})(?:\s|$)/', stringValue($responseHeaders[0]), $matches) === 1) {
+    if (isset($httpResponseHeader[0]) && preg_match('/\s(\d{3})(?:\s|$)/', stringValue($httpResponseHeader[0]), $matches) === 1) {
         $statusCode = (int)$matches[1];
     }
 

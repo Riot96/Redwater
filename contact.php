@@ -493,9 +493,9 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                   <div class="form-group">
                     <label class="form-check">
                       <input type="checkbox" name="newsletter_opt_in" value="1" <?= $inquiryValues['newsletter_opt_in'] ? 'checked' : '' ?>>
-                      I want to receive RedWater newsletter updates by email.
+                      I want to receive the RedWater newsletter by email.
                     </label>
-                    <div class="form-hint">If enabled, we will try to add this email address to our configured Mailjet newsletter list.</div>
+                    <div class="form-hint">Optional. We will use this email address for occasional newsletter and event updates.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-check">

@@ -108,6 +108,9 @@ defined('SMTP_USERNAME')    || define('SMTP_USERNAME',    configEnvString('SMTP_
 defined('SMTP_PASSWORD')    || define('SMTP_PASSWORD',    configEnvString('SMTP_PASSWORD', ''));
 defined('SMTP_ENCRYPTION')  || define('SMTP_ENCRYPTION',  strtolower(configEnvString('SMTP_ENCRYPTION', 'tls')));
 defined('SMTP_TIMEOUT')     || define('SMTP_TIMEOUT',     configEnvInt('SMTP_TIMEOUT', 15));
+defined('MAILJET_API_KEY')  || define('MAILJET_API_KEY',  configEnvString('MAILJET_API_KEY', configEnvString('SMTP_USERNAME', '')));
+defined('MAILJET_API_SECRET') || define('MAILJET_API_SECRET', configEnvString('MAILJET_API_SECRET', configEnvString('SMTP_PASSWORD', '')));
+// Set this in the environment or root .env file to sync inquiry newsletter opt-ins to a Mailjet list.
 defined('MAILJET_NEWSLETTER_LIST_ID') || define('MAILJET_NEWSLETTER_LIST_ID', configEnvInt('MAILJET_NEWSLETTER_LIST_ID', 0));
 
 // ─── Upload Settings ──────────────────────────────────────────────────────────

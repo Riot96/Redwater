@@ -8,10 +8,12 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 $db = getDb();
+$newsletterOptInMigrationWarning = '';
 try {
     ensureAutomaticMigrationColumn($db, 'contact_submissions', 'newsletter_opt_in TINYINT(1) NOT NULL DEFAULT 0');
 } catch (PDOException $e) {
     error_log('Unable to add contact_submissions.newsletter_opt_in automatically: ' . $e->getMessage());
+    $newsletterOptInMigrationWarning = 'Inquiry newsletter opt-ins cannot be stored locally until the latest database migration is applied.';
 }
 $contactSubmissionColumnsStmt = $db->query('SHOW COLUMNS FROM `contact_submissions`');
 assert($contactSubmissionColumnsStmt instanceof PDOStatement);
@@ -385,6 +387,10 @@ include __DIR__ . '/../includes/header.php';
       </div>
     </div>
 
+    <?php if ($newsletterOptInMigrationWarning !== ''): ?>
+      <div class="alert alert-warning mb-3"><?= e($newsletterOptInMigrationWarning) ?></div>
+    <?php endif; ?>
+
     <div class="card mb-3">
       <div class="card-body">
         <h3 style="font-size:1rem;margin-bottom:1.5rem;">Site Settings</h3>
@@ -528,20 +534,20 @@ include __DIR__ . '/../includes/header.php';
 
     <?php if ($showInquiryForm): ?>
       <?php
-       $inquiryFormValues = [
-           'id' => intValue($editMessage['id'] ?? null),
-           'name' => stringValue($editMessage['name'] ?? ''),
-           'email' => stringValue($editMessage['email'] ?? ''),
-           'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
-           'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
-           'location_address' => stringValue($editMessage['location_address'] ?? ''),
-           'subject' => stringValue($editMessage['subject'] ?? ''),
-           'message' => stringValue($editMessage['message'] ?? ''),
-           'newsletter_opt_in' => !empty($editMessage['newsletter_opt_in']),
-           'converted_volunteer_id' => intValue($editMessage['converted_volunteer_id'] ?? null),
-           'is_read' => !empty($editMessage['is_read']),
-       ];
-       ?>
+      $inquiryFormValues = [
+          'id' => intValue($editMessage['id'] ?? null),
+          'name' => stringValue($editMessage['name'] ?? ''),
+          'email' => stringValue($editMessage['email'] ?? ''),
+          'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
+          'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
+          'location_address' => stringValue($editMessage['location_address'] ?? ''),
+          'subject' => stringValue($editMessage['subject'] ?? ''),
+          'message' => stringValue($editMessage['message'] ?? ''),
+          'newsletter_opt_in' => !empty($editMessage['newsletter_opt_in']),
+          'converted_volunteer_id' => intValue($editMessage['converted_volunteer_id'] ?? null),
+          'is_read' => !empty($editMessage['is_read']),
+      ];
+      ?>
       <div class="card mb-3" id="inquiry-form">
         <div class="card-body">
           <div class="d-flex justify-between align-center mb-2" style="gap:1rem;flex-wrap:wrap;">

@@ -170,6 +170,11 @@ SMTP_TIMEOUT=15
 MAILJET_NEWSLETTER_LIST_ID=123456
 ```
 
+For newsletter opt-ins on the public inquiry form, RedWater uses
+`MAILJET_NEWSLETTER_LIST_ID` and authenticates with `MAILJET_API_KEY` /
+`MAILJET_API_SECRET` when those are set. If you omit the dedicated Mailjet API
+variables, it falls back to `SMTP_USERNAME` / `SMTP_PASSWORD`.
+
 If you prefer to keep non-secret mail settings in `includes/config.local.php`,
 you can still do that while leaving the SMTP credentials in environment
 variables.
