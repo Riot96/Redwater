@@ -362,7 +362,7 @@ function buildPasswordResetSiteUrl(): string {
         return $configuredSiteUrl;
     }
 
-    error_log('Password reset email is using the request host fallback because SITE_URL is not configured for this environment.');
+    error_log('Password reset email is using the request host fallback because SITE_URL is unset or still at the default placeholder value for this environment.');
     return $requestSiteUrl;
 }
 
