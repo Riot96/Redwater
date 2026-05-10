@@ -7,10 +7,15 @@ if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
     require_once __DIR__ . '/config.php';
 }
 
+// Password reset links remain valid for one hour from issuance.
 defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 3600);
+// Allow a small future skew so slightly fast app servers do not invalidate brand-new tokens.
 defined('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE') || define('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE', 300);
+// Prefix marks self-validating password reset tokens that embed their issue timestamp.
 defined('PASSWORD_RESET_TOKEN_PREFIX') || define('PASSWORD_RESET_TOKEN_PREFIX', 'rw');
+// Ten decimal digits preserve Unix timestamps through the year 2286 within a fixed-width token.
 defined('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS') || define('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS', 10);
+// Random suffix keeps the overall token at 64 characters while preserving strong entropy.
 defined('PASSWORD_RESET_TOKEN_RANDOM_BYTES') || define('PASSWORD_RESET_TOKEN_RANDOM_BYTES', 26);
 
 // ─── Session Init ─────────────────────────────────────────────────────────────
@@ -257,6 +262,12 @@ function generatePasswordResetToken(string $email): ?string {
     return $token;
 }
 
+/**
+ * Validates a reset token with an embedded issue timestamp.
+ *
+ * Legacy tokens without the prefixed timestamp format return false here and
+ * should fall back to the stored reset_token_expires value.
+ */
 function isCurrentPasswordResetToken(string $token): bool {
     $pattern = '/^'
         . preg_quote(PASSWORD_RESET_TOKEN_PREFIX, '/')
@@ -299,9 +310,12 @@ function validatePasswordResetToken(string $token): ?array {
         ];
     }
 
-    $resetTokenExpiresValue = $user['reset_token_expires'] ?? '';
-    $resetTokenExpires = is_scalar($resetTokenExpiresValue) ? trim((string)$resetTokenExpiresValue) : '';
-    $resetTokenExpiresTimestamp = strtotime($resetTokenExpires);
+    $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
+    if ($resetTokenExpiresValue !== null && !is_string($resetTokenExpiresValue)) {
+        return null;
+    }
+
+    $resetTokenExpiresTimestamp = strtotime($resetTokenExpiresValue ?? '');
     if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
         return null;
     }
