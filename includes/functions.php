@@ -2060,7 +2060,7 @@ function saveRaffleEntries(array $entries): void {
  */
 function getRaffleShareUrl(): string {
     $baseUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
-    if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
+    if ($baseUrl === '' || $baseUrl === DEFAULT_PLACEHOLDER_SITE_URL) {
         $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
         $host = serverString('HTTP_HOST');
         $hostWithoutPort = $host;

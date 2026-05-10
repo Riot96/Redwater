@@ -349,7 +349,7 @@ function buildPasswordResetSiteUrl(): string {
         return $requestSiteUrl;
     }
 
-    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== 'https://yourdomain.com') {
+    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== DEFAULT_PLACEHOLDER_SITE_URL) {
         return $configuredSiteUrl;
     }
 

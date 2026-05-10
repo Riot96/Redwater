@@ -95,7 +95,8 @@ defined('DB_PASS')    || define('DB_PASS',    'CHANGE_ME_STRONG_PASSWORD');
 defined('DB_CHARSET') || define('DB_CHARSET', 'utf8mb4');
 
 // ─── Site Settings ────────────────────────────────────────────────────────────
-defined('SITE_URL')   || define('SITE_URL',  configEnvString('SITE_URL', 'https://yourdomain.com'));
+defined('DEFAULT_PLACEHOLDER_SITE_URL') || define('DEFAULT_PLACEHOLDER_SITE_URL', 'https://yourdomain.com');
+defined('SITE_URL')   || define('SITE_URL',  configEnvString('SITE_URL', DEFAULT_PLACEHOLDER_SITE_URL));
 defined('SITE_NAME')  || define('SITE_NAME', configEnvString('SITE_NAME', 'RedWater Entertainment'));
 
 // ─── Email Settings ───────────────────────────────────────────────────────────
