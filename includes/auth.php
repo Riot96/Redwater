@@ -9,6 +9,9 @@ if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
 
 defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 3600);
 defined('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE') || define('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE', 300);
+defined('PASSWORD_RESET_TOKEN_PREFIX') || define('PASSWORD_RESET_TOKEN_PREFIX', 'rw');
+defined('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS') || define('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS', 10);
+defined('PASSWORD_RESET_TOKEN_RANDOM_BYTES') || define('PASSWORD_RESET_TOKEN_RANDOM_BYTES', 26);
 
 // ─── Session Init ─────────────────────────────────────────────────────────────
 function initSession(): void {
@@ -242,7 +245,9 @@ function generatePasswordResetToken(string $email): ?string {
         return null; // Don't reveal whether email exists
     }
 
-    $token = 'rw' . sprintf('%010d', time()) . bin2hex(random_bytes(26));
+    $token = PASSWORD_RESET_TOKEN_PREFIX
+        . sprintf('%0' . PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS . 'd', time())
+        . bin2hex(random_bytes(PASSWORD_RESET_TOKEN_RANDOM_BYTES));
 
     $stmt = $db->prepare(
         'UPDATE users SET reset_token = ?, reset_token_expires = FROM_UNIXTIME(UNIX_TIMESTAMP(UTC_TIMESTAMP()) + ?) WHERE email = ?'
@@ -253,15 +258,15 @@ function generatePasswordResetToken(string $email): ?string {
 }
 
 function isCurrentPasswordResetToken(string $token): bool {
-    if (!preg_match('/^rw([0-9]{10})([0-9a-f]{52})$/', $token, $matches)) {
+    $pattern = '/^'
+        . preg_quote(PASSWORD_RESET_TOKEN_PREFIX, '/')
+        . '([0-9]{' . PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS . '})'
+        . '([0-9a-f]{' . (PASSWORD_RESET_TOKEN_RANDOM_BYTES * 2) . '})$/';
+    if (preg_match($pattern, $token, $matches) !== 1) {
         return false;
     }
 
     $issuedAt = (int)$matches[1];
-    if ($issuedAt <= 0) {
-        return false;
-    }
-
     $now = time();
     if ($issuedAt > $now + PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE) {
         return false;
