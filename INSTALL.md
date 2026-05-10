@@ -167,6 +167,7 @@ SMTP_USERNAME=your-mailjet-api-key
 SMTP_PASSWORD=your-mailjet-secret-key
 SMTP_ENCRYPTION=tls
 SMTP_TIMEOUT=15
+MAILJET_NEWSLETTER_LIST_ID=123456
 ```
 
 If you prefer to keep non-secret mail settings in `includes/config.local.php`,
@@ -183,6 +184,9 @@ variables.
      that environment.
 3. Submit the contact or volunteer form and confirm the admin notification is
    received.
+   - If you enable the newsletter opt-in checkbox on the inquiry form, confirm
+     the contact appears in the Mailjet list identified by
+     `MAILJET_NEWSLETTER_LIST_ID`.
 4. If a message lands in spam, confirm your SPF/DKIM records are passing in
    Mailjet and that the envelope sender matches your authenticated domain.
 
@@ -193,6 +197,9 @@ variables.
   on port `587` are allowed by your host/firewall.
 - **Mail not arriving**: verify Mailjet domain authentication, inspect Mailjet's
   message activity logs, and confirm the `MAIL_FROM` mailbox exists.
+- **Newsletter opt-ins not syncing**: verify `MAILJET_NEWSLETTER_LIST_ID` points
+  to the correct Mailjet contacts list and that `SMTP_USERNAME` /
+  `SMTP_PASSWORD` are valid Mailjet API credentials.
 - **Reset link opens the wrong host**: password reset emails stay on the current
   request host when it matches `SITE_URL` or one of its subdomains. If your dev
   or staging site uses a different domain entirely, set `SITE_URL` for that

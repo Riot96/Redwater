@@ -1600,6 +1600,96 @@ function sendSiteMail(string $toEmail, string $subject, string $body, string $re
     return deliverMailMessage($toEmail, $subject, $body, $headers, $from);
 }
 
+/**
+ * @return array{
+ *   attempted: bool,
+ *   success: bool,
+ *   status: 'invalid_email'|'list_not_configured'|'credentials_missing'|'subscribed'|'request_failed'
+ * }
+ */
+function syncMailjetContactToNewsletterList(string $email): array {
+    $normalizedEmail = trim($email);
+    if (!filter_var($normalizedEmail, FILTER_VALIDATE_EMAIL)) {
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'invalid_email',
+        ];
+    }
+
+    $listId = defined('MAILJET_NEWSLETTER_LIST_ID') ? intValue(MAILJET_NEWSLETTER_LIST_ID, 0) : 0;
+    if ($listId <= 0) {
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'list_not_configured',
+        ];
+    }
+
+    $apiKey = defined('SMTP_USERNAME') ? trim(stringValue(SMTP_USERNAME)) : '';
+    $apiSecret = defined('SMTP_PASSWORD') ? stringValue(SMTP_PASSWORD) : '';
+    if ($apiKey === '' || $apiSecret === '') {
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'credentials_missing',
+        ];
+    }
+
+    $payload = json_encode([
+        'Email' => $normalizedEmail,
+        'Action' => 'addforce',
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($payload)) {
+        error_log('Mailjet newsletter sync failed to encode payload for ' . $normalizedEmail . '.');
+        return [
+            'attempted' => true,
+            'success' => false,
+            'status' => 'request_failed',
+        ];
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Authorization: Basic " . base64_encode($apiKey . ':' . $apiSecret) . "\r\n"
+                . "Content-Type: application/json\r\n"
+                . "Accept: application/json\r\n",
+            'content' => $payload,
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $response = @file_get_contents('https://api.mailjet.com/v3/REST/contactslist/' . $listId . '/managecontact', false, $context);
+    $responseHeaders = $http_response_header;
+    $statusCode = 0;
+    if (isset($responseHeaders[0]) && preg_match('/\s(\d{3})(?:\s|$)/', stringValue($responseHeaders[0]), $matches) === 1) {
+        $statusCode = (int)$matches[1];
+    }
+
+    if ($response !== false && $statusCode >= 200 && $statusCode < 300) {
+        return [
+            'attempted' => true,
+            'success' => true,
+            'status' => 'subscribed',
+        ];
+    }
+
+    $responsePreview = $response !== false ? substr(trim($response), 0, 500) : 'No response body returned.';
+    error_log(
+        'Mailjet newsletter sync failed for ' . $normalizedEmail
+        . ' (list ' . $listId . ', status ' . $statusCode . '): '
+        . $responsePreview
+    );
+
+    return [
+        'attempted' => true,
+        'success' => false,
+        'status' => 'request_failed',
+    ];
+}
+
 function logVolunteerAudit(PDO $db, ?int $volunteerId, string $volunteerName, ?int $actorUserId, string $action, string $details = ''): void {
     $stmt = $db->prepare(
         'INSERT INTO volunteer_audit_log (volunteer_id, volunteer_name, actor_user_id, action, details)

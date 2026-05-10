@@ -21,6 +21,7 @@ $inquiryValues = [
     'location_address' => '',
     'subject' => '',
     'message' => '',
+    'newsletter_opt_in' => false,
     'privacy_consent' => false,
 ];
 
@@ -250,6 +251,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'location_address' => trim(postString('location_address')),
             'subject' => trim(postString('subject')),
             'message' => trim(postString('message')),
+            'newsletter_opt_in' => postBool('newsletter_opt_in'),
             'privacy_consent' => postBool('privacy_consent'),
         ];
 
@@ -288,6 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'location_address' => $inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : null,
                     'subject' => $inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : null,
                     'message' => $inquiryValues['message'],
+                    'newsletter_opt_in' => $inquiryValues['newsletter_opt_in'] ? 1 : 0,
                     'privacy_consent' => 1,
                 ], $contactSubmissionColumns);
 
@@ -296,6 +299,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($errors === []) {
+                    $newsletterSync = ['attempted' => false, 'success' => false, 'status' => 'invalid_email'];
+                    if ($inquiryValues['newsletter_opt_in']) {
+                        $newsletterSync = syncMailjetContactToNewsletterList($inquiryValues['email']);
+                    }
+
                     $adminEmail = getSetting('contact_email');
                     if ($adminEmail !== '') {
                         $body = "New inquiry received.\n\n";
@@ -304,6 +312,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $body .= "Phone: " . ($inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : '—') . "\n";
                         $body .= "Preferred Contact: " . ucfirst($inquiryValues['preferred_contact_method']) . "\n";
                         $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
+                        $body .= "Newsletter Opt-In: " . ($inquiryValues['newsletter_opt_in'] ? 'Yes' : 'No') . "\n";
+                        if ($inquiryValues['newsletter_opt_in']) {
+                            $body .= "Mailjet Newsletter Sync: " . ($newsletterSync['success'] ? 'Subscribed' : 'Pending / Failed (' . $newsletterSync['status'] . ')') . "\n";
+                        }
                         $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
                         $body .= "Message:\n{$inquiryValues['message']}\n";
                         sendSiteMail($adminEmail, 'New Inquiry Submission', $body, $inquiryValues['email'], $inquiryValues['name']);
@@ -318,6 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         'location_address' => '',
                         'subject' => '',
                         'message' => '',
+                        'newsletter_opt_in' => false,
                         'privacy_consent' => false,
                     ];
                 }
@@ -476,6 +489,13 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                     <label class="form-label" for="inquiry-message">Message</label>
                     <textarea id="inquiry-message" name="message" class="form-control" rows="6" required><?= e($inquiryValues['message']) ?></textarea>
                     <?php if ($activeForm === 'inquiry' && isset($errors['message'])): ?><div class="form-error"><?= e($errors['message']) ?></div><?php endif; ?>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-check">
+                      <input type="checkbox" name="newsletter_opt_in" value="1" <?= $inquiryValues['newsletter_opt_in'] ? 'checked' : '' ?>>
+                      I want to receive RedWater newsletter updates by email.
+                    </label>
+                    <div class="form-hint">If enabled, we will try to add this email address to our configured Mailjet newsletter list.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-check">

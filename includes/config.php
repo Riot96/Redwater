@@ -108,6 +108,7 @@ defined('SMTP_USERNAME')    || define('SMTP_USERNAME',    configEnvString('SMTP_
 defined('SMTP_PASSWORD')    || define('SMTP_PASSWORD',    configEnvString('SMTP_PASSWORD', ''));
 defined('SMTP_ENCRYPTION')  || define('SMTP_ENCRYPTION',  strtolower(configEnvString('SMTP_ENCRYPTION', 'tls')));
 defined('SMTP_TIMEOUT')     || define('SMTP_TIMEOUT',     configEnvInt('SMTP_TIMEOUT', 15));
+defined('MAILJET_NEWSLETTER_LIST_ID') || define('MAILJET_NEWSLETTER_LIST_ID', configEnvInt('MAILJET_NEWSLETTER_LIST_ID', 0));
 
 // ─── Upload Settings ──────────────────────────────────────────────────────────
 defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
