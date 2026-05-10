@@ -339,7 +339,14 @@ function buildPasswordResetSiteUrl(): string {
     $requestHostWithoutPort = requestHostWithoutPort($requestHost);
     $requestSiteUrl = (requestUsesHttps() ? 'https' : 'http') . '://' . $requestHost;
     $configuredSiteUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
-    $configuredHost = parse_url($configuredSiteUrl, PHP_URL_HOST);
+    $placeholderSiteUrl = defined('DEFAULT_PLACEHOLDER_SITE_URL') ? DEFAULT_PLACEHOLDER_SITE_URL : 'https://yourdomain.com';
+    $configuredHost = null;
+    if ($configuredSiteUrl !== '' && is_string(parse_url($configuredSiteUrl, PHP_URL_SCHEME))) {
+        $parsedConfiguredHost = parse_url($configuredSiteUrl, PHP_URL_HOST);
+        if (is_string($parsedConfiguredHost) && $parsedConfiguredHost !== '') {
+            $configuredHost = $parsedConfiguredHost;
+        }
+    }
 
     if (
         $configuredSiteUrl !== ''
@@ -349,7 +356,7 @@ function buildPasswordResetSiteUrl(): string {
         return $requestSiteUrl;
     }
 
-    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== DEFAULT_PLACEHOLDER_SITE_URL) {
+    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== $placeholderSiteUrl) {
         return $configuredSiteUrl;
     }
 
