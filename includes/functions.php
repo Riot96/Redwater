@@ -1651,6 +1651,14 @@ function syncMailjetContactToNewsletterList(string $email): array {
             'status' => 'credentials_missing',
         ];
     }
+    if (preg_match('/[\x00-\x1F\x7F]/', $apiKey . $apiSecret) === 1) {
+        error_log('Mailjet newsletter sync skipped due to invalid API credential characters.');
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'credentials_missing',
+        ];
+    }
 
     $payload = json_encode([
         'Email' => $normalizedEmail,
