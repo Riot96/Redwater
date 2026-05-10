@@ -3,7 +3,7 @@
  * RedWater Entertainment - Authentication Functions
  */
 
-if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
+if (!defined('DB_HOST')) {
     require_once __DIR__ . '/config.php';
 }
 
@@ -336,11 +336,15 @@ function isAllowedPasswordResetHost(string $requestHost, string $configuredHost)
 
 function buildPasswordResetSiteUrl(): string {
     $rawRequestHost = serverString('HTTP_HOST', 'localhost');
-    $requestHostWithoutPort = requestHostWithoutPort($rawRequestHost);
-    $requestHost = isValidPasswordResetHost($requestHostWithoutPort) ? $rawRequestHost : 'localhost';
-    $requestHostWithoutPort = isValidPasswordResetHost($requestHostWithoutPort) ? $requestHostWithoutPort : 'localhost';
+    $rawRequestHostWithoutPort = requestHostWithoutPort($rawRequestHost);
+    $requestHostIsValid = isValidPasswordResetHost($rawRequestHostWithoutPort);
+    $requestHost = $requestHostIsValid ? $rawRequestHost : 'localhost';
+    $validatedRequestHostWithoutPort = $requestHostIsValid ? $rawRequestHostWithoutPort : 'localhost';
     $requestSiteUrl = (requestUsesHttps() ? 'https' : 'http') . '://' . $requestHost;
     $configuredSiteUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
+    if (!defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
+        require_once __DIR__ . '/config.php';
+    }
     $configuredHost = null;
     if ($configuredSiteUrl !== '' && is_string(parse_url($configuredSiteUrl, PHP_URL_SCHEME))) {
         $parsedConfiguredHost = parse_url($configuredSiteUrl, PHP_URL_HOST);
@@ -352,7 +356,7 @@ function buildPasswordResetSiteUrl(): string {
     if (
         $configuredSiteUrl !== ''
         && is_string($configuredHost)
-        && isAllowedPasswordResetHost($requestHostWithoutPort, $configuredHost)
+        && isAllowedPasswordResetHost($validatedRequestHostWithoutPort, $configuredHost)
     ) {
         return $requestSiteUrl;
     }
