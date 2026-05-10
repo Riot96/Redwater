@@ -59,7 +59,7 @@ if (getString('export') === 'inquiries') {
                 $csvSafeCell($message['location_address'] ?? ''),
                 $csvSafeCell($message['subject'] ?? ''),
                 $csvSafeCell($message['message'] ?? ''),
-                !empty($message['newsletter_opt_in']) ? 'Yes' : 'No',
+                $hasNewsletterOptInColumn ? (!empty($message['newsletter_opt_in']) ? 'Yes' : 'No') : '—',
                 !empty($message['is_read']) ? 'Yes' : 'No',
                 $csvSafeCell($message['created_at'] ?? ''),
                 $csvSafeCell($message['updated_at'] ?? ''),

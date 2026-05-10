@@ -1627,7 +1627,7 @@ function syncMailjetContactToNewsletterList(string $email): array {
         ];
     }
 
-    $listId = defined('MAILJET_NEWSLETTER_LIST_ID') ? intValue(MAILJET_NEWSLETTER_LIST_ID, 0) : 0;
+    $listId = defined('MAILJET_NEWSLETTER_LIST_ID') ? intValue((int) MAILJET_NEWSLETTER_LIST_ID, 0) : 0;
     if ($listId <= 0) {
         return [
             'attempted' => false,
@@ -1673,6 +1673,7 @@ function syncMailjetContactToNewsletterList(string $email): array {
     ]);
 
     $response = @file_get_contents('https://api.mailjet.com/v3/REST/contactslist/' . $listId . '/managecontact', false, $context);
+    // PHP populates this local-scope variable for HTTP stream wrapper responses.
     $httpResponseHeader = $http_response_header;
     $statusCode = 0;
     if (isset($httpResponseHeader[0]) && preg_match('/\s(\d{3})(?:\s|$)/', stringValue($httpResponseHeader[0]), $matches) === 1) {

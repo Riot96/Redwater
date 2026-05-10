@@ -203,8 +203,9 @@ variables.
 - **Mail not arriving**: verify Mailjet domain authentication, inspect Mailjet's
   message activity logs, and confirm the `MAIL_FROM` mailbox exists.
 - **Newsletter opt-ins not syncing**: verify `MAILJET_NEWSLETTER_LIST_ID` points
-  to the correct Mailjet contacts list and that `SMTP_USERNAME` /
-  `SMTP_PASSWORD` are valid Mailjet API credentials.
+  to the correct Mailjet contacts list and that `MAILJET_API_KEY` /
+  `MAILJET_API_SECRET` are correct. If you are relying on fallback credentials,
+  also verify `SMTP_USERNAME` / `SMTP_PASSWORD`.
 - **Reset link opens the wrong host**: password reset emails stay on the current
   request host when it matches `SITE_URL` or one of its subdomains. If your dev
   or staging site uses a different domain entirely, set `SITE_URL` for that

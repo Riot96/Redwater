@@ -299,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if ($errors === []) {
-                    $newsletterSync = ['attempted' => false, 'success' => false, 'status' => 'invalid_email'];
+                    $newsletterSync = null;
                     if ($inquiryValues['newsletter_opt_in']) {
                         $newsletterSync = syncMailjetContactToNewsletterList($inquiryValues['email']);
                     }
