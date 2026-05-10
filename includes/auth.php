@@ -9,8 +9,6 @@ if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
 
 // Password reset links remain valid for one hour from issuance.
 defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 60 * 60);
-// Allow a small future skew so slightly fast app servers do not invalidate brand-new tokens.
-defined('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE') || define('PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE', 5 * 60);
 // Prefix marks self-validating password reset tokens that embed their issue timestamp.
 defined('PASSWORD_RESET_TOKEN_PREFIX') || define('PASSWORD_RESET_TOKEN_PREFIX', 'pr');
 // Ten decimal digits preserve Unix timestamps through the year 2286 within a fixed-width token.
@@ -266,7 +264,9 @@ function generatePasswordResetToken(string $email): ?string {
  * Validates a reset token with an embedded issue timestamp.
  *
  * Legacy tokens without the prefixed timestamp format return false here and
- * should fall back to the stored reset_token_expires value.
+ * should fall back to the stored reset_token_expires value. The token is still
+ * matched exactly in the database before this helper is used, so app-server
+ * clock skew should not cause brand-new links to be rejected.
  */
 function isCurrentPasswordResetToken(string $token): bool {
     $pattern = '/^'
@@ -279,10 +279,6 @@ function isCurrentPasswordResetToken(string $token): bool {
 
     $issuedAt = (int)$matches[1];
     $now = time();
-    if ($issuedAt > $now + PASSWORD_RESET_TOKEN_FUTURE_SKEW_TOLERANCE) {
-        return false;
-    }
-
     return ($now - $issuedAt) <= PASSWORD_RESET_TOKEN_LIFETIME;
 }
 
