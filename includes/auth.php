@@ -239,7 +239,7 @@ function generatePasswordResetToken(string $email): ?string {
         return null; // Don't reveal whether email exists
     }
 
-    $token = bin2hex(random_bytes(32));
+    $token = 'rw' . str_pad(dechex(time()), 8, '0', STR_PAD_LEFT) . bin2hex(random_bytes(27));
 
     $stmt = $db->prepare(
         'UPDATE users SET reset_token = ?, reset_token_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR) WHERE email = ?'
@@ -249,6 +249,24 @@ function generatePasswordResetToken(string $email): ?string {
     return $token;
 }
 
+function isCurrentPasswordResetToken(string $token): bool {
+    if (!preg_match('/^rw([0-9a-f]{8})([0-9a-f]{54})$/', $token, $matches)) {
+        return false;
+    }
+
+    $issuedAt = hexdec($matches[1]);
+    if ($issuedAt <= 0) {
+        return false;
+    }
+
+    $now = time();
+    if ($issuedAt > $now + 300) {
+        return false;
+    }
+
+    return ($now - $issuedAt) <= 3600;
+}
+
 /**
  * @return array{id: int, email: string, display_name: string}|null
  */
@@ -256,12 +274,34 @@ function validatePasswordResetToken(string $token): ?array {
     if (empty($token)) return null;
     $db = getDb();
     $stmt = $db->prepare(
-        'SELECT id, email, display_name FROM users WHERE reset_token = ? AND reset_token_expires > UTC_TIMESTAMP()'
+        'SELECT id, email, display_name, reset_token_expires FROM users WHERE reset_token = ?'
     );
     $stmt->execute([$token]);
-    /** @var array{id: int, email: string, display_name: string}|false $user */
+    /** @var array{id: int, email: string, display_name: string, reset_token_expires?: mixed}|false $user */
     $user = $stmt->fetch();
-    return $user ?: null;
+    if (!$user) {
+        return null;
+    }
+
+    if (isCurrentPasswordResetToken($token)) {
+        return [
+            'id' => $user['id'],
+            'email' => $user['email'],
+            'display_name' => $user['display_name'],
+        ];
+    }
+
+    $resetTokenExpires = stringValue($user['reset_token_expires'] ?? '');
+    $resetTokenExpiresTimestamp = strtotime($resetTokenExpires);
+    if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
+        return null;
+    }
+
+    return [
+        'id' => $user['id'],
+        'email' => $user['email'],
+        'display_name' => $user['display_name'],
+    ];
 }
 
 /**
