@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS contact_submissions (
     location_address VARCHAR(255) NULL,
     subject VARCHAR(255) NULL,
     message TEXT NOT NULL,
+    newsletter_opt_in TINYINT(1) NOT NULL DEFAULT 0,
     privacy_consent TINYINT(1) NOT NULL DEFAULT 0,
     converted_volunteer_id INT NULL,
     is_read TINYINT(1) NOT NULL DEFAULT 0,

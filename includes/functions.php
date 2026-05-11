@@ -1394,29 +1394,367 @@ function sanitizeMailHeaderValue(string $value): string {
     return trim(str_replace(["\r", "\n"], '', $value));
 }
 
+/**
+ * @param array<string, string> $headers
+ */
+function hasMailHeader(array $headers, string $headerName): bool {
+    foreach ($headers as $name => $_value) {
+        if (strcasecmp($name, $headerName) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function buildMailMessageId(string $fromEmail): string {
+    $domain = 'localhost';
+    $atPosition = strrpos($fromEmail, '@');
+    if ($atPosition !== false) {
+        $candidateDomain = sanitizeMailHeaderValue(substr($fromEmail, $atPosition + 1));
+        if ($candidateDomain !== '') {
+            $domain = $candidateDomain;
+        }
+    }
+
+    return '<' . bin2hex(random_bytes(16)) . '@' . $domain . '>';
+}
+
+function buildDefaultMailFromAddress(): string {
+    $host = serverString('HTTP_HOST', 'localhost');
+    $fallbackHost = $host !== '' ? $host : 'localhost';
+    $from = defined('MAIL_FROM') ? stringValue(MAIL_FROM, 'noreply@' . $fallbackHost) : 'noreply@' . $fallbackHost;
+
+    return filter_var($from, FILTER_VALIDATE_EMAIL) ? $from : 'noreply@localhost';
+}
+
+function buildDefaultMailFromName(): string {
+    $fallbackSiteName = defined('SITE_NAME') ? stringValue(SITE_NAME, 'RedWater Entertainment') : 'RedWater Entertainment';
+    return sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, $fallbackSiteName) : $fallbackSiteName);
+}
+
+/**
+ * @param resource $socket
+ * @param list<int> $expectedCodes
+ */
+function readSmtpResponse($socket, array $expectedCodes, string $context): bool {
+    $response = '';
+
+    while (($line = fgets($socket)) !== false) {
+        $response .= $line;
+        if (preg_match('/^\d{3}\s/', $line) === 1) {
+            break;
+        }
+    }
+
+    if ($response === '') {
+        error_log('SMTP ' . $context . ' failed: empty response.');
+        return false;
+    }
+
+    $code = (int)substr($response, 0, 3);
+    if (!in_array($code, $expectedCodes, true)) {
+        error_log('SMTP ' . $context . ' failed: ' . sanitizeMailHeaderValue(trim($response)));
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @param resource $socket
+ * @param list<int> $expectedCodes
+ */
+function smtpCommand($socket, string $command, array $expectedCodes, string $context): bool {
+    if (fwrite($socket, $command . "\r\n") === false) {
+        error_log('SMTP ' . $context . ' failed: could not write command.');
+        return false;
+    }
+
+    return readSmtpResponse($socket, $expectedCodes, $context);
+}
+
+/**
+ * @param array<string, string> $headers
+ */
+function sendMailUsingSmtp(string $toEmail, string $subject, string $body, array $headers, string $fromEmail): bool {
+    $smtpHost = defined('SMTP_HOST') ? trim(stringValue(SMTP_HOST)) : '';
+    if ($smtpHost === '') {
+        return false;
+    }
+
+    $smtpPort = defined('SMTP_PORT') ? intValue(SMTP_PORT, 587) : 587;
+    $smtpTimeout = defined('SMTP_TIMEOUT') ? max(1, intValue(SMTP_TIMEOUT, 15)) : 15;
+    $smtpEncryption = strtolower(defined('SMTP_ENCRYPTION') ? stringValue(SMTP_ENCRYPTION, 'tls') : 'tls');
+    $smtpUsername = defined('SMTP_USERNAME') ? stringValue(SMTP_USERNAME) : '';
+    $smtpPassword = defined('SMTP_PASSWORD') ? stringValue(SMTP_PASSWORD) : '';
+    $transportHost = $smtpEncryption === 'ssl' ? 'ssl://' . $smtpHost : $smtpHost;
+
+    $socket = @stream_socket_client(
+        $transportHost . ':' . $smtpPort,
+        $errorNumber,
+        $errorMessage,
+        $smtpTimeout
+    );
+
+    if (!is_resource($socket)) {
+        error_log('SMTP connection failed: ' . sanitizeMailHeaderValue($errorMessage ?? '') . ' (' . $errorNumber . ')');
+        return false;
+    }
+
+    stream_set_timeout($socket, $smtpTimeout);
+
+    $clientHost = sanitizeMailHeaderValue(parse_url(defined('SITE_URL') ? stringValue(SITE_URL) : '', PHP_URL_HOST) ?: serverString('HTTP_HOST', 'localhost'));
+    if ($clientHost === '') {
+        $clientHost = 'localhost';
+    }
+
+    try {
+        if (!readSmtpResponse($socket, [220], 'connect')) {
+            return false;
+        }
+
+        if (!smtpCommand($socket, 'EHLO ' . $clientHost, [250], 'EHLO')) {
+            return false;
+        }
+
+        if ($smtpEncryption === 'tls') {
+            if (!smtpCommand($socket, 'STARTTLS', [220], 'STARTTLS')) {
+                return false;
+            }
+
+            if (@stream_socket_enable_crypto($socket, true, STREAM_CRYPTO_METHOD_TLS_CLIENT) !== true) {
+                error_log('SMTP STARTTLS failed.');
+                return false;
+            }
+
+            if (!smtpCommand($socket, 'EHLO ' . $clientHost, [250], 'EHLO after STARTTLS')) {
+                return false;
+            }
+        }
+
+        if (($smtpUsername === '') !== ($smtpPassword === '')) {
+            error_log('SMTP configuration error: both username and password must be provided together or both must be empty.');
+            return false;
+        }
+
+        if ($smtpUsername !== '' && $smtpPassword !== '') {
+            if (!smtpCommand($socket, 'AUTH LOGIN', [334], 'AUTH LOGIN')) {
+                return false;
+            }
+
+            if (!smtpCommand($socket, base64_encode($smtpUsername), [334], 'SMTP username')) {
+                return false;
+            }
+
+            if (!smtpCommand($socket, base64_encode($smtpPassword), [235], 'SMTP password')) {
+                return false;
+            }
+        }
+
+        if (!smtpCommand($socket, 'MAIL FROM:<' . sanitizeMailHeaderValue($fromEmail) . '>', [250], 'MAIL FROM')) {
+            return false;
+        }
+
+        if (!smtpCommand($socket, 'RCPT TO:<' . sanitizeMailHeaderValue($toEmail) . '>', [250, 251], 'RCPT TO')) {
+            return false;
+        }
+
+        if (!smtpCommand($socket, 'DATA', [354], 'DATA')) {
+            return false;
+        }
+
+        $messageHeaders = $headers;
+        if (!hasMailHeader($messageHeaders, 'From')) {
+            $messageHeaders = ['From' => $fromEmail] + $messageHeaders;
+        }
+        if (!hasMailHeader($messageHeaders, 'To')) {
+            $messageHeaders['To'] = $toEmail;
+        }
+        if (!hasMailHeader($messageHeaders, 'Subject')) {
+            $messageHeaders['Subject'] = $subject;
+        }
+        if (!hasMailHeader($messageHeaders, 'Date')) {
+            $messageHeaders['Date'] = gmdate('D, d M Y H:i:s') . ' +0000';
+        }
+        if (!hasMailHeader($messageHeaders, 'Message-ID')) {
+            $messageHeaders['Message-ID'] = buildMailMessageId($fromEmail);
+        }
+
+        $messageLines = [];
+        foreach ($messageHeaders as $name => $value) {
+            $messageLines[] = sanitizeMailHeaderValue($name) . ': ' . sanitizeMailHeaderValue($value);
+        }
+
+        $normalizedBody = preg_replace("/\r\n|\r|\n/", "\r\n", $body);
+        if ($normalizedBody === null) {
+            $normalizedBody = $body;
+        }
+
+        $message = implode("\r\n", $messageLines) . "\r\n\r\n" . preg_replace('/^\./m', '..', $normalizedBody) . "\r\n.";
+        if (fwrite($socket, $message . "\r\n") === false) {
+            error_log('SMTP DATA failed: could not write message body.');
+            return false;
+        }
+
+        if (!readSmtpResponse($socket, [250], 'message body')) {
+            return false;
+        }
+
+        smtpCommand($socket, 'QUIT', [221], 'QUIT');
+        return true;
+    } finally {
+        fclose($socket);
+    }
+}
+
+/**
+ * @param array<string, string> $headers
+ */
+function deliverMailMessage(string $toEmail, string $subject, string $body, array $headers, string $fromEmail): bool {
+    if (defined('SMTP_HOST') && trim(stringValue(SMTP_HOST)) !== '') {
+        return sendMailUsingSmtp($toEmail, $subject, $body, $headers, $fromEmail);
+    }
+
+    $headerLines = [];
+    foreach ($headers as $name => $value) {
+        $headerLines[] = sanitizeMailHeaderValue($name) . ': ' . sanitizeMailHeaderValue($value);
+    }
+
+    return @mail($toEmail, sanitizeMailHeaderValue($subject), $body, implode("\r\n", $headerLines));
+}
+
 function sendSiteMail(string $toEmail, string $subject, string $body, string $replyToEmail = '', string $replyToName = ''): bool {
     if (!filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         return false;
     }
 
-    $host = serverString('HTTP_HOST', 'localhost');
-    $fallbackFrom = 'noreply@' . ($host !== '' ? $host : 'localhost');
-    $from = defined('MAIL_FROM') ? stringValue(MAIL_FROM, $fallbackFrom) : $fallbackFrom;
-    if (!filter_var($from, FILTER_VALIDATE_EMAIL)) {
-        $from = 'noreply@localhost';
-    }
-
-    $fallbackSiteName = defined('SITE_NAME') ? stringValue(SITE_NAME, 'RedWater Entertainment') : 'RedWater Entertainment';
-    $fromName = sanitizeMailHeaderValue(defined('MAIL_FROM_NAME') ? stringValue(MAIL_FROM_NAME, $fallbackSiteName) : $fallbackSiteName);
-    $safeSubject = sanitizeMailHeaderValue($subject);
-    $headers = 'From: ' . $fromName . ' <' . $from . '>';
+    $from = buildDefaultMailFromAddress();
+    $headers = [
+        'From' => buildDefaultMailFromName() . ' <' . $from . '>',
+        'MIME-Version' => '1.0',
+        'Content-Type' => 'text/plain; charset=UTF-8',
+    ];
 
     if (filter_var($replyToEmail, FILTER_VALIDATE_EMAIL)) {
-        $safeReplyToName = sanitizeMailHeaderValue($replyToName);
-        $headers .= "\r\nReply-To: " . $safeReplyToName . ' <' . sanitizeMailHeaderValue($replyToEmail) . '>';
+        $headers['Reply-To'] = sanitizeMailHeaderValue($replyToName) . ' <' . sanitizeMailHeaderValue($replyToEmail) . '>';
     }
 
-    return @mail($toEmail, $safeSubject, $body, $headers);
+    return deliverMailMessage($toEmail, $subject, $body, $headers, $from);
+}
+
+/**
+ * Syncs an opted-in inquiry email address to the configured Mailjet newsletter list.
+ *
+ * Status meanings:
+ * - invalid_email: the provided address was not a valid email
+ * - list_not_configured: no Mailjet list ID has been configured
+ * - credentials_missing: no Mailjet API credentials were available
+ * - subscribed: Mailjet accepted the contact subscription request
+ * - request_failed: the Mailjet request could not be completed successfully
+ *
+ * @param string $email Email address from the inquiry form opt-in.
+ * @return array{
+ *   attempted: bool,
+ *   success: bool,
+ *   status: 'invalid_email'|'list_not_configured'|'credentials_missing'|'subscribed'|'request_failed'
+ * }
+ */
+function syncMailjetContactToNewsletterList(string $email): array {
+    $normalizedEmail = trim($email);
+    if (!filter_var($normalizedEmail, FILTER_VALIDATE_EMAIL)) {
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'invalid_email',
+        ];
+    }
+
+    $listId = defined('MAILJET_NEWSLETTER_LIST_ID') ? intValue(MAILJET_NEWSLETTER_LIST_ID, 0) : 0;
+    if ($listId <= 0) {
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'list_not_configured',
+        ];
+    }
+
+    $apiKey = defined('MAILJET_API_KEY') ? trim(stringValue(MAILJET_API_KEY)) : '';
+    $apiSecret = defined('MAILJET_API_SECRET') ? trim(stringValue(MAILJET_API_SECRET)) : '';
+    if ($apiKey === '' && defined('SMTP_USERNAME')) {
+        $apiKey = trim(stringValue(SMTP_USERNAME));
+    }
+    if ($apiSecret === '' && defined('SMTP_PASSWORD')) {
+        $apiSecret = trim(stringValue(SMTP_PASSWORD));
+    }
+    if ($apiKey === '' || $apiSecret === '') {
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'credentials_missing',
+        ];
+    }
+    if (preg_match('/[\x00-\x1F\x7F]/', $apiKey . $apiSecret) === 1) {
+        error_log('Mailjet newsletter sync skipped due to invalid API credential characters.');
+        return [
+            'attempted' => false,
+            'success' => false,
+            'status' => 'credentials_missing',
+        ];
+    }
+
+    $payload = json_encode([
+        'Email' => $normalizedEmail,
+        // addforce adds the contact to the list even if they were previously removed.
+        'Action' => 'addforce',
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($payload)) {
+        error_log('Mailjet newsletter sync failed to encode payload for ' . $normalizedEmail . '.');
+        return [
+            'attempted' => true,
+            'success' => false,
+            'status' => 'request_failed',
+        ];
+    }
+
+    $context = stream_context_create([
+        'http' => [
+            'method' => 'POST',
+            'header' => "Authorization: Basic " . base64_encode($apiKey . ':' . $apiSecret) . "\r\n"
+                . "Content-Type: application/json\r\n"
+                . "Accept: application/json\r\n",
+            'content' => $payload,
+            'timeout' => 10,
+            'ignore_errors' => true,
+        ],
+    ]);
+
+    $response = @file_get_contents('https://api.mailjet.com/v3/REST/contactslist/' . $listId . '/managecontact', false, $context);
+    $statusCode = 0;
+    if (isset($http_response_header[0]) && preg_match('/\s(\d{3})(?:\s|$)/', stringValue($http_response_header[0]), $matches) === 1) {
+        $statusCode = (int)$matches[1];
+    }
+
+    if ($response !== false && $statusCode >= 200 && $statusCode < 300) {
+        return [
+            'attempted' => true,
+            'success' => true,
+            'status' => 'subscribed',
+        ];
+    }
+
+    $responsePreview = $response !== false ? substr(trim($response), 0, 500) : 'No response body returned.';
+    error_log(
+        'Mailjet newsletter sync failed for ' . $normalizedEmail
+        . ' (list ' . $listId . ', status ' . $statusCode . '): '
+        . $responsePreview
+    );
+
+    return [
+        'attempted' => true,
+        'success' => false,
+        'status' => 'request_failed',
+    ];
 }
 
 function logVolunteerAudit(PDO $db, ?int $volunteerId, string $volunteerName, ?int $actorUserId, string $action, string $details = ''): void {
@@ -1879,7 +2217,7 @@ function saveRaffleEntries(array $entries): void {
  */
 function getRaffleShareUrl(): string {
     $baseUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
-    if ($baseUrl === '' || $baseUrl === 'https://yourdomain.com') {
+    if ($baseUrl === '' || $baseUrl === DEFAULT_PLACEHOLDER_SITE_URL) {
         $scheme = serverString('HTTPS') !== '' && serverString('HTTPS') !== 'off' ? 'https' : 'http';
         $host = serverString('HTTP_HOST');
         $hostWithoutPort = $host;

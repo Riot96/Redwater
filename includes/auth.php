@@ -3,9 +3,18 @@
  * RedWater Entertainment - Authentication Functions
  */
 
-if (!defined('DB_HOST')) {
+if (!defined('DB_HOST') || !defined('DEFAULT_PLACEHOLDER_SITE_URL')) {
     require_once __DIR__ . '/config.php';
 }
+
+// Password reset links remain valid for one hour from issuance.
+defined('PASSWORD_RESET_TOKEN_LIFETIME') || define('PASSWORD_RESET_TOKEN_LIFETIME', 60 * 60);
+// Prefix marks self-validating password reset tokens that embed their issue timestamp.
+defined('PASSWORD_RESET_TOKEN_PREFIX') || define('PASSWORD_RESET_TOKEN_PREFIX', 'pr');
+// Ten decimal digits preserve Unix timestamps through the year 2286 within a fixed-width token.
+defined('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS') || define('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS', 10);
+// Random suffix keeps the overall token at 64 characters while preserving strong entropy.
+defined('PASSWORD_RESET_TOKEN_RANDOM_BYTES') || define('PASSWORD_RESET_TOKEN_RANDOM_BYTES', 26);
 
 // ─── Session Init ─────────────────────────────────────────────────────────────
 function initSession(): void {
@@ -239,13 +248,38 @@ function generatePasswordResetToken(string $email): ?string {
         return null; // Don't reveal whether email exists
     }
 
-    $token = bin2hex(random_bytes(32));
-    $expires = date('Y-m-d H:i:s', time() + 3600); // 1 hour
+    $token = PASSWORD_RESET_TOKEN_PREFIX
+        . sprintf('%0' . PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS . 'd', time())
+        . bin2hex(random_bytes(PASSWORD_RESET_TOKEN_RANDOM_BYTES));
 
-    $stmt = $db->prepare('UPDATE users SET reset_token = ?, reset_token_expires = ? WHERE email = ?');
-    $stmt->execute([$token, $expires, $email]);
+    $stmt = $db->prepare(
+        'UPDATE users SET reset_token = ?, reset_token_expires = FROM_UNIXTIME(UNIX_TIMESTAMP(UTC_TIMESTAMP()) + ?) WHERE email = ?'
+    );
+    $stmt->execute([$token, PASSWORD_RESET_TOKEN_LIFETIME, $email]);
 
     return $token;
+}
+
+/**
+ * Validates a reset token with an embedded issue timestamp.
+ *
+ * Legacy tokens without the prefixed timestamp format return false here and
+ * should fall back to the stored reset_token_expires value. The token is still
+ * matched exactly in the database before this helper is used, so app-server
+ * clock skew should not cause brand-new links to be rejected.
+ */
+function isCurrentPasswordResetToken(string $token): bool {
+    $pattern = '/^'
+        . preg_quote(PASSWORD_RESET_TOKEN_PREFIX, '/')
+        . '([0-9]{' . PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS . '})'
+        . '([0-9a-f]{' . (PASSWORD_RESET_TOKEN_RANDOM_BYTES * 2) . '})$/';
+    if (preg_match($pattern, $token, $matches) !== 1) {
+        return false;
+    }
+
+    $issuedAt = (int)$matches[1];
+    $now = time();
+    return ($now - $issuedAt) <= PASSWORD_RESET_TOKEN_LIFETIME;
 }
 
 /**
@@ -255,12 +289,36 @@ function validatePasswordResetToken(string $token): ?array {
     if (empty($token)) return null;
     $db = getDb();
     $stmt = $db->prepare(
-        'SELECT id, email, display_name FROM users WHERE reset_token = ? AND reset_token_expires > NOW()'
+        'SELECT id, email, display_name, reset_token_expires FROM users WHERE reset_token = ?'
     );
     $stmt->execute([$token]);
-    /** @var array{id: int, email: string, display_name: string}|false $user */
+    /** @var array{id: int, email: string, display_name: string, reset_token_expires?: mixed}|false $user */
     $user = $stmt->fetch();
-    return $user ?: null;
+    if (!$user) {
+        return null;
+    }
+
+    $validatedUser = [
+        'id' => $user['id'],
+        'email' => $user['email'],
+        'display_name' => $user['display_name'],
+    ];
+
+    if (isCurrentPasswordResetToken($token)) {
+        return $validatedUser;
+    }
+
+    $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
+    if ($resetTokenExpiresValue === null || !is_string($resetTokenExpiresValue)) {
+        return null;
+    }
+
+    $resetTokenExpiresTimestamp = strtotime($resetTokenExpiresValue);
+    if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
+        return null;
+    }
+
+    return $validatedUser;
 }
 
 /**
@@ -285,26 +343,100 @@ function resetPassword(string $token, string $newPassword): array {
     return ['success' => true];
 }
 
+function requestUsesHttps(): bool {
+    $requestScheme = strtolower(serverString('REQUEST_SCHEME'));
+    if ($requestScheme === 'https') {
+        return true;
+    }
+
+    $https = strtolower(serverString('HTTPS'));
+    return $https !== '' && $https !== 'off';
+}
+
+function requestHostWithoutPort(string $host): string {
+    if (preg_match('/^\[([0-9A-Fa-f:.]+)\](?::\d+)?$/', $host, $ipv6Matches) === 1) {
+        return $ipv6Matches[1];
+    }
+
+    if (preg_match('/^([^:]+)(?::\d+)?$/', $host, $hostMatches) === 1) {
+        return $hostMatches[1];
+    }
+
+    return $host;
+}
+
+function isValidPasswordResetHost(string $host): bool {
+    if ($host === '') {
+        return false;
+    }
+
+    return filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false
+        || filter_var($host, FILTER_VALIDATE_IP) !== false;
+}
+
+function isAllowedPasswordResetHost(string $requestHost, string $configuredHost): bool {
+    $normalizedRequestHost = strtolower(trim($requestHost, '.'));
+    $normalizedConfiguredHost = strtolower(trim($configuredHost, '.'));
+
+    if (
+        $normalizedRequestHost === ''
+        || $normalizedConfiguredHost === ''
+        || !isValidPasswordResetHost($normalizedRequestHost)
+        || !isValidPasswordResetHost($normalizedConfiguredHost)
+    ) {
+        return false;
+    }
+
+    return $normalizedRequestHost === $normalizedConfiguredHost
+        || str_ends_with($normalizedRequestHost, '.' . $normalizedConfiguredHost);
+}
+
+function buildPasswordResetSiteUrl(): string {
+    $rawRequestHost = serverString('SERVER_NAME');
+    if ($rawRequestHost === '') {
+        $rawRequestHost = serverString('HTTP_HOST', 'localhost');
+    }
+    $rawRequestHostWithoutPort = requestHostWithoutPort($rawRequestHost);
+    $requestHostIsValid = isValidPasswordResetHost($rawRequestHostWithoutPort);
+    $requestHost = $requestHostIsValid ? $rawRequestHost : 'localhost';
+    $validatedRequestHostWithoutPort = $requestHostIsValid ? $rawRequestHostWithoutPort : 'localhost';
+    $requestSiteUrl = (requestUsesHttps() ? 'https' : 'http') . '://' . $requestHost;
+    $configuredSiteUrl = defined('SITE_URL') ? rtrim(stringValue(SITE_URL), '/') : '';
+    $configuredHost = null;
+    if ($configuredSiteUrl !== '' && is_string(parse_url($configuredSiteUrl, PHP_URL_SCHEME))) {
+        $parsedConfiguredHost = parse_url($configuredSiteUrl, PHP_URL_HOST);
+        if (is_string($parsedConfiguredHost) && $parsedConfiguredHost !== '') {
+            $configuredHost = $parsedConfiguredHost;
+        }
+    }
+
+    if (
+        $configuredSiteUrl !== ''
+        && is_string($configuredHost)
+        && isAllowedPasswordResetHost($validatedRequestHostWithoutPort, $configuredHost)
+    ) {
+        return $requestSiteUrl;
+    }
+
+    if ($configuredSiteUrl !== '' && $configuredSiteUrl !== DEFAULT_PLACEHOLDER_SITE_URL) {
+        return $configuredSiteUrl;
+    }
+
+    return $requestSiteUrl;
+}
+
 // ─── Send password reset email ────────────────────────────────────────────────
 function sendPasswordResetEmail(string $email, string $token): bool {
-    $host = serverString('HTTP_HOST', 'localhost');
-    $siteUrl = defined('SITE_URL') ? SITE_URL : 'http://' . $host;
-    $resetUrl = $siteUrl . '/reset-password.php?token=' . urlencode($token);
-    $fromName = defined('MAIL_FROM_NAME') ? MAIL_FROM_NAME : 'RedWater Entertainment';
-    $from = defined('MAIL_FROM') ? MAIL_FROM : 'noreply@' . $host;
+    $resetUrl = buildPasswordResetSiteUrl() . '/reset-password.php?token=' . urlencode($token);
 
-    $subject = 'Password Reset - ' . $fromName;
+    $subject = 'Password Reset - ' . buildDefaultMailFromName();
     $message = "Hello,\n\nYou requested a password reset for your RedWater Entertainment account.\n\n";
     $message .= "Click the link below to reset your password (valid for 1 hour):\n";
     $message .= $resetUrl . "\n\n";
     $message .= "If you did not request this, you can safely ignore this email.\n\n";
     $message .= "— The RedWater Entertainment Team";
 
-    $headers = "From: {$fromName} <{$from}>\r\n";
-    $headers .= "Reply-To: {$from}\r\n";
-    $headers .= "X-Mailer: PHP/" . phpversion();
-
-    return @mail($email, $subject, $message, $headers);
+    return sendSiteMail($email, $subject, $message);
 }
 
 // ─── Refresh session user data ────────────────────────────────────────────────

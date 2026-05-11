@@ -41,11 +41,15 @@ reference snapshot or manual recovery fallback.
    - `DB_NAME` — `redwater`
    - `DB_USER` — `redwater_user`
    - `DB_PASS` — your database password
-   - `SITE_URL` — your full domain (e.g., `https://redwaterentertainment.com`)
-   - `MAIL_FROM` — the email address for outgoing emails
    - `APP_KEY` — a random 32+ character string (used for setup page security)
 
    > ⚠️ **Never commit `config.local.php` to version control.** It's already in `.gitignore`.
+
+   RedWater now also reads `SITE_URL`, `SITE_NAME`, `MAIL_FROM`, `MAIL_FROM_NAME`,
+   `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_ENCRYPTION`,
+   and `SMTP_TIMEOUT` from environment variables. It will automatically load
+   those values from a root-level `.env` file when present, so SMTP credentials
+   do not need to live in version-controlled PHP files.
 
    **Generate a strong APP_KEY:**
    ```bash
@@ -116,12 +120,100 @@ location ~ /uploads/.*\.php {
 
 ## Step 6: Email Configuration
 
-The site uses PHP's built-in `mail()` function for password reset emails.
+RedWater can send password reset emails and site notifications through Mailjet's
+SMTP relay when the SMTP environment variables are configured. If SMTP settings
+are omitted, the site falls back to PHP's built-in `mail()` function.
 
-For reliable email delivery, consider configuring your server's MTA (Postfix, etc.) or use an SMTP service:
+### 1. Create a Mailjet account
 
-- **SendGrid**, **Mailgun**, **Amazon SES**, or **SMTP2GO** are recommended.
-- Alternatively, install a library like PHPMailer and update `sendPasswordResetEmail()` in `includes/auth.php`.
+1. Sign up at [Mailjet](https://www.mailjet.com/).
+2. In the Mailjet dashboard, create or locate your SMTP credentials.
+   - `SMTP_USERNAME` = your Mailjet API key
+   - `SMTP_PASSWORD` = your Mailjet secret key
+3. Use Mailjet's SMTP relay hostname:
+   - `SMTP_HOST=in-v3.mailjet.com`
+   - `SMTP_PORT=587`
+   - `SMTP_ENCRYPTION=tls`
+
+### 2. Authenticate your sending domain
+
+1. In Mailjet, add your domain (for example `redwaterhaunt.com`) as a sender
+   domain.
+2. Publish the SPF and DKIM DNS records Mailjet provides.
+3. Wait for Mailjet to verify both records before sending production email.
+4. Use a real mailbox on that domain for `MAIL_FROM`, such as
+   `admin@redwaterhaunt.com`, so outgoing mail matches your branded domain.
+
+### 3. Add the required environment variables
+
+Use your host, web server, or PHP-FPM pool to define environment variables, or
+copy `.env.example` to a root-level `.env` file:
+
+```bash
+cp .env.example .env
+
+```
+
+Then edit `.env` (or your host environment) with your real values:
+
+```bash
+SITE_URL=https://redwaterhaunt.com
+SITE_NAME="RedWater Entertainment"
+MAIL_FROM=admin@redwaterhaunt.com
+MAIL_FROM_NAME="RedWater Entertainment"
+SMTP_HOST=in-v3.mailjet.com
+SMTP_PORT=587
+SMTP_USERNAME=your-mailjet-api-key
+SMTP_PASSWORD=your-mailjet-secret-key
+SMTP_ENCRYPTION=tls
+SMTP_TIMEOUT=15
+MAILJET_NEWSLETTER_LIST_ID=123456
+```
+
+For newsletter opt-ins on the public inquiry form, RedWater uses
+`MAILJET_NEWSLETTER_LIST_ID` and authenticates with `MAILJET_API_KEY` /
+`MAILJET_API_SECRET` when those are set. If you omit the dedicated Mailjet API
+variables, it falls back to `SMTP_USERNAME` / `SMTP_PASSWORD`.
+
+If you prefer to keep non-secret mail settings in `includes/config.local.php`,
+you can still do that while leaving the SMTP credentials in environment
+variables.
+
+### 4. Verify the setup
+
+1. Request a password reset from `/forgot-password.php`.
+2. Confirm the message arrives from the `MAIL_FROM` address you configured.
+   - If you test from a dev or staging subdomain of your main site domain, the
+     password reset link will stay on that current subdomain.
+   - If you test from a completely different hostname, update `SITE_URL` for
+     that environment.
+3. Submit the contact or volunteer form and confirm the admin notification is
+   received.
+   - If you enable the newsletter opt-in checkbox on the inquiry form, confirm
+     the contact appears in the Mailjet list identified by
+     `MAILJET_NEWSLETTER_LIST_ID`.
+4. If a message lands in spam, confirm your SPF/DKIM records are passing in
+   Mailjet and that the envelope sender matches your authenticated domain.
+
+### 5. Troubleshooting
+
+- **Authentication errors**: re-check `SMTP_USERNAME` and `SMTP_PASSWORD`.
+- **TLS/connectivity errors**: ensure outbound connections to `in-v3.mailjet.com`
+  on port `587` are allowed by your host/firewall.
+- **Mail not arriving**: verify Mailjet domain authentication, inspect Mailjet's
+  message activity logs, and confirm the `MAIL_FROM` mailbox exists.
+- **Newsletter opt-ins not syncing**: verify `MAILJET_NEWSLETTER_LIST_ID` points
+  to the correct Mailjet contacts list and that `MAILJET_API_KEY` /
+  `MAILJET_API_SECRET` are correct. If you are relying on fallback credentials,
+  also verify `SMTP_USERNAME` / `SMTP_PASSWORD`.
+- **Reset link opens the wrong host**: password reset emails stay on the current
+  request host when it matches `SITE_URL` or one of its subdomains. If your dev
+  or staging site uses a different domain entirely, set `SITE_URL` for that
+  environment to the correct hostname.
+- **`.env` settings not applying**: make sure the file is named exactly `.env`
+  in the project root (next to `index.php`) and that the web server can read it.
+- **Fallback behavior**: if `SMTP_HOST` is blank, RedWater uses PHP `mail()`
+  instead of Mailjet SMTP.
 
 ---
 

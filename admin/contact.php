@@ -8,13 +8,24 @@ require_once __DIR__ . '/../includes/functions.php';
 
 requireAdmin();
 $db = getDb();
+$newsletterOptInMigrationWarning = '';
+try {
+    ensureAutomaticMigrationColumn($db, 'contact_submissions', 'newsletter_opt_in TINYINT(1) NOT NULL DEFAULT 0');
+} catch (PDOException $e) {
+    error_log('Unable to add contact_submissions.newsletter_opt_in automatically: ' . $e->getMessage());
+    $newsletterOptInMigrationWarning = 'Inquiry newsletter opt-ins cannot be stored locally until the latest database migration is applied.';
+}
 $contactSubmissionColumnsStmt = $db->query('SHOW COLUMNS FROM `contact_submissions`');
 assert($contactSubmissionColumnsStmt instanceof PDOStatement);
 $hasConvertedVolunteerIdColumn = false;
+$hasNewsletterOptInColumn = false;
 foreach ($contactSubmissionColumnsStmt->fetchAll() as $columnDefinition) {
-    if (stringValue($columnDefinition['Field'] ?? '') === 'converted_volunteer_id') {
+    $fieldName = stringValue($columnDefinition['Field'] ?? '');
+    if ($fieldName === 'converted_volunteer_id') {
         $hasConvertedVolunteerIdColumn = true;
-        break;
+    }
+    if ($fieldName === 'newsletter_opt_in') {
+        $hasNewsletterOptInColumn = true;
     }
 }
 
@@ -37,7 +48,7 @@ if (getString('export') === 'inquiries') {
     header('Content-Disposition: attachment; filename="redwater-inquiries.csv"');
     $output = fopen('php://output', 'wb');
     if (is_resource($output)) {
-        fputcsv($output, ['ID', 'Name', 'Email', 'Phone', 'Preferred Contact', 'Location', 'Subject', 'Message', 'Read', 'Created At', 'Updated At']);
+        fputcsv($output, ['ID', 'Name', 'Email', 'Phone', 'Preferred Contact', 'Location', 'Subject', 'Message', 'Newsletter Opt-In', 'Read', 'Created At', 'Updated At']);
         foreach ($messages as $message) {
             fputcsv($output, [
                 intValue($message['id'] ?? null),
@@ -48,6 +59,7 @@ if (getString('export') === 'inquiries') {
                 $csvSafeCell($message['location_address'] ?? ''),
                 $csvSafeCell($message['subject'] ?? ''),
                 $csvSafeCell($message['message'] ?? ''),
+                $hasNewsletterOptInColumn ? (!empty($message['newsletter_opt_in']) ? 'Yes' : 'No') : '—',
                 !empty($message['is_read']) ? 'Yes' : 'No',
                 $csvSafeCell($message['created_at'] ?? ''),
                 $csvSafeCell($message['updated_at'] ?? ''),
@@ -267,6 +279,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $locationAddress = trim(postString('location_address'));
         $subject = trim(postString('subject'));
         $message = trim(postString('message'));
+        $newsletterOptIn = postBool('newsletter_opt_in') ? 1 : 0;
         $isRead = postBool('is_read') ? 1 : 0;
         $savedSuccessfully = false;
 
@@ -280,13 +293,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flashMessage('error', 'Message is required.');
         } else {
             if ($act === 'add_inquiry') {
-                $stmt = $db->prepare(
-                    'INSERT INTO contact_submissions (
+                $insertSql = 'INSERT INTO contact_submissions (
                         name, email, phone_number, preferred_contact_method, location_address,
-                        subject, message, privacy_consent, is_read
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                );
-                $stmt->execute([
+                        subject, message, ';
+                $insertSql .= $hasNewsletterOptInColumn ? 'newsletter_opt_in, ' : '';
+                $insertSql .= 'privacy_consent, is_read
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ';
+                $insertSql .= $hasNewsletterOptInColumn ? '?, ' : '';
+                $insertSql .= '?, ?)';
+                $insertValues = [
                     $name,
                     $email,
                     $phoneNumber !== '' ? $phoneNumber : null,
@@ -294,19 +309,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $locationAddress !== '' ? $locationAddress : null,
                     $subject !== '' ? $subject : null,
                     $message,
-                    1,
-                    $isRead,
-                ]);
+                ];
+                if ($hasNewsletterOptInColumn) {
+                    $insertValues[] = $newsletterOptIn;
+                }
+                $insertValues[] = 1;
+                $insertValues[] = $isRead;
+                $stmt = $db->prepare($insertSql);
+                $stmt->execute($insertValues);
                 flashMessage('success', 'Inquiry added.');
                 $savedSuccessfully = true;
             } else {
-                $stmt = $db->prepare(
-                    'UPDATE contact_submissions
+                $updateSql = 'UPDATE contact_submissions
                      SET name=?, email=?, phone_number=?, preferred_contact_method=?, location_address=?,
-                         subject=?, message=?, is_read=?
-                     WHERE id=?'
-                );
-                $stmt->execute([
+                         subject=?, message=?, ';
+                $updateSql .= $hasNewsletterOptInColumn ? 'newsletter_opt_in=?, ' : '';
+                $updateSql .= 'is_read=?
+                     WHERE id=?';
+                $updateValues = [
                     $name,
                     $email,
                     $phoneNumber !== '' ? $phoneNumber : null,
@@ -314,9 +334,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $locationAddress !== '' ? $locationAddress : null,
                     $subject !== '' ? $subject : null,
                     $message,
-                    $isRead,
-                    $messageId,
-                ]);
+                ];
+                if ($hasNewsletterOptInColumn) {
+                    $updateValues[] = $newsletterOptIn;
+                }
+                $updateValues[] = $isRead;
+                $updateValues[] = $messageId;
+                $stmt = $db->prepare($updateSql);
+                $stmt->execute($updateValues);
                 flashMessage('success', 'Inquiry updated.');
                 $savedSuccessfully = true;
             }
@@ -361,6 +386,10 @@ include __DIR__ . '/../includes/header.php';
         <a href="/admin/volunteers.php" class="btn btn-outline btn-sm">Manage Volunteers</a>
       </div>
     </div>
+
+    <?php if ($newsletterOptInMigrationWarning !== ''): ?>
+      <div class="alert alert-warning mb-3"><?= e($newsletterOptInMigrationWarning) ?></div>
+    <?php endif; ?>
 
     <div class="card mb-3">
       <div class="card-body">
@@ -511,13 +540,14 @@ include __DIR__ . '/../includes/header.php';
           'email' => stringValue($editMessage['email'] ?? ''),
           'phone_number' => stringValue($editMessage['phone_number'] ?? ''),
           'preferred_contact_method' => normalizePreferredContactMethod(stringValue($editMessage['preferred_contact_method'] ?? 'email')),
-           'location_address' => stringValue($editMessage['location_address'] ?? ''),
-           'subject' => stringValue($editMessage['subject'] ?? ''),
-           'message' => stringValue($editMessage['message'] ?? ''),
-           'converted_volunteer_id' => intValue($editMessage['converted_volunteer_id'] ?? null),
-           'is_read' => !empty($editMessage['is_read']),
-       ];
-       ?>
+          'location_address' => stringValue($editMessage['location_address'] ?? ''),
+          'subject' => stringValue($editMessage['subject'] ?? ''),
+          'message' => stringValue($editMessage['message'] ?? ''),
+          'newsletter_opt_in' => !empty($editMessage['newsletter_opt_in']),
+          'converted_volunteer_id' => intValue($editMessage['converted_volunteer_id'] ?? null),
+          'is_read' => !empty($editMessage['is_read']),
+      ];
+      ?>
       <div class="card mb-3" id="inquiry-form">
         <div class="card-body">
           <div class="d-flex justify-between align-center mb-2" style="gap:1rem;flex-wrap:wrap;">
@@ -565,6 +595,12 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="form-group">
               <label class="form-check">
+                <input type="checkbox" name="newsletter_opt_in" value="1" <?= $inquiryFormValues['newsletter_opt_in'] ? 'checked' : '' ?>>
+                Newsletter opt-in
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="form-check">
                 <input type="checkbox" name="is_read" value="1" <?= $inquiryFormValues['is_read'] ? 'checked' : '' ?>>
                 Mark as read
               </label>
@@ -608,6 +644,7 @@ include __DIR__ . '/../includes/header.php';
                   <th>Preferred</th>
                   <th>Subject</th>
                   <th>Message</th>
+                  <th>Newsletter</th>
                   <th>Location</th>
                   <th>Date</th>
                   <th>Status</th>
@@ -627,6 +664,7 @@ include __DIR__ . '/../includes/header.php';
                   <td><?= e(ucfirst(stringValue($msg['preferred_contact_method'] ?? 'email'))) ?></td>
                   <td><?= e($msg['subject'] ?: '—') ?></td>
                   <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="<?= e($msg['message']) ?>"><?= e($msg['message']) ?></td>
+                  <td><?= $hasNewsletterOptInColumn ? (!empty($msg['newsletter_opt_in']) ? 'Yes' : 'No') : '—' ?></td>
                   <td><?= e($msg['location_address'] ?: '—') ?></td>
                   <td><?= formatDateOrFallback($msg['created_at'] ?? null, 'M j, Y g:ia') ?></td>
                   <td><span class="status-badge <?= $msg['is_read'] ? 'status-approved' : 'status-pending' ?>"><?= $msg['is_read'] ? 'Read' : 'New' ?></span></td>

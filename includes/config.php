@@ -9,6 +9,78 @@
  * IMPORTANT: Never commit real credentials to version control.
  */
 
+function loadConfigDotEnv(): void {
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+
+    $loaded = true;
+    $dotenvPath = dirname(__DIR__) . '/.env';
+    if (!is_file($dotenvPath) || !is_readable($dotenvPath)) {
+        return;
+    }
+
+    $lines = file($dotenvPath, FILE_IGNORE_NEW_LINES);
+    if ($lines === false) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $trimmedLine = trim($line);
+        if ($trimmedLine === '' || str_starts_with($trimmedLine, '#')) {
+            continue;
+        }
+
+        if (str_starts_with($trimmedLine, 'export ')) {
+            $trimmedLine = trim(substr($trimmedLine, 7));
+        }
+
+        $separatorPosition = strpos($trimmedLine, '=');
+        if ($separatorPosition === false) {
+            continue;
+        }
+
+        $key = trim(substr($trimmedLine, 0, $separatorPosition));
+        if ($key === '' || preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $key) !== 1) {
+            continue;
+        }
+
+        if (getenv($key) !== false || array_key_exists($key, $_ENV) || array_key_exists($key, $_SERVER)) {
+            continue;
+        }
+
+        $value = trim(substr($trimmedLine, $separatorPosition + 1));
+        $valueLength = strlen($value);
+        if (
+            $valueLength >= 2
+            && (($value[0] === '"' && $value[$valueLength - 1] === '"') || ($value[0] === "'" && $value[$valueLength - 1] === "'"))
+        ) {
+            $value = substr($value, 1, -1);
+        }
+
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+}
+
+function configEnvString(string $key, string $default = ''): string {
+    $value = getenv($key);
+    if ($value === false) {
+        $value = $_ENV[$key] ?? $_SERVER[$key] ?? null;
+    }
+
+    return is_scalar($value) ? trim((string)$value) : $default;
+}
+
+function configEnvInt(string $key, int $default): int {
+    $value = configEnvString($key, (string)$default);
+    return is_numeric($value) ? (int)$value : $default;
+}
+
+loadConfigDotEnv();
+
 // ─── Load local overrides (constants only) ────────────────────────────────────
 if (file_exists(__DIR__ . '/config.local.php') && !defined('_RW_LOCAL_LOADED')) {
     define('_RW_LOCAL_LOADED', true);
@@ -23,12 +95,23 @@ defined('DB_PASS')    || define('DB_PASS',    'CHANGE_ME_STRONG_PASSWORD');
 defined('DB_CHARSET') || define('DB_CHARSET', 'utf8mb4');
 
 // ─── Site Settings ────────────────────────────────────────────────────────────
-defined('SITE_URL')   || define('SITE_URL',  'https://yourdomain.com');
-defined('SITE_NAME')  || define('SITE_NAME', 'RedWater Entertainment');
+defined('DEFAULT_PLACEHOLDER_SITE_URL') || define('DEFAULT_PLACEHOLDER_SITE_URL', 'https://yourdomain.com');
+defined('SITE_URL')   || define('SITE_URL',  configEnvString('SITE_URL', DEFAULT_PLACEHOLDER_SITE_URL));
+defined('SITE_NAME')  || define('SITE_NAME', configEnvString('SITE_NAME', 'RedWater Entertainment'));
 
 // ─── Email Settings ───────────────────────────────────────────────────────────
-defined('MAIL_FROM')      || define('MAIL_FROM',      'noreply@yourdomain.com');
-defined('MAIL_FROM_NAME') || define('MAIL_FROM_NAME', 'RedWater Entertainment');
+defined('MAIL_FROM')        || define('MAIL_FROM',        configEnvString('MAIL_FROM', 'noreply@yourdomain.com'));
+defined('MAIL_FROM_NAME')   || define('MAIL_FROM_NAME',   configEnvString('MAIL_FROM_NAME', 'RedWater Entertainment'));
+defined('SMTP_HOST')        || define('SMTP_HOST',        configEnvString('SMTP_HOST', ''));
+defined('SMTP_PORT')        || define('SMTP_PORT',        configEnvInt('SMTP_PORT', 587));
+defined('SMTP_USERNAME')    || define('SMTP_USERNAME',    configEnvString('SMTP_USERNAME', ''));
+defined('SMTP_PASSWORD')    || define('SMTP_PASSWORD',    configEnvString('SMTP_PASSWORD', ''));
+defined('SMTP_ENCRYPTION')  || define('SMTP_ENCRYPTION',  strtolower(configEnvString('SMTP_ENCRYPTION', 'tls')));
+defined('SMTP_TIMEOUT')     || define('SMTP_TIMEOUT',     configEnvInt('SMTP_TIMEOUT', 15));
+defined('MAILJET_API_KEY')  || define('MAILJET_API_KEY',  configEnvString('MAILJET_API_KEY', configEnvString('SMTP_USERNAME', '')));
+defined('MAILJET_API_SECRET') || define('MAILJET_API_SECRET', configEnvString('MAILJET_API_SECRET', configEnvString('SMTP_PASSWORD', '')));
+// Set this in the environment or root .env file to sync inquiry newsletter opt-ins to a Mailjet list.
+defined('MAILJET_NEWSLETTER_LIST_ID') || define('MAILJET_NEWSLETTER_LIST_ID', configEnvInt('MAILJET_NEWSLETTER_LIST_ID', 0));
 
 // ─── Upload Settings ──────────────────────────────────────────────────────────
 defined('MAX_UPLOAD_SIZE')    || define('MAX_UPLOAD_SIZE',    50 * 1024 * 1024);
