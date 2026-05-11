@@ -1394,6 +1394,32 @@ function sanitizeMailHeaderValue(string $value): string {
     return trim(str_replace(["\r", "\n"], '', $value));
 }
 
+/**
+ * @param array<string, string> $headers
+ */
+function hasMailHeader(array $headers, string $headerName): bool {
+    foreach ($headers as $name => $_value) {
+        if (strcasecmp($name, $headerName) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function buildMailMessageId(string $fromEmail): string {
+    $domain = 'localhost';
+    $atPosition = strrpos($fromEmail, '@');
+    if ($atPosition !== false) {
+        $candidateDomain = sanitizeMailHeaderValue(substr($fromEmail, $atPosition + 1));
+        if ($candidateDomain !== '') {
+            $domain = $candidateDomain;
+        }
+    }
+
+    return '<' . bin2hex(random_bytes(16)) . '@' . $domain . '>';
+}
+
 function buildDefaultMailFromAddress(): string {
     $host = serverString('HTTP_HOST', 'localhost');
     $fallbackHost = $host !== '' ? $host : 'localhost';
@@ -1538,8 +1564,25 @@ function sendMailUsingSmtp(string $toEmail, string $subject, string $body, array
             return false;
         }
 
+        $messageHeaders = $headers;
+        if (!hasMailHeader($messageHeaders, 'From')) {
+            $messageHeaders = ['From' => $fromEmail] + $messageHeaders;
+        }
+        if (!hasMailHeader($messageHeaders, 'To')) {
+            $messageHeaders['To'] = $toEmail;
+        }
+        if (!hasMailHeader($messageHeaders, 'Subject')) {
+            $messageHeaders['Subject'] = $subject;
+        }
+        if (!hasMailHeader($messageHeaders, 'Date')) {
+            $messageHeaders['Date'] = gmdate('D, d M Y H:i:s') . ' +0000';
+        }
+        if (!hasMailHeader($messageHeaders, 'Message-ID')) {
+            $messageHeaders['Message-ID'] = buildMailMessageId($fromEmail);
+        }
+
         $messageLines = [];
-        foreach ($headers as $name => $value) {
+        foreach ($messageHeaders as $name => $value) {
             $messageLines[] = sanitizeMailHeaderValue($name) . ': ' . sanitizeMailHeaderValue($value);
         }
 
