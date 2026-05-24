@@ -1,17 +1,16 @@
 <?php
 /**
- * RedWater Entertainment - Contact & Volunteer Page
+ * RedWater Entertainment - Contact Page
  */
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/functions.php';
 
-$pageTitle = 'Contact & Volunteer';
-$seoDescription = 'Send an inquiry or sign up to volunteer with RedWater Entertainment.';
+$pageTitle = 'Contact';
+$seoDescription = 'Send an inquiry to RedWater Entertainment.';
 
 $errors = [];
 $successMessage = '';
-$activeForm = getString('form', 'inquiry') === 'volunteer' ? 'volunteer' : 'inquiry';
 
 $inquiryValues = [
     'name' => '',
@@ -22,18 +21,6 @@ $inquiryValues = [
     'subject' => '',
     'message' => '',
     'newsletter_opt_in' => false,
-    'privacy_consent' => false,
-];
-
-$volunteerValues = [
-    'full_name' => '',
-    'email' => '',
-    'phone_number' => '',
-    'preferred_contact_method' => 'email',
-    'location_address' => '',
-    'areas_of_interest' => '',
-    'availability' => '',
-    'message' => '',
     'privacy_consent' => false,
 ];
 
@@ -103,146 +90,9 @@ $insertUsingAvailableColumns = static function (PDO $db, string $table, array $v
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
-    $activeForm = postString('form_type') === 'volunteer' ? 'volunteer' : 'inquiry';
     $honeypot = trim(postString('website'));
 
-    if ($activeForm === 'volunteer') {
-        $volunteerValues = [
-            'full_name' => trim(postString('full_name')),
-            'email' => trim(postString('email')),
-            'phone_number' => trim(postString('phone_number')),
-            'preferred_contact_method' => normalizePreferredContactMethod(postString('preferred_contact_method', 'email')),
-            'location_address' => trim(postString('location_address')),
-            'areas_of_interest' => trim(postString('areas_of_interest')),
-            'availability' => trim(postString('availability')),
-            'message' => trim(postString('message')),
-            'privacy_consent' => postBool('privacy_consent'),
-        ];
-
-        if ($honeypot === '') {
-            if ($volunteerValues['full_name'] === '') {
-                $errors['full_name'] = 'Your full name is required.';
-            }
-            if ($volunteerValues['email'] === '' || !filter_var($volunteerValues['email'], FILTER_VALIDATE_EMAIL)) {
-                $errors['email'] = 'A valid email address is required.';
-            }
-            if ($volunteerValues['preferred_contact_method'] === 'phone' && $volunteerValues['phone_number'] === '') {
-                $errors['phone_number'] = 'A phone number is required if phone is your preferred contact method.';
-            }
-            if ($volunteerValues['areas_of_interest'] === '') {
-                $errors['areas_of_interest'] = 'Please share your areas of interest or skills.';
-            }
-            if ($volunteerValues['availability'] === '') {
-                $errors['availability'] = 'Please share your availability.';
-            }
-            if (!$volunteerValues['privacy_consent']) {
-                $errors['privacy_consent'] = 'Please confirm that we may store your details to follow up.';
-            }
-
-            if ($errors === []) {
-                $turnstileError = validateTurnstileSubmission('contact_volunteer');
-                if ($turnstileError !== '') {
-                    $errors['general'] = $turnstileError;
-                }
-            }
-
-            if ($errors === []) {
-                $db = getDb();
-                $volunteerColumns = $getTableColumns($db, 'volunteers');
-                $contactSubmissionColumns = $getTableColumns($db, 'contact_submissions');
-                $volunteerAuditColumns = $getTableColumns($db, 'volunteer_audit_log');
-                $savedVolunteerSignup = false;
-
-                if (in_array('full_name', $volunteerColumns, true) && in_array('email', $volunteerColumns, true)) {
-                    $savedVolunteerSignup = $insertUsingAvailableColumns($db, 'volunteers', [
-                        'full_name' => $volunteerValues['full_name'],
-                        'email' => $volunteerValues['email'],
-                        'phone_number' => $volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : null,
-                        'preferred_contact_method' => $volunteerValues['preferred_contact_method'],
-                        'location_address' => $volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : null,
-                        'areas_of_interest' => $volunteerValues['areas_of_interest'],
-                        'availability' => $volunteerValues['availability'],
-                        'message' => $volunteerValues['message'] !== '' ? $volunteerValues['message'] : null,
-                        'privacy_consent' => 1,
-                        'status' => 'pending',
-                    ], $volunteerColumns);
-
-                    if ($savedVolunteerSignup && $volunteerAuditColumns !== []) {
-                        $volunteerId = (int)$db->lastInsertId();
-                        logVolunteerAudit($db, $volunteerId, $volunteerValues['full_name'], null, 'submitted', 'Volunteer sign-up received from website.');
-                    }
-                }
-
-                if (!$savedVolunteerSignup && in_array('name', $contactSubmissionColumns, true) && in_array('email', $contactSubmissionColumns, true) && in_array('message', $contactSubmissionColumns, true)) {
-                    $fallbackSubject = 'Volunteer Sign-Up';
-                    if ($volunteerValues['areas_of_interest'] !== '') {
-                        $fallbackSubject .= ': ' . $volunteerValues['areas_of_interest'];
-                    }
-                    $fallbackSubject = substr($fallbackSubject, 0, 255);
-
-                    $fallbackMessage = "Volunteer sign-up received via public form.\n\n";
-                    $fallbackMessage .= "Areas of Interest / Skills:\n" . $volunteerValues['areas_of_interest'] . "\n\n";
-                    $fallbackMessage .= "Availability:\n" . $volunteerValues['availability'] . "\n\n";
-                    if ($volunteerValues['phone_number'] !== '') {
-                        $fallbackMessage .= "Phone Number: " . $volunteerValues['phone_number'] . "\n";
-                    }
-                    $fallbackMessage .= "Preferred Contact Method: " . ucfirst($volunteerValues['preferred_contact_method']) . "\n";
-                    if ($volunteerValues['location_address'] !== '') {
-                        $fallbackMessage .= "Location: " . $volunteerValues['location_address'] . "\n";
-                    }
-                    $fallbackMessage .= "\nAdditional Notes:\n" . ($volunteerValues['message'] !== '' ? $volunteerValues['message'] : '—');
-
-                    $savedVolunteerSignup = $insertUsingAvailableColumns($db, 'contact_submissions', [
-                        'name' => $volunteerValues['full_name'],
-                        'email' => $volunteerValues['email'],
-                        'phone_number' => $volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : null,
-                        'preferred_contact_method' => $volunteerValues['preferred_contact_method'],
-                        'location_address' => $volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : null,
-                        'subject' => $fallbackSubject,
-                        'message' => $fallbackMessage,
-                        'privacy_consent' => 1,
-                        'is_read' => 0,
-                    ], $contactSubmissionColumns);
-                }
-
-                if (!$savedVolunteerSignup) {
-                    $errors['general'] = 'We could not save your volunteer sign-up right now. Please try again in a few minutes.';
-                }
-
-                if ($errors === []) {
-                    $adminEmail = getSetting('contact_email');
-                    if ($adminEmail !== '') {
-                        $body = "New volunteer sign-up received.\n\n";
-                        $body .= "Name: {$volunteerValues['full_name']}\n";
-                        $body .= "Email: {$volunteerValues['email']}\n";
-                        $body .= "Phone: " . ($volunteerValues['phone_number'] !== '' ? $volunteerValues['phone_number'] : '—') . "\n";
-                        $body .= "Preferred Contact: " . ucfirst($volunteerValues['preferred_contact_method']) . "\n";
-                        $body .= "Location: " . ($volunteerValues['location_address'] !== '' ? $volunteerValues['location_address'] : '—') . "\n";
-                        $body .= "Areas of Interest / Skills:\n{$volunteerValues['areas_of_interest']}\n\n";
-                        $body .= "Availability:\n{$volunteerValues['availability']}\n\n";
-                        $body .= "Additional Notes:\n" . ($volunteerValues['message'] !== '' ? $volunteerValues['message'] : '—') . "\n";
-                        sendSiteMail($adminEmail, 'New Volunteer Sign-Up', $body, $volunteerValues['email'], $volunteerValues['full_name']);
-                    }
-
-                    $successMessage = 'Volunteer sign-up received! Our team will follow up soon.';
-                    $volunteerValues = [
-                        'full_name' => '',
-                        'email' => '',
-                        'phone_number' => '',
-                        'preferred_contact_method' => 'email',
-                        'location_address' => '',
-                        'areas_of_interest' => '',
-                        'availability' => '',
-                        'message' => '',
-                        'privacy_consent' => false,
-                    ];
-                }
-            }
-        } else {
-            error_log('Volunteer form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
-            $successMessage = 'Volunteer sign-up received! Our team will follow up soon.';
-        }
-    } else {
+    if ($honeypot === '') {
         $inquiryValues = [
             'name' => trim(postString('name')),
             'email' => trim(postString('email')),
@@ -255,92 +105,90 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'privacy_consent' => postBool('privacy_consent'),
         ];
 
-        if ($honeypot === '') {
-            if ($inquiryValues['name'] === '') {
-                $errors['name'] = 'Your full name is required.';
-            }
-            if ($inquiryValues['email'] === '' || !filter_var($inquiryValues['email'], FILTER_VALIDATE_EMAIL)) {
-                $errors['email'] = 'A valid email address is required.';
-            }
-            if ($inquiryValues['preferred_contact_method'] === 'phone' && $inquiryValues['phone_number'] === '') {
-                $errors['phone_number'] = 'A phone number is required if phone is your preferred contact method.';
-            }
-            if ($inquiryValues['message'] === '') {
-                $errors['message'] = 'A message is required.';
-            }
-            if (!$inquiryValues['privacy_consent']) {
-                $errors['privacy_consent'] = 'Please confirm that we may store your details to respond.';
-            }
-
-            if ($errors === []) {
-                $turnstileError = validateTurnstileSubmission('contact_inquiry');
-                if ($turnstileError !== '') {
-                    $errors['general'] = $turnstileError;
-                }
-            }
-
-            if ($errors === []) {
-                $db = getDb();
-                $contactSubmissionColumns = $getTableColumns($db, 'contact_submissions');
-                $savedInquiry = $insertUsingAvailableColumns($db, 'contact_submissions', [
-                    'name' => $inquiryValues['name'],
-                    'email' => $inquiryValues['email'],
-                    'phone_number' => $inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : null,
-                    'preferred_contact_method' => $inquiryValues['preferred_contact_method'],
-                    'location_address' => $inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : null,
-                    'subject' => $inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : null,
-                    'message' => $inquiryValues['message'],
-                    'newsletter_opt_in' => $inquiryValues['newsletter_opt_in'] ? 1 : 0,
-                    'privacy_consent' => 1,
-                ], $contactSubmissionColumns);
-
-                if (!$savedInquiry) {
-                    $errors['general'] = 'We could not save your message right now. Please try again in a few minutes.';
-                }
-
-                if ($errors === []) {
-                    $newsletterSyncStatusLine = '';
-                    if ($inquiryValues['newsletter_opt_in']) {
-                        $newsletterSync = syncMailjetContactToNewsletterList($inquiryValues['email']);
-                        $newsletterSyncStatusLine = "Mailjet Newsletter Sync: "
-                            . ($newsletterSync['success'] ? 'Subscribed' : 'Failed (' . $newsletterSync['status'] . ')');
-                    }
-
-                    $adminEmail = getSetting('contact_email');
-                    if ($adminEmail !== '') {
-                        $body = "New inquiry received.\n\n";
-                        $body .= "Name: {$inquiryValues['name']}\n";
-                        $body .= "Email: {$inquiryValues['email']}\n";
-                        $body .= "Phone: " . ($inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : '—') . "\n";
-                        $body .= "Preferred Contact: " . ucfirst($inquiryValues['preferred_contact_method']) . "\n";
-                        $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
-                        $body .= "Newsletter Opt-In: " . ($inquiryValues['newsletter_opt_in'] ? 'Yes' : 'No') . "\n";
-                        if ($newsletterSyncStatusLine !== '') {
-                            $body .= $newsletterSyncStatusLine . "\n";
-                        }
-                        $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
-                        $body .= "Message:\n{$inquiryValues['message']}\n";
-                        sendSiteMail($adminEmail, 'New Inquiry Submission', $body, $inquiryValues['email'], $inquiryValues['name']);
-                    }
-
-                    $successMessage = 'Message sent! Thank you for reaching out.';
-                    $inquiryValues = [
-                        'name' => '',
-                        'email' => '',
-                        'phone_number' => '',
-                        'preferred_contact_method' => 'email',
-                        'location_address' => '',
-                        'subject' => '',
-                        'message' => '',
-                        'newsletter_opt_in' => false,
-                        'privacy_consent' => false,
-                    ];
-                }
-            }
-        } else {
-            error_log('Inquiry form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
-            $successMessage = 'Message sent! Thank you for reaching out.';
+        if ($inquiryValues['name'] === '') {
+            $errors['name'] = 'Your full name is required.';
         }
+        if ($inquiryValues['email'] === '' || !filter_var($inquiryValues['email'], FILTER_VALIDATE_EMAIL)) {
+            $errors['email'] = 'A valid email address is required.';
+        }
+        if ($inquiryValues['preferred_contact_method'] === 'phone' && $inquiryValues['phone_number'] === '') {
+            $errors['phone_number'] = 'A phone number is required if phone is your preferred contact method.';
+        }
+        if ($inquiryValues['message'] === '') {
+            $errors['message'] = 'A message is required.';
+        }
+        if (!$inquiryValues['privacy_consent']) {
+            $errors['privacy_consent'] = 'Please confirm that we may store your details to respond.';
+        }
+
+        if ($errors === []) {
+            $turnstileError = validateTurnstileSubmission('contact_inquiry');
+            if ($turnstileError !== '') {
+                $errors['general'] = $turnstileError;
+            }
+        }
+
+        if ($errors === []) {
+            $db = getDb();
+            $contactSubmissionColumns = $getTableColumns($db, 'contact_submissions');
+            $savedInquiry = $insertUsingAvailableColumns($db, 'contact_submissions', [
+                'name' => $inquiryValues['name'],
+                'email' => $inquiryValues['email'],
+                'phone_number' => $inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : null,
+                'preferred_contact_method' => $inquiryValues['preferred_contact_method'],
+                'location_address' => $inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : null,
+                'subject' => $inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : null,
+                'message' => $inquiryValues['message'],
+                'newsletter_opt_in' => $inquiryValues['newsletter_opt_in'] ? 1 : 0,
+                'privacy_consent' => 1,
+            ], $contactSubmissionColumns);
+
+            if (!$savedInquiry) {
+                $errors['general'] = 'We could not save your message right now. Please try again in a few minutes.';
+            }
+
+            if ($errors === []) {
+                $newsletterSyncStatusLine = '';
+                if ($inquiryValues['newsletter_opt_in']) {
+                    $newsletterSync = syncMailjetContactToNewsletterList($inquiryValues['email']);
+                    $newsletterSyncStatusLine = "Mailjet Newsletter Sync: "
+                        . ($newsletterSync['success'] ? 'Subscribed' : 'Failed (' . $newsletterSync['status'] . ')');
+                }
+
+                $adminEmail = getSetting('contact_email');
+                if ($adminEmail !== '') {
+                    $body = "New inquiry received.\n\n";
+                    $body .= "Name: {$inquiryValues['name']}\n";
+                    $body .= "Email: {$inquiryValues['email']}\n";
+                    $body .= "Phone: " . ($inquiryValues['phone_number'] !== '' ? $inquiryValues['phone_number'] : '—') . "\n";
+                    $body .= "Preferred Contact: " . ucfirst($inquiryValues['preferred_contact_method']) . "\n";
+                    $body .= "Location: " . ($inquiryValues['location_address'] !== '' ? $inquiryValues['location_address'] : '—') . "\n";
+                    $body .= "Newsletter Opt-In: " . ($inquiryValues['newsletter_opt_in'] ? 'Yes' : 'No') . "\n";
+                    if ($newsletterSyncStatusLine !== '') {
+                        $body .= $newsletterSyncStatusLine . "\n";
+                    }
+                    $body .= "Subject: " . ($inquiryValues['subject'] !== '' ? $inquiryValues['subject'] : '—') . "\n\n";
+                    $body .= "Message:\n{$inquiryValues['message']}\n";
+                    sendSiteMail($adminEmail, 'New Inquiry Submission', $body, $inquiryValues['email'], $inquiryValues['name']);
+                }
+
+                $successMessage = 'Message sent! Thank you for reaching out.';
+                $inquiryValues = [
+                    'name' => '',
+                    'email' => '',
+                    'phone_number' => '',
+                    'preferred_contact_method' => 'email',
+                    'location_address' => '',
+                    'subject' => '',
+                    'message' => '',
+                    'newsletter_opt_in' => false,
+                    'privacy_consent' => false,
+                ];
+            }
+        }
+    } else {
+        error_log('Inquiry form honeypot triggered from IP ' . serverString('REMOTE_ADDR', 'unknown'));
+        $successMessage = 'Message sent! Thank you for reaching out.';
     }
 }
 
@@ -357,8 +205,8 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
 <main class="page-wrapper">
   <div class="page-header">
     <div class="container">
-      <h1>Contact &amp; <span style="color:var(--blue)">Volunteer</span></h1>
-      <p>Send a general inquiry or join our volunteer roster. We securely store submissions so our team can follow up quickly.</p>
+      <h1>Contact <span style="color:var(--blue)">RedWater</span></h1>
+      <p>Send a general inquiry and our team will follow up. If you are interested in volunteering, mention it in your message so staff can convert your inquiry into a volunteer profile.</p>
     </div>
   </div>
 
@@ -418,7 +266,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
           <div class="card mt-3">
             <div class="card-body">
               <h3 style="font-size:1rem;margin-bottom:0.75rem;">Privacy &amp; Response Notes</h3>
-              <p class="text-muted">Only authorized admins can access volunteer and inquiry records. We use your details only to respond to your message or coordinate volunteer opportunities.</p>
+              <p class="text-muted">Only authorized admins can access inquiry records. We use your details only to respond to your message and coordinate any follow-up you request.</p>
               <p class="text-muted">To reduce spam, suspicious automated submissions are ignored.</p>
             </div>
           </div>
@@ -446,10 +294,9 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
             <div class="card">
               <div class="card-body">
                 <h3 style="margin-bottom:1rem;">General Inquiry</h3>
-                <?php if ($activeForm === 'inquiry' && isset($errors['general'])): ?><div class="alert alert-error" style="margin-bottom:1rem;"><?= e($errors['general']) ?></div><?php endif; ?>
-                <form method="POST" action="/contact.php?form=inquiry">
+                <?php if (isset($errors['general'])): ?><div class="alert alert-error" style="margin-bottom:1rem;"><?= e($errors['general']) ?></div><?php endif; ?>
+                <form method="POST" action="/contact.php">
                   <?= csrfField() ?>
-                  <input type="hidden" name="form_type" value="inquiry">
                   <div class="spam-trap" aria-hidden="true">
                     <label for="website-inquiry">Leave this field blank</label>
                     <input type="text" id="website-inquiry" name="website" tabindex="-1" autocomplete="off">
@@ -458,19 +305,19 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                     <div class="form-group">
                       <label class="form-label" for="inquiry-name">Full Name</label>
                       <input type="text" id="inquiry-name" name="name" class="form-control" value="<?= e($inquiryValues['name']) ?>" required>
-                      <?php if ($activeForm === 'inquiry' && isset($errors['name'])): ?><div class="form-error"><?= e($errors['name']) ?></div><?php endif; ?>
+                      <?php if (isset($errors['name'])): ?><div class="form-error"><?= e($errors['name']) ?></div><?php endif; ?>
                     </div>
                     <div class="form-group">
                       <label class="form-label" for="inquiry-email">Email Address</label>
                       <input type="email" id="inquiry-email" name="email" class="form-control" value="<?= e($inquiryValues['email']) ?>" required>
-                      <?php if ($activeForm === 'inquiry' && isset($errors['email'])): ?><div class="form-error"><?= e($errors['email']) ?></div><?php endif; ?>
+                      <?php if (isset($errors['email'])): ?><div class="form-error"><?= e($errors['email']) ?></div><?php endif; ?>
                     </div>
                   </div>
                   <div class="form-row">
                     <div class="form-group">
                       <label class="form-label" for="inquiry-phone">Phone Number</label>
                       <input type="text" id="inquiry-phone" name="phone_number" class="form-control" value="<?= e($inquiryValues['phone_number']) ?>">
-                      <?php if ($activeForm === 'inquiry' && isset($errors['phone_number'])): ?><div class="form-error"><?= e($errors['phone_number']) ?></div><?php endif; ?>
+                      <?php if (isset($errors['phone_number'])): ?><div class="form-error"><?= e($errors['phone_number']) ?></div><?php endif; ?>
                     </div>
                     <div class="form-group">
                       <label class="form-label" for="inquiry-contact-method">Preferred Contact Method</label>
@@ -487,11 +334,12 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                   <div class="form-group">
                     <label class="form-label" for="inquiry-subject">Subject</label>
                     <input type="text" id="inquiry-subject" name="subject" class="form-control" value="<?= e($inquiryValues['subject']) ?>">
+                    <div class="form-hint">Interested in volunteering? Let us know here or in your message so staff can convert your inquiry into a volunteer record.</div>
                   </div>
                   <div class="form-group">
                     <label class="form-label" for="inquiry-message">Message</label>
                     <textarea id="inquiry-message" name="message" class="form-control" rows="6" required><?= e($inquiryValues['message']) ?></textarea>
-                    <?php if ($activeForm === 'inquiry' && isset($errors['message'])): ?><div class="form-error"><?= e($errors['message']) ?></div><?php endif; ?>
+                    <?php if (isset($errors['message'])): ?><div class="form-error"><?= e($errors['message']) ?></div><?php endif; ?>
                   </div>
                   <div class="form-group">
                     <label class="form-check">
@@ -505,78 +353,10 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
                       <input type="checkbox" name="privacy_consent" value="1" <?= $inquiryValues['privacy_consent'] ? 'checked' : '' ?>>
                       I consent to RedWater storing this information so staff can respond to my inquiry.
                     </label>
-                    <?php if ($activeForm === 'inquiry' && isset($errors['privacy_consent'])): ?><div class="form-error"><?= e($errors['privacy_consent']) ?></div><?php endif; ?>
+                    <?php if (isset($errors['privacy_consent'])): ?><div class="form-error"><?= e($errors['privacy_consent']) ?></div><?php endif; ?>
                   </div>
                   <?= renderTurnstileWidget('contact_inquiry') ?>
                   <button type="submit" class="btn btn-primary">Send Message</button>
-                </form>
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="card-body">
-                <h3 style="margin-bottom:1rem;">Volunteer Sign-Up</h3>
-                <?php if ($activeForm === 'volunteer' && isset($errors['general'])): ?><div class="alert alert-error" style="margin-bottom:1rem;"><?= e($errors['general']) ?></div><?php endif; ?>
-                <form method="POST" action="/contact.php?form=volunteer">
-                  <?= csrfField() ?>
-                  <input type="hidden" name="form_type" value="volunteer">
-                  <div class="spam-trap" aria-hidden="true">
-                    <label for="website-volunteer">Leave this field blank</label>
-                    <input type="text" id="website-volunteer" name="website" tabindex="-1" autocomplete="off">
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label" for="volunteer-full-name">Full Name</label>
-                      <input type="text" id="volunteer-full-name" name="full_name" class="form-control" value="<?= e($volunteerValues['full_name']) ?>" required>
-                      <?php if ($activeForm === 'volunteer' && isset($errors['full_name'])): ?><div class="form-error"><?= e($errors['full_name']) ?></div><?php endif; ?>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label" for="volunteer-email">Email Address</label>
-                      <input type="email" id="volunteer-email" name="email" class="form-control" value="<?= e($volunteerValues['email']) ?>" required>
-                      <?php if ($activeForm === 'volunteer' && isset($errors['email'])): ?><div class="form-error"><?= e($errors['email']) ?></div><?php endif; ?>
-                    </div>
-                  </div>
-                  <div class="form-row">
-                    <div class="form-group">
-                      <label class="form-label" for="volunteer-phone">Phone Number</label>
-                      <input type="text" id="volunteer-phone" name="phone_number" class="form-control" value="<?= e($volunteerValues['phone_number']) ?>">
-                      <?php if ($activeForm === 'volunteer' && isset($errors['phone_number'])): ?><div class="form-error"><?= e($errors['phone_number']) ?></div><?php endif; ?>
-                    </div>
-                    <div class="form-group">
-                      <label class="form-label" for="volunteer-contact-method">Preferred Contact Method</label>
-                      <select id="volunteer-contact-method" name="preferred_contact_method" class="form-control">
-                        <option value="email" <?= $volunteerValues['preferred_contact_method'] === 'email' ? 'selected' : '' ?>>Email</option>
-                        <option value="phone" <?= $volunteerValues['preferred_contact_method'] === 'phone' ? 'selected' : '' ?>>Phone</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="volunteer-location">Location / Address</label>
-                    <input type="text" id="volunteer-location" name="location_address" class="form-control" value="<?= e($volunteerValues['location_address']) ?>">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="volunteer-interests">Areas of Interest or Skills</label>
-                    <textarea id="volunteer-interests" name="areas_of_interest" class="form-control" rows="4" required><?= e($volunteerValues['areas_of_interest']) ?></textarea>
-                    <?php if ($activeForm === 'volunteer' && isset($errors['areas_of_interest'])): ?><div class="form-error"><?= e($errors['areas_of_interest']) ?></div><?php endif; ?>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="volunteer-availability">Availability</label>
-                    <textarea id="volunteer-availability" name="availability" class="form-control" rows="3" required><?= e($volunteerValues['availability']) ?></textarea>
-                    <?php if ($activeForm === 'volunteer' && isset($errors['availability'])): ?><div class="form-error"><?= e($errors['availability']) ?></div><?php endif; ?>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label" for="volunteer-message">Additional Notes</label>
-                    <textarea id="volunteer-message" name="message" class="form-control" rows="4"><?= e($volunteerValues['message']) ?></textarea>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-check">
-                      <input type="checkbox" name="privacy_consent" value="1" <?= $volunteerValues['privacy_consent'] ? 'checked' : '' ?>>
-                      I consent to RedWater storing this information to coordinate volunteer opportunities with me.
-                    </label>
-                    <?php if ($activeForm === 'volunteer' && isset($errors['privacy_consent'])): ?><div class="form-error"><?= e($errors['privacy_consent']) ?></div><?php endif; ?>
-                  </div>
-                  <?= renderTurnstileWidget('contact_volunteer') ?>
-                  <button type="submit" class="btn btn-primary">Sign Up to Volunteer</button>
                 </form>
               </div>
             </div>
