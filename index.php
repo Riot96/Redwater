@@ -35,7 +35,7 @@ include __DIR__ . '/includes/header.php';
     <div class="container">
       <div class="about-grid">
         <div class="about-image-wrap">
-          <img src="/assets/images/about-redwater.svg" alt="RedWater Entertainment" class="about-image" onerror="this.parentElement.style.display='none'">
+          <img src="/assets/images/Redwater%20LoGo%20NoBG.jpg" alt="RedWater Entertainment" class="about-image" onerror="this.parentElement.style.display='none'">
         </div>
         <div class="about-text">
           <h2>About <span>RedWater</span> Entertainment</h2>
