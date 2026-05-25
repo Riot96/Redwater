@@ -598,9 +598,9 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 }
 .about-image {
   width: 100%;
+  display: block;
+  height: auto;
   border-radius: var(--radius-lg);
-  aspect-ratio: 4/3;
-  object-fit: cover;
 }
 .about-text h2 { margin-bottom: 1rem; }
 .about-text h2 span { color: var(--red); }
