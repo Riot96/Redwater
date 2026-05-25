@@ -263,10 +263,9 @@ function generatePasswordResetToken(string $email): ?string {
 /**
  * Validates a reset token with an embedded issue timestamp.
  *
- * Legacy tokens without the prefixed timestamp format return false here and
- * should fall back to the stored reset_token_expires value. The token is still
- * matched exactly in the database before this helper is used, so app-server
- * clock skew should not cause brand-new links to be rejected.
+ * Tokens now prefer the stored reset_token_expires value during validation.
+ * This helper remains as a fallback for malformed or legacy rows that do not
+ * have a usable UTC expiry in the database.
  */
 function isCurrentPasswordResetToken(string $token): bool {
     $pattern = '/^'
@@ -280,6 +279,20 @@ function isCurrentPasswordResetToken(string $token): bool {
     $issuedAt = (int)$matches[1];
     $now = time();
     return ($now - $issuedAt) <= PASSWORD_RESET_TOKEN_LIFETIME;
+}
+
+function parseUtcDateTimeString(string $value): ?int {
+    $dateTime = DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $value, new DateTimeZone('UTC'));
+    if (!$dateTime instanceof DateTimeImmutable) {
+        return null;
+    }
+
+    $errors = DateTimeImmutable::getLastErrors();
+    if (is_array($errors) && ($errors['warning_count'] > 0 || $errors['error_count'] > 0)) {
+        return null;
+    }
+
+    return $dateTime->getTimestamp();
 }
 
 /**
@@ -304,21 +317,15 @@ function validatePasswordResetToken(string $token): ?array {
         'display_name' => $user['display_name'],
     ];
 
-    if (isCurrentPasswordResetToken($token)) {
-        return $validatedUser;
-    }
-
     $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
-    if ($resetTokenExpiresValue === null || !is_string($resetTokenExpiresValue)) {
-        return null;
+    if (is_string($resetTokenExpiresValue) && $resetTokenExpiresValue !== '') {
+        $resetTokenExpiresTimestamp = parseUtcDateTimeString($resetTokenExpiresValue);
+        if ($resetTokenExpiresTimestamp !== null) {
+            return $resetTokenExpiresTimestamp > time() ? $validatedUser : null;
+        }
     }
 
-    $resetTokenExpiresTimestamp = strtotime($resetTokenExpiresValue);
-    if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
-        return null;
-    }
-
-    return $validatedUser;
+    return isCurrentPasswordResetToken($token) ? $validatedUser : null;
 }
 
 /**
