@@ -308,7 +308,7 @@ function validatePasswordResetToken(string $token): ?array {
 
     $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
     if (is_string($resetTokenExpiresValue) && $resetTokenExpiresValue !== '') {
-        return (bool)($user['reset_token_expires_valid'] ?? false) ? $validatedUser : null;
+        return ($user['reset_token_expires_valid'] ?? false) ? $validatedUser : null;
     }
 
     return isCurrentPasswordResetToken($token) ? $validatedUser : null;
