@@ -1325,9 +1325,9 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   margin-bottom: 3rem;
 }
 .footer-col {}
-.footer-brand { max-width: 320px; }
+.footer-brand { }
 .footer-logo { display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
-.logo-img-sm { height: 120px; width: auto; }
+.logo-img-sm { height: 96px; width: auto; }
 .footer-tagline { font-size: 0.9rem; color: var(--text-muted); margin-top: 0.5rem; font-style: italic; }
 .footer-heading {
   font-family: var(--font-head);
@@ -1948,8 +1948,7 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
   .form-row          { grid-template-columns: 1fr; }
   .contact-form-panel .card-body { padding: 1.5rem; }
   .footer-grid       { grid-template-columns: 1fr; }
-  .footer-brand      { max-width: none; }
-  .logo-img-sm       { height: 92px; }
+  .logo-img-sm       { height: 80px; }
   .filter-grid       { grid-template-columns: 1fr; }
   .merch-card-header { flex-direction: column; }
   .merch-product-layout,
