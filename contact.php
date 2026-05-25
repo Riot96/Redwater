@@ -290,7 +290,7 @@ $phoneHref = preg_replace('/\D/', '', $phone) ?? '';
             </div>
           <?php endif; ?>
 
-          <div class="submission-grid">
+          <div class="contact-form-panel">
             <div class="card">
               <div class="card-body">
                 <h3 style="margin-bottom:1rem;">General Inquiry</h3>

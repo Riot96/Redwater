@@ -991,14 +991,18 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
 /* ── Contact ─────────────────────────────────────────────────────────────── */
 .contact-grid {
   display: grid;
-  grid-template-columns: 1fr 1.5fr;
-  gap: 3rem;
+  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.75fr);
+  gap: 2.5rem;
   align-items: start;
 }
-.submission-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+.contact-form-panel {
+  width: 100%;
+}
+.contact-form-panel .card {
+  width: 100%;
+}
+.contact-form-panel .card-body {
+  padding: 2rem;
 }
 .spam-trap {
   position: absolute;
@@ -1891,7 +1895,7 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
   .about-grid      { grid-template-columns: 1fr; }
   .about-image-wrap{ display: none; }
   .contact-grid    { grid-template-columns: 1fr; }
-  .submission-grid { grid-template-columns: 1fr; }
+  .contact-form-panel .card-body { padding: 1.75rem; }
   .footer-grid     { grid-template-columns: 1fr 1fr; }
   .admin-layout    { grid-template-columns: 200px 1fr; }
   .filter-grid     { grid-template-columns: 1fr 1fr; }
@@ -1938,6 +1942,7 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
 
   .policies-content  { grid-template-columns: 1fr; }
   .form-row          { grid-template-columns: 1fr; }
+  .contact-form-panel .card-body { padding: 1.5rem; }
   .footer-grid       { grid-template-columns: 1fr; }
   .filter-grid       { grid-template-columns: 1fr; }
   .merch-card-header { flex-direction: column; }
