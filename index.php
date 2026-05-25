@@ -35,7 +35,7 @@ include __DIR__ . '/includes/header.php';
     <div class="container">
       <div class="about-grid">
         <div class="about-image-wrap">
-          <img src="/assets/images/about-placeholder.jpg" alt="RedWater Entertainment" class="about-image" onerror="this.style.display='none'">
+          <img src="https://github.com/user-attachments/assets/690ac52d-50c7-4a20-a8f1-b851c88aca13" alt="RedWater Entertainment" class="about-image">
         </div>
         <div class="about-text">
           <h2>About <span>RedWater</span> Entertainment</h2>
@@ -82,7 +82,7 @@ include __DIR__ . '/includes/header.php';
           </div>
           <div class="feature-card-body">
             <h3>Educational Events</h3>
-            <p>We believe entertainment and education go hand in hand. Our educational programs bring history, science, and the arts to life in ways that are engaging and memorable.</p>
+            <p>From theater and design to construction and STEM exploration, our programs turn creativity into real-world learning. We create engaging experiences that encourage imagination, skill-building, and personal responsibility.</p>
             <a href="/contact.php" class="btn btn-secondary btn-sm mt-2">Learn More</a>
           </div>
         </div>
