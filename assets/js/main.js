@@ -65,8 +65,7 @@ document.addEventListener('DOMContentLoaded', function () {
         deferredInstallPrompt.prompt();
         try {
           await deferredInstallPrompt.userChoice;
-        } catch (error) {
-          void error;
+        } catch {
         }
         deferredInstallPrompt = null;
         installButton.hidden = true;

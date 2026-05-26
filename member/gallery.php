@@ -631,9 +631,13 @@ memberSyncUploadInputs();
   const uploadTimeoutMs = 180000;
   const uploadDbName = 'redwater-member-gallery';
   const uploadStoreName = 'uploadQueue';
+  let uploadSequence = 0;
   const createUploadId = window.crypto && typeof window.crypto.randomUUID === 'function'
     ? function () { return window.crypto.randomUUID(); }
-    : function () { return String(Date.now()) + '-' + Math.random().toString(16).slice(2) + '-' + Math.random().toString(16).slice(2); };
+    : function () {
+        uploadSequence += 1;
+        return String(Date.now()) + '-' + uploadSequence + '-' + Math.random().toString(16).slice(2) + '-' + Math.random().toString(16).slice(2);
+      };
   let isSyncingQueue = false;
 
   function setStatus(message, tone) {
@@ -667,6 +671,7 @@ memberSyncUploadInputs();
     progressBar.style.width = percent + '%';
     progressPercent.textContent = percent + '%';
     progressBar.setAttribute('aria-valuenow', String(percent));
+    progressBar.setAttribute('aria-label', label + ' (' + percent + '%)');
     progressLabel.textContent = label;
   }
 
@@ -678,6 +683,7 @@ memberSyncUploadInputs();
     progressWrap.hidden = true;
     progressBar.style.width = progressMin + '%';
     progressBar.setAttribute('aria-valuenow', String(progressMin));
+    progressBar.setAttribute('aria-label', 'Upload progress');
     progressPercent.textContent = progressMin + '%';
     progressLabel.textContent = 'Preparing upload…';
   }
@@ -699,9 +705,14 @@ memberSyncUploadInputs();
     memberToggleType('photo');
     memberTogglePhotoSource('upload');
     memberToggleVideoType('embed');
-    document.querySelectorAll('#memberUploadForm .dropzone p').forEach(function (element, index) {
-      element.textContent = index === 0 ? 'Drop image here or click to select' : 'Drop video file here or click to select';
-    });
+    const photoDropzoneLabel = document.querySelector('#memberPhotoUploadField .dropzone p');
+    const videoDropzoneLabel = document.querySelector('#memberUploadField .dropzone p');
+    if (photoDropzoneLabel) {
+      photoDropzoneLabel.textContent = 'Drop image here or click to select';
+    }
+    if (videoDropzoneLabel) {
+      videoDropzoneLabel.textContent = 'Drop video file here or click to select';
+    }
   }
 
   function openQueueDatabase() {
@@ -841,7 +852,7 @@ memberSyncUploadInputs();
         if (!event.lengthComputable) {
           return;
         }
-        const percent = Math.max(progressMin + 1, Math.min(progressMax, Math.round((event.loaded / event.total) * progressMax)));
+        const percent = Math.max(progressMin, Math.min(progressMax, Math.round((event.loaded / event.total) * progressMax)));
         setProgress(percent, progressText);
       };
       xhr.onload = function () {

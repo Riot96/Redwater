@@ -65,6 +65,7 @@ self.addEventListener('fetch', function (event) {
       }
 
       return fetch(event.request).then(function (networkResponse) {
+        // Only cache first-party static assets; dynamic, cross-origin, and opaque responses stay network-only.
         if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
           return networkResponse;
         }
