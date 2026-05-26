@@ -27,7 +27,14 @@ document.addEventListener('DOMContentLoaded', function () {
   // ── Nav User Dropdown ─────────────────────────────────────────────────────
   document.querySelectorAll('.nav-dropdown').forEach(function (dropdown) {
     const btn = dropdown.querySelector('.nav-user-btn');
+    const menu = dropdown.querySelector('.nav-dropdown-menu');
     if (!btn) return;
+
+    function closeDropdown() {
+      dropdown.classList.remove('open');
+      btn.setAttribute('aria-expanded', false);
+    }
+
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       const open = !dropdown.classList.contains('open');
@@ -38,11 +45,61 @@ document.addEventListener('DOMContentLoaded', function () {
       dropdown.classList.toggle('open', open);
       btn.setAttribute('aria-expanded', open);
     });
-    document.addEventListener('click', function () {
-      dropdown.classList.remove('open');
-      btn.setAttribute('aria-expanded', false);
+
+    if (menu) {
+      menu.addEventListener('click', function (e) {
+        e.stopPropagation();
+      });
+    }
+
+    document.addEventListener('click', function (e) {
+      if (!dropdown.contains(e.target)) {
+        closeDropdown();
+      }
     });
   });
+
+  function dismissFlash(alert) {
+    if (!alert) return;
+    alert.style.opacity = '0';
+    alert.style.transform = 'translateX(100%)';
+    alert.style.transition = 'all 0.3s ease';
+    setTimeout(function () { alert.remove(); }, 300);
+  }
+
+  function showRuntimeFlash(type, message) {
+    if (!message) return;
+
+    let container = document.querySelector('.flash-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.className = 'flash-container';
+      document.body.appendChild(container);
+    }
+
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-' + type;
+
+    const text = document.createElement('span');
+    text.textContent = message;
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'alert-close';
+    close.setAttribute('aria-label', 'Close');
+    close.textContent = '×';
+    close.addEventListener('click', function () {
+      dismissFlash(alert);
+    });
+
+    alert.appendChild(text);
+    alert.appendChild(close);
+    container.prepend(alert);
+
+    setTimeout(function () {
+      if (alert.isConnected) dismissFlash(alert);
+    }, 8000);
+  }
 
   // ── Logged-in PWA install/support ─────────────────────────────────────────
   const pwaEnabled = document.querySelector('meta[name="redwater-pwa-enabled"]');
@@ -58,14 +115,28 @@ document.addEventListener('DOMContentLoaded', function () {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
     let deferredInstallPrompt = null;
+    const installFallbackMessage = isIos
+      ? 'Open this site in Safari, tap Share, then choose "Add to Home Screen" to install the RedWater uploader.'
+      : 'Use your browser menu and choose "Install app" or "Add to Home Screen" to install the RedWater uploader.';
 
     if (installButton) {
-      installButton.addEventListener('click', async function () {
-        if (!deferredInstallPrompt) return;
+      installButton.addEventListener('click', async function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!deferredInstallPrompt) {
+          showRuntimeFlash('info', installFallbackMessage);
+          return;
+        }
+
         deferredInstallPrompt.prompt();
         try {
-          await deferredInstallPrompt.userChoice;
+          const choice = await deferredInstallPrompt.userChoice;
+          if (choice.outcome !== 'accepted') {
+            showRuntimeFlash('info', installFallbackMessage);
+          }
         } catch {
+          showRuntimeFlash('info', installFallbackMessage);
         }
         deferredInstallPrompt = null;
         installButton.hidden = true;
@@ -73,8 +144,10 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (iosInstallButton) {
-      iosInstallButton.addEventListener('click', function () {
-        alert('On iPhone or iPad, tap Share in Safari and then choose "Add to Home Screen" to install the RedWater uploader.');
+      iosInstallButton.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        showRuntimeFlash('info', 'Open this site in Safari, tap Share, then choose "Add to Home Screen" to install the RedWater uploader.');
       });
       iosInstallButton.hidden = !(isIos && !isStandalone);
     }

@@ -1,5 +1,5 @@
 // Bump this cache name whenever the offline shell or cached static assets change.
-const CACHE_NAME = 'redwater-pwa-v2';
+const CACHE_NAME = 'redwater-pwa-v3';
 const CORE_ASSETS = [
   '/offline.html',
   '/assets/css/style.css',

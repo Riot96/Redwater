@@ -16,6 +16,8 @@ $socialPinterest = trim(getSetting('social_pinterest'));
 $contactEmail    = trim(getSetting('contact_email'));
 $contactPhone    = trim(getSetting('contact_phone'));
 $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
+$mainJsPath = dirname(__DIR__) . '/assets/js/main.js';
+$mainJsVersion = is_file($mainJsPath) ? (string) filemtime($mainJsPath) : '1';
 ?>
 
 <footer class="site-footer">
@@ -95,6 +97,6 @@ $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
     </div>
 </footer>
 
-<script src="/assets/js/main.js"></script>
+<script src="/assets/js/main.js?v=<?= e($mainJsVersion) ?>"></script>
 </body>
 </html>
