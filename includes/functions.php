@@ -191,6 +191,198 @@ function renderFlashMessages(): string {
     return $html;
 }
 
+defined('LOGIN_RATE_LIMIT_WINDOW_SECONDS') || define('LOGIN_RATE_LIMIT_WINDOW_SECONDS', 900);
+defined('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_IP') || define('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_IP', 15);
+defined('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP') || define('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP', 6);
+
+function cspNonce(): string {
+    static $nonce = null;
+    if (is_string($nonce) && $nonce !== '') {
+        return $nonce;
+    }
+
+    $nonce = rtrim(strtr(base64_encode(random_bytes(18)), '+/', '-_'), '=');
+    return $nonce;
+}
+
+function cspNonceAttribute(): string {
+    return 'nonce="' . e(cspNonce()) . '"';
+}
+
+function buildContentSecurityPolicyHeader(string $nonce): string {
+    $directives = [
+        "default-src 'self'",
+        "base-uri 'self'",
+        "object-src 'none'",
+        "frame-ancestors 'self'",
+        "img-src 'self' data: blob: https:",
+        "media-src 'self' blob: https:",
+        "font-src 'self' data: https://fonts.gstatic.com",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "script-src 'self' 'nonce-" . $nonce . "' https:",
+        "connect-src 'self' https:",
+        "frame-src 'self' https:",
+        "form-action 'self' https://www.paypal.com https://www.sandbox.paypal.com",
+    ];
+
+    return implode('; ', $directives);
+}
+
+function loginRateLimitStorageDir(): string {
+    $dir = dirname(__DIR__) . '/uploads/temp/login-rate-limit';
+    if (!is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    return $dir;
+}
+
+function loginRateLimitIdentifier(string $value, string $fallback = 'unknown'): string {
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return $fallback;
+    }
+
+    return strtolower($trimmed);
+}
+
+function loginRateLimitBucketFile(string $scope, string $identifier): string {
+    return loginRateLimitStorageDir() . '/' . hash('sha256', $scope . "\0" . $identifier) . '.json';
+}
+
+/**
+ * @param list<int> $attempts
+ * @return list<int>
+ */
+function pruneLoginRateLimitAttempts(array $attempts, int $now, int $window = LOGIN_RATE_LIMIT_WINDOW_SECONDS): array {
+    $minimumTimestamp = $now - $window;
+    $pruned = [];
+    foreach ($attempts as $attempt) {
+        $timestamp = intValue($attempt);
+        if ($timestamp >= $minimumTimestamp && $timestamp <= $now) {
+            $pruned[] = $timestamp;
+        }
+    }
+
+    sort($pruned, SORT_NUMERIC);
+    return $pruned;
+}
+
+/**
+ * @return list<int>
+ */
+function readLoginRateLimitAttempts(string $scope, string $identifier, int $now): array {
+    $file = loginRateLimitBucketFile($scope, $identifier);
+    if (!is_file($file)) {
+        return [];
+    }
+
+    $decoded = json_decode(stringValue(file_get_contents($file), '[]'), true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $attempts = [];
+    foreach ($decoded as $attempt) {
+        $attempts[] = intValue($attempt);
+    }
+
+    return pruneLoginRateLimitAttempts($attempts, $now);
+}
+
+/**
+ * @param list<int> $attempts
+ */
+function writeLoginRateLimitAttempts(string $scope, string $identifier, array $attempts): void {
+    $file = loginRateLimitBucketFile($scope, $identifier);
+    if ($attempts === []) {
+        if (is_file($file)) {
+            @unlink($file);
+        }
+        return;
+    }
+
+    file_put_contents($file, json_encode($attempts, JSON_UNESCAPED_SLASHES), LOCK_EX);
+}
+
+/**
+ * @param list<int> $ipAttempts
+ * @param list<int> $emailIpAttempts
+ * @return array{allowed: bool, retry_after: int, scope: 'none'|'ip'|'email_ip', message: string}
+ */
+function evaluateLoginRateLimit(int $now, array $ipAttempts, array $emailIpAttempts): array {
+    $ipAttempts = pruneLoginRateLimitAttempts($ipAttempts, $now);
+    if (count($ipAttempts) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_IP) {
+        $retryAfter = max(1, ($ipAttempts[0] + LOGIN_RATE_LIMIT_WINDOW_SECONDS) - $now);
+        return [
+            'allowed' => false,
+            'retry_after' => $retryAfter,
+            'scope' => 'ip',
+            'message' => 'Too many login attempts. Please wait about ' . max(1, (int) ceil($retryAfter / 60)) . ' minute(s) and try again.',
+        ];
+    }
+
+    $emailIpAttempts = pruneLoginRateLimitAttempts($emailIpAttempts, $now);
+    if (count($emailIpAttempts) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP) {
+        $retryAfter = max(1, ($emailIpAttempts[0] + LOGIN_RATE_LIMIT_WINDOW_SECONDS) - $now);
+        return [
+            'allowed' => false,
+            'retry_after' => $retryAfter,
+            'scope' => 'email_ip',
+            'message' => 'Too many login attempts. Please wait about ' . max(1, (int) ceil($retryAfter / 60)) . ' minute(s) and try again.',
+        ];
+    }
+
+    return [
+        'allowed' => true,
+        'retry_after' => 0,
+        'scope' => 'none',
+        'message' => '',
+    ];
+}
+
+/**
+ * @return array{allowed: bool, retry_after: int, scope: 'none'|'ip'|'email_ip', message: string}
+ */
+function getLoginRateLimitStatus(string $ipAddress, string $email, ?int $now = null): array {
+    $now = $now ?? time();
+    $normalizedIp = loginRateLimitIdentifier($ipAddress);
+    $normalizedEmailIp = loginRateLimitIdentifier($normalizedIp . '|' . strtolower(trim($email)));
+
+    return evaluateLoginRateLimit(
+        $now,
+        readLoginRateLimitAttempts('ip', $normalizedIp, $now),
+        readLoginRateLimitAttempts('email_ip', $normalizedEmailIp, $now)
+    );
+}
+
+function recordLoginRateLimitFailure(string $ipAddress, string $email, ?int $now = null): void {
+    $now = $now ?? time();
+    $normalizedIp = loginRateLimitIdentifier($ipAddress);
+    $normalizedEmail = strtolower(trim($email));
+    $normalizedEmailIp = loginRateLimitIdentifier($normalizedIp . '|' . $normalizedEmail);
+
+    $ipAttempts = readLoginRateLimitAttempts('ip', $normalizedIp, $now);
+    $ipAttempts[] = $now;
+    writeLoginRateLimitAttempts('ip', $normalizedIp, pruneLoginRateLimitAttempts($ipAttempts, $now));
+
+    if ($normalizedEmail !== '') {
+        $emailIpAttempts = readLoginRateLimitAttempts('email_ip', $normalizedEmailIp, $now);
+        $emailIpAttempts[] = $now;
+        writeLoginRateLimitAttempts('email_ip', $normalizedEmailIp, pruneLoginRateLimitAttempts($emailIpAttempts, $now));
+    }
+}
+
+function clearLoginRateLimitFailures(string $ipAddress, string $email): void {
+    $normalizedIp = loginRateLimitIdentifier($ipAddress);
+    $normalizedEmail = strtolower(trim($email));
+    writeLoginRateLimitAttempts('ip', $normalizedIp, []);
+    if ($normalizedEmail !== '') {
+        $normalizedEmailIp = loginRateLimitIdentifier($normalizedIp . '|' . $normalizedEmail);
+        writeLoginRateLimitAttempts('email_ip', $normalizedEmailIp, []);
+    }
+}
+
 /**
  * @return array{
  *   enabled: bool,
@@ -225,7 +417,7 @@ function renderTurnstileWidget(string $action): string {
 
     $html = '';
     if (!$scriptIncluded) {
-        $html .= '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
+        $html .= '<script ' . cspNonceAttribute() . ' src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>';
         $scriptIncluded = true;
     }
 
@@ -397,6 +589,29 @@ function validateTurnstileSubmission(string $action): string {
 }
 
 // ─── File Upload Helpers ───────────────────────────────────────────────────────
+function uploadExtensionForMimeType(string $mime, string $originalName = ''): string {
+    $normalizedMime = strtolower(trim($mime));
+    $mappedExtensions = [
+        'image/jpeg' => 'jpg',
+        'image/png' => 'png',
+        'image/gif' => 'gif',
+        'image/webp' => 'webp',
+        'video/mp4' => 'mp4',
+        'video/webm' => 'webm',
+        'video/ogg' => 'ogg',
+    ];
+    if (isset($mappedExtensions[$normalizedMime])) {
+        return $mappedExtensions[$normalizedMime];
+    }
+
+    $originalExtension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    if (preg_match('/^[a-z0-9]{1,10}$/', $originalExtension) === 1) {
+        return $originalExtension;
+    }
+
+    return 'bin';
+}
+
 /**
  * @param array{name?: string, type?: string, tmp_name?: string, error?: int, size?: int} $file
  * @param list<string> $allowedMimes
@@ -428,13 +643,13 @@ function handleFileUpload(array $file, string $destDir, array $allowedMimes, int
     $finfo = new finfo(FILEINFO_MIME_TYPE);
     $tmpName = isset($file['tmp_name']) ? (string)$file['tmp_name'] : '';
     $mime = $finfo->file($tmpName);
-    if (!in_array($mime, $allowedMimes, true)) {
+    if (!is_string($mime) || !in_array($mime, $allowedMimes, true)) {
         return ['success' => false, 'error' => 'File type not allowed. Allowed types: ' . implode(', ', $allowedMimes)];
     }
 
-    // Generate safe filename
+    // Generate a safe filename based on the validated MIME type rather than the user-supplied extension.
     $name = isset($file['name']) ? (string)$file['name'] : '';
-    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+    $ext = uploadExtensionForMimeType($mime, $name);
     $filename = uniqid('rw_', true) . '.' . $ext;
     $destPath = rtrim($destDir, '/') . '/' . $filename;
 
@@ -465,7 +680,7 @@ function deleteUploadedFile(string $path): void {
 }
 
 // ─── Gallery Helpers ──────────────────────────────────────────────────────────
-function normalizeLocalGalleryWatermarkImagePath(string $path): string {
+function normalizeManagedUploadPath(string $path, string $pattern): string {
     $normalized = trim($path);
     if ($normalized === '') {
         return '';
@@ -473,11 +688,57 @@ function normalizeLocalGalleryWatermarkImagePath(string $path): string {
     if (preg_match('/[\x00-\x1F\x7F\\\\]/', $normalized) === 1 || str_contains($normalized, '..')) {
         return '';
     }
-    if (preg_match('#^/uploads/watermarks/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i', $normalized) !== 1) {
+
+    $normalized = '/' . ltrim($normalized, '/');
+    if (preg_match($pattern, $normalized) !== 1) {
         return '';
     }
 
     return $normalized;
+}
+
+function managedUploadAbsolutePath(string $path, string $uploadsRootPath): string {
+    $candidate = realpath(dirname(__DIR__) . '/' . ltrim($path, '/'));
+    $uploadsRoot = realpath(dirname(__DIR__) . '/' . ltrim($uploadsRootPath, '/'));
+    if ($candidate === false || $uploadsRoot === false || !is_file($candidate)) {
+        return '';
+    }
+
+    if (!str_starts_with($candidate, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+        return '';
+    }
+
+    return $candidate;
+}
+
+function normalizeLocalGalleryUploadPath(string $path): string {
+    return normalizeManagedUploadPath(
+        $path,
+        '#^/uploads/gallery/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp|mp4|webm|ogg)$#i'
+    );
+}
+
+function galleryUploadAbsolutePath(string $path): string {
+    $normalizedPath = normalizeLocalGalleryUploadPath($path);
+    if ($normalizedPath === '') {
+        return '';
+    }
+
+    return managedUploadAbsolutePath($normalizedPath, '/uploads/gallery');
+}
+
+function deleteManagedGalleryUpload(string $path): void {
+    $absolutePath = galleryUploadAbsolutePath($path);
+    if ($absolutePath !== '') {
+        deleteUploadedFile($absolutePath);
+    }
+}
+
+function normalizeLocalGalleryWatermarkImagePath(string $path): string {
+    return normalizeManagedUploadPath(
+        $path,
+        '#^/uploads/watermarks/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i'
+    );
 }
 
 function isManagedGalleryWatermarkImagePath(string $path): bool {
@@ -490,14 +751,36 @@ function deleteManagedGalleryWatermarkImage(string $path): void {
         return;
     }
 
-    $candidate = realpath(dirname(__DIR__) . '/' . ltrim($path, '/'));
-    $uploadsRoot = realpath(dirname(__DIR__) . '/uploads/watermarks');
-    if ($candidate === false || $uploadsRoot === false) {
-        return;
+    $candidate = managedUploadAbsolutePath($path, '/uploads/watermarks');
+    if ($candidate !== '') {
+        deleteUploadedFile($candidate);
+    }
+}
+
+function normalizeLocalPolicyImagePath(string $path): string {
+    return normalizeManagedUploadPath(
+        $path,
+        '#^/uploads/policies/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i'
+    );
+}
+
+function policyImageAbsolutePath(string $path): string {
+    $normalizedPath = normalizeLocalPolicyImagePath($path);
+    if ($normalizedPath === '') {
+        return '';
     }
 
-    if ($candidate !== $uploadsRoot && str_starts_with($candidate, $uploadsRoot . DIRECTORY_SEPARATOR)) {
-        deleteUploadedFile($candidate);
+    return managedUploadAbsolutePath($normalizedPath, '/uploads/policies');
+}
+
+function policyImageExists(string $path): bool {
+    return policyImageAbsolutePath($path) !== '';
+}
+
+function deleteManagedPolicyImage(string $path): void {
+    $absolutePath = policyImageAbsolutePath($path);
+    if ($absolutePath !== '') {
+        deleteUploadedFile($absolutePath);
     }
 }
 
@@ -552,18 +835,10 @@ function saveGalleryWatermarkSettings(array $settings): void {
 }
 
 function normalizeLocalTicketEventImagePath(string $path): string {
-    $normalized = trim($path);
-    if ($normalized === '') {
-        return '';
-    }
-    if (preg_match('/[\x00-\x1F\x7F\\\\]/', $normalized) === 1 || str_contains($normalized, '..')) {
-        return '';
-    }
-    if (preg_match('#^/uploads/tickets/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i', $normalized) !== 1) {
-        return '';
-    }
-
-    return $normalized;
+    return normalizeManagedUploadPath(
+        $path,
+        '#^/uploads/tickets/[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?(?:\.[A-Za-z0-9_](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?)*\.(?:jpe?g|png|gif|webp)$#i'
+    );
 }
 
 function isSupportedTicketManualEventImagePath(string $path): bool {
@@ -589,13 +864,8 @@ function deleteManagedTicketManualEventImage(string $path): void {
         return;
     }
 
-    $candidate = realpath(dirname(__DIR__) . '/' . ltrim($path, '/'));
-    $uploadsRoot = realpath(dirname(__DIR__) . '/uploads/tickets');
-    if ($candidate === false || $uploadsRoot === false) {
-        return;
-    }
-
-    if ($candidate !== $uploadsRoot && str_starts_with($candidate, $uploadsRoot . DIRECTORY_SEPARATOR)) {
+    $candidate = managedUploadAbsolutePath($path, '/uploads/tickets');
+    if ($candidate !== '') {
         deleteUploadedFile($candidate);
     }
 }
@@ -1362,11 +1632,27 @@ function getSponsorTiers(): array {
 }
 
 // ─── Redirect ─────────────────────────────────────────────────────────────────
+function normalizeInternalRedirectTarget(string $url): string {
+    $candidate = trim($url);
+    if ($candidate === '') {
+        return '';
+    }
+    if (preg_match('/[\x00-\x1F\x7F]/', $candidate) === 1) {
+        return '';
+    }
+    if (!str_starts_with($candidate, '/') || str_starts_with($candidate, '//') || str_contains($candidate, '\\')) {
+        return '';
+    }
+
+    return $candidate;
+}
+
 /**
  * @return never
  */
 function redirect(string $url): void {
-    header('Location: ' . $url);
+    $sanitizedUrl = trim(str_replace(["\r", "\n"], '', $url));
+    header('Location: ' . ($sanitizedUrl !== '' ? $sanitizedUrl : '/'));
     exit;
 }
 

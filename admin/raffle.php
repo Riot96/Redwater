@@ -333,7 +333,7 @@ include __DIR__ . '/../includes/header.php';
                     <td><?= $storedEntry['newsletter_opt_in'] ? 'Yes' : 'No' ?></td>
                     <td><?= $storedEntry['created_at'] !== '' ? e(formatDateOrFallback($storedEntry['created_at'], 'M j, Y g:ia', '—')) : '—' ?></td>
                     <td>
-                      <form method="POST" action="/admin/raffle.php#raffle-entries" onsubmit="return confirm('Remove this raffle entry?');">
+                      <form method="POST" action="/admin/raffle.php#raffle-entries" data-confirm-submit="Remove this raffle entry?">
                         <?= csrfField() ?>
                         <input type="hidden" name="action" value="delete_raffle_entry">
                         <input type="hidden" name="entry_index" value="<?= $index ?>">
@@ -345,7 +345,7 @@ include __DIR__ . '/../includes/header.php';
               </tbody>
             </table>
           </div>
-          <form method="POST" action="/admin/raffle.php#raffle-entries" class="mt-2" onsubmit="return confirm('Clear every saved raffle entry?');">
+          <form method="POST" action="/admin/raffle.php#raffle-entries" class="mt-2" data-confirm-submit="Clear every saved raffle entry?">
             <?= csrfField() ?>
             <input type="hidden" name="action" value="clear_raffle_entries">
             <button type="submit" class="btn btn-outline">Clear All Entries</button>
@@ -356,7 +356,7 @@ include __DIR__ . '/../includes/header.php';
   </main>
 </div>
 
-<script>
+<script <?= cspNonceAttribute() ?>>
 (() => {
   const collectEmailToggle = document.getElementById('raffle-collect-email');
   const requireEmailToggle = document.getElementById('raffle-require-email');

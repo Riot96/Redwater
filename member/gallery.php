@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         redirect('/member/gallery.php');
                     }
                 }
-                $filePath = 'uploads/gallery/' . $upload['filename'];
+                $filePath = '/uploads/gallery/' . $upload['filename'];
             } else {
                 flashMessage('error', 'Please select a file to upload.');
                 redirect('/member/gallery.php');
@@ -160,7 +160,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /** @var array{file_path?: string}|false $row */
         $row = $stmt->fetch();
         if ($row) {
-            if ($row['file_path']) deleteUploadedFile(__DIR__ . '/../' . ltrim($row['file_path'], '/'));
+            if ($row['file_path']) {
+                deleteManagedGalleryUpload(stringValue($row['file_path']));
+            }
             $db->prepare('DELETE FROM gallery_items WHERE id=? AND user_id=?')->execute([$itemId, $user['id']]);
             flashMessage('success', 'Item deleted.');
         }
@@ -324,7 +326,7 @@ include __DIR__ . '/../includes/header.php';
         <input type="hidden" name="action" value="upload">
         <div class="form-group">
           <label class="form-label">Content Type</label>
-          <select name="type" class="form-control" id="memberMediaType" onchange="memberToggleType(this.value)">
+          <select name="type" class="form-control" id="memberMediaType">
             <option value="photo">Photo</option>
             <option value="video">Video</option>
           </select>
@@ -332,7 +334,7 @@ include __DIR__ . '/../includes/header.php';
         <div id="memberPhotoField">
           <div class="form-group">
             <label class="form-label">Photo Source</label>
-            <select name="photo_source" class="form-control" id="memberPhotoSource" onchange="memberTogglePhotoSource(this.value)">
+            <select name="photo_source" class="form-control" id="memberPhotoSource">
               <option value="upload">Upload Photo File</option>
               <option value="link">Link to Photo Page/Media</option>
             </select>
@@ -356,7 +358,7 @@ include __DIR__ . '/../includes/header.php';
         <div id="memberVideoField" style="display:none;">
           <div class="form-group">
             <label class="form-label">Video Source</label>
-            <select name="video_type" class="form-control" id="memberVideoType" onchange="memberToggleVideoType(this.value)">
+            <select name="video_type" class="form-control" id="memberVideoType">
               <option value="embed">Embed URL (YouTube, Vimeo)</option>
               <option value="upload">Upload Video File</option>
               <option value="link">Link to Video Page</option>
@@ -421,7 +423,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<script>
+<script <?= cspNonceAttribute() ?>>
 function memberSyncUploadInputs() {
   const mediaType = document.getElementById('memberMediaType')?.value;
   const photoSource = document.getElementById('memberPhotoSource')?.value;
@@ -452,6 +454,9 @@ function memberToggleVideoType(type) {
   document.getElementById('memberVideoLinkField').style.display = type === 'link' ? '' : 'none';
   memberSyncUploadInputs();
 }
+document.getElementById('memberMediaType')?.addEventListener('change', function () { memberToggleType(this.value); });
+document.getElementById('memberPhotoSource')?.addEventListener('change', function () { memberTogglePhotoSource(this.value); });
+document.getElementById('memberVideoType')?.addEventListener('change', function () { memberToggleVideoType(this.value); });
 memberSyncUploadInputs();
 </script>
 

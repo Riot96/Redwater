@@ -17,8 +17,8 @@ assert($policyStmt instanceof PDOStatement);
 /** @var array<string, mixed>|false $policy */
 $policy = $policyStmt->fetch();
 $contentHtml = stringValue($policy['content_html'] ?? '<p>Policies coming soon.</p>');
-$imagePath   = stringValue($policy['image_path'] ?? '');
-$hasPolicyImage = $imagePath !== '' && file_exists($imagePath);
+$imagePath   = normalizeLocalPolicyImagePath(stringValue($policy['image_path'] ?? ''));
+$hasPolicyImage = policyImageExists($imagePath);
 ?>
 
 <main class="page-wrapper">

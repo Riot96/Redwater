@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
 
     $contentHtml = postString('content_html');
-    $imagePath   = stringValue($policy['image_path'] ?? null);
+    $imagePath   = normalizeLocalPolicyImagePath(stringValue($policy['image_path'] ?? null));
     $policyImage = uploadedFile('policy_image');
 
     // Handle image upload
@@ -29,11 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp']
         );
         if ($upload['success']) {
-            // Delete old image
-            if ($imagePath !== '' && file_exists(__DIR__ . '/../' . ltrim($imagePath, '/'))) {
-                @unlink(__DIR__ . '/../' . ltrim($imagePath, '/'));
-            }
-            $imagePath = 'uploads/policies/' . $upload['filename'];
+            deleteManagedPolicyImage($imagePath);
+            $imagePath = '/uploads/policies/' . $upload['filename'];
         } else {
             flashMessage('error', 'Image upload failed: ' . $upload['error']);
             redirect('/admin/policies.php');
@@ -42,9 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Handle image removal
     if (postString('remove_image') === '1') {
-        if ($imagePath !== '' && file_exists(__DIR__ . '/../' . ltrim($imagePath, '/'))) {
-            @unlink(__DIR__ . '/../' . ltrim($imagePath, '/'));
-        }
+        deleteManagedPolicyImage($imagePath);
         $imagePath = '';
     }
 
@@ -57,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $pageTitle   = 'Edit Policies';
 $contentHtml = stringValue($policy['content_html'] ?? '');
-$imagePath   = stringValue($policy['image_path'] ?? '');
+$imagePath   = normalizeLocalPolicyImagePath(stringValue($policy['image_path'] ?? ''));
 include __DIR__ . '/../includes/header.php';
 ?>
 

@@ -24,7 +24,7 @@ $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
         <!-- Brand -->
         <div class="footer-col footer-brand">
             <a href="/" class="footer-logo">
-                <img src="/assets/images/logo.png" alt="RedWater Entertainment" class="logo-img-sm" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+                <img src="/assets/images/logo.png" alt="RedWater Entertainment" class="logo-img-sm" data-img-error="hide-show-next">
                 <span class="logo-text-fallback-sm" style="display:none;">
                     <span class="logo-red">Red</span><span class="logo-blue">Water</span>
                     <span class="logo-ent">Entertainment</span>
@@ -95,6 +95,6 @@ $contactPhoneHref = preg_replace('/\D/', '', $contactPhone) ?? '';
     </div>
 </footer>
 
-<script src="/assets/js/main.js"></script>
+<script <?= cspNonceAttribute() ?> src="/assets/js/main.js"></script>
 </body>
 </html>

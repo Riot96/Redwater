@@ -11,6 +11,10 @@ require_once __DIR__ . '/functions.php';
 
 initSession();
 
+if (!headers_sent()) {
+    header('Content-Security-Policy: ' . buildContentSecurityPolicyHeader(cspNonce()));
+}
+
 $siteName  = getSetting('site_name', 'RedWater Entertainment');
 $pageTitle = isset($pageTitle) && $pageTitle !== '' ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
 $bodyClass = $bodyClass ?? '';
@@ -41,7 +45,7 @@ $currentScript = basename(serverString('PHP_SELF'));
 <header class="site-header">
     <nav class="nav-container">
         <a href="/" class="nav-logo">
-            <img src="/assets/images/logo.png" alt="<?= e($siteName) ?> Logo" class="logo-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+            <img src="/assets/images/logo.png" alt="<?= e($siteName) ?> Logo" class="logo-img" data-img-error="hide-show-next">
             <span class="logo-text-fallback" style="display:none;">
                 <span class="logo-red">Red</span><span class="logo-blue">Water</span>
                 <span class="logo-ent">Entertainment</span>

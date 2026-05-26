@@ -370,6 +370,37 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  document.querySelectorAll('form[data-confirm-submit]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      if (!confirm(form.dataset.confirmSubmit || 'Are you sure?')) {
+        event.preventDefault();
+      }
+    });
+  });
+
+  // ── Image Error Fallbacks ──────────────────────────────────────────────────
+  document.querySelectorAll('img[data-img-error]').forEach(function (img) {
+    img.addEventListener('error', function () {
+      const behavior = img.dataset.imgError || 'hide-self';
+      if (behavior === 'hide-show-next') {
+        img.style.display = 'none';
+        const sibling = img.nextElementSibling;
+        if (sibling) {
+          sibling.style.display = 'block';
+        }
+        return;
+      }
+      if (behavior === 'hide-parent') {
+        if (img.parentElement) {
+          img.parentElement.style.display = 'none';
+        }
+        return;
+      }
+
+      img.style.display = 'none';
+    });
+  });
+
   // ── Admin: Sponsor tier enable/disable fields ─────────────────────────────
   document.querySelectorAll('.tier-form-toggle').forEach(function (checkbox) {
     checkbox.addEventListener('change', function () {

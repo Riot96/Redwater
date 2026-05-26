@@ -294,7 +294,7 @@ include __DIR__ . '/../includes/header.php';
         </div>
         <div class="form-group">
           <label class="form-label">Role</label>
-          <select name="role" class="form-control" id="newMemberRole" onchange="toggleBypassField(this.value)">
+          <select name="role" class="form-control" id="newMemberRole">
             <option value="member">Member</option>
             <option value="admin">Admin</option>
           </select>
@@ -314,10 +314,12 @@ include __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<script>
+<script <?= cspNonceAttribute() ?>>
 function toggleBypassField(role) {
   document.getElementById('bypassField').style.display = role === 'admin' ? 'none' : '';
 }
+document.getElementById('newMemberRole')?.addEventListener('change', function () { toggleBypassField(this.value); });
+toggleBypassField(document.getElementById('newMemberRole')?.value || 'member');
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

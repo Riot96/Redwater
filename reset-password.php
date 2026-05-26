@@ -45,7 +45,7 @@ include __DIR__ . '/includes/header.php';
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-logo">
-        <img src="/assets/images/logo.png" alt="RedWater Entertainment" onerror="this.style.display='none'">
+        <img src="/assets/images/logo.png" alt="RedWater Entertainment" data-img-error="hide-self">
       </div>
       <h2 class="auth-title">Reset Password</h2>
 

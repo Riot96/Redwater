@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     redirect('/admin/gallery.php');
                 }
             }
-            $filePath = 'uploads/gallery/' . $upload['filename'];
+            $filePath = '/uploads/gallery/' . $upload['filename'];
         }
 
         if ($requiresEmbed) {
@@ -149,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /** @var array{file_path?: string}|false $row */
         $row = $item->fetch();
         if ($row && $row['file_path']) {
-            deleteUploadedFile(__DIR__ . '/../' . ltrim($row['file_path'], '/'));
+            deleteManagedGalleryUpload(stringValue($row['file_path']));
         }
         $db->prepare('DELETE FROM gallery_items WHERE id = ?')->execute([$itemId]);
         flashMessage('success', 'Gallery item deleted.');
@@ -357,7 +357,7 @@ include __DIR__ . '/../includes/header.php';
 
         <div class="form-group">
           <label class="form-label">Content Type</label>
-          <select name="type" class="form-control" id="mediaType" onchange="toggleMediaType(this.value)">
+          <select name="type" class="form-control" id="mediaType">
             <option value="photo">Photo</option>
             <option value="video">Video</option>
           </select>
@@ -366,7 +366,7 @@ include __DIR__ . '/../includes/header.php';
         <div id="photoFields">
           <div class="form-group">
             <label class="form-label">Photo Source</label>
-            <select name="photo_source" class="form-control" id="photoSource" onchange="togglePhotoSource(this.value)">
+            <select name="photo_source" class="form-control" id="photoSource">
               <option value="upload">Upload Photo File</option>
               <option value="link">Link to Photo Page/Media</option>
             </select>
@@ -392,7 +392,7 @@ include __DIR__ . '/../includes/header.php';
         <div id="videoFields" style="display:none;">
           <div class="form-group">
             <label class="form-label">Video Source</label>
-            <select name="video_type" class="form-control" id="videoType" onchange="toggleVideoType(this.value)">
+            <select name="video_type" class="form-control" id="videoType">
               <option value="embed">Embed URL (YouTube, Vimeo)</option>
               <option value="upload">Upload Video File</option>
               <option value="link">Link to Video Page</option>
@@ -459,7 +459,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<script>
+<script <?= cspNonceAttribute() ?>>
 function syncGalleryUploadInputs() {
   const mediaType = document.getElementById('mediaType')?.value;
   const photoSource = document.getElementById('photoSource')?.value;
@@ -490,6 +490,9 @@ function toggleVideoType(type) {
   document.getElementById('videoLinkField').style.display = type === 'link' ? '' : 'none';
   syncGalleryUploadInputs();
 }
+document.getElementById('mediaType')?.addEventListener('change', function () { toggleMediaType(this.value); });
+document.getElementById('photoSource')?.addEventListener('change', function () { togglePhotoSource(this.value); });
+document.getElementById('videoType')?.addEventListener('change', function () { toggleVideoType(this.value); });
 syncGalleryUploadInputs();
 </script>
 

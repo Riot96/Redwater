@@ -127,7 +127,7 @@ include __DIR__ . '/../includes/header.php';
             </div>
             <div class="d-flex gap-1">
               <button class="btn btn-outline btn-sm"
-                      onclick="openEditTier(<?= htmlspecialchars(json_encode($tier) ?: '{}', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)">Edit Tier</button>
+                      data-edit-tier="<?= htmlspecialchars(json_encode($tier) ?: '{}', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">Edit Tier</button>
               <form method="POST" style="display:inline;">
                 <?= csrfField() ?>
                 <input type="hidden" name="action" value="delete_tier">
@@ -154,7 +154,7 @@ include __DIR__ . '/../includes/header.php';
                     <td>
                       <div class="td-actions">
                         <button class="btn btn-outline btn-sm"
-                                onclick="openEditSponsor(<?= htmlspecialchars(json_encode($sponsor) ?: '{}', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>)">Edit</button>
+                                data-edit-sponsor="<?= htmlspecialchars(json_encode($sponsor) ?: '{}', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">Edit</button>
                         <form method="POST" style="display:inline;">
                           <?= csrfField() ?>
                           <input type="hidden" name="action" value="delete_sponsor">
@@ -283,7 +283,7 @@ include __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
-<script>
+<script <?= cspNonceAttribute() ?>>
 function openEditTier(tier) {
   document.getElementById('tierModalTitle').textContent = 'Edit Tier: ' + tier.name;
   document.getElementById('tierFormId').value  = tier.id;
@@ -307,6 +307,24 @@ function openEditSponsor(sponsor) {
   document.getElementById('sponsorLink').value    = sponsor.link_url || '';
   document.getElementById('addSponsorModal').classList.add('open');
 }
+document.querySelectorAll('[data-edit-tier]').forEach(function (button) {
+  button.addEventListener('click', function () {
+    try {
+      openEditTier(JSON.parse(button.dataset.editTier || '{}'));
+    } catch (error) {
+      console.error('Unable to parse tier payload.', error);
+    }
+  });
+});
+document.querySelectorAll('[data-edit-sponsor]').forEach(function (button) {
+  button.addEventListener('click', function () {
+    try {
+      openEditSponsor(JSON.parse(button.dataset.editSponsor || '{}'));
+    } catch (error) {
+      console.error('Unable to parse sponsor payload.', error);
+    }
+  });
+});
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>

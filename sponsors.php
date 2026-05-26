@@ -85,7 +85,7 @@ $tiers = getSponsorTiers();
                       <img src="<?= e($sponsor['logo_url']) ?>"
                            alt="<?= e($sponsor['name'] ?? 'Sponsor') ?> logo"
                            class="sponsor-logo"
-                           onerror="this.style.display='none'">
+                           data-img-error="hide-self">
                     <?php elseif ($tier['show_logo']): ?>
                       <div style="width:80px;height:80px;background:var(--bg-card2);border-radius:var(--radius);display:flex;align-items:center;justify-content:center;font-size:2rem;opacity:0.4;">🏢</div>
                     <?php endif; ?>

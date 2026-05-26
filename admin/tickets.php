@@ -307,7 +307,7 @@ include __DIR__ . '/../includes/header.php';
   </main>
 </div>
 
-<script>
+<script <?= cspNonceAttribute() ?>>
 document.addEventListener('DOMContentLoaded', () => {
   const list = document.getElementById('manualTicketEvents');
   const addButton = document.getElementById('addManualTicketEvent');

@@ -98,8 +98,12 @@ function isMember(): bool {
 
 function requireLogin(string $redirect = '/login.php'): void {
     if (!isLoggedIn()) {
-        header('Location: ' . $redirect . '?next=' . urlencode(serverString('REQUEST_URI')));
-        exit;
+        $destination = $redirect;
+        $next = normalizeInternalRedirectTarget(serverString('REQUEST_URI'));
+        if ($next !== '') {
+            $destination .= '?next=' . urlencode($next);
+        }
+        redirect($destination);
     }
 }
 
@@ -261,25 +265,104 @@ function generatePasswordResetToken(string $email): ?string {
 }
 
 /**
- * Validates a reset token with an embedded issue timestamp.
- *
- * Legacy tokens without the prefixed timestamp format return false here and
- * should fall back to the stored reset_token_expires value. The token is still
- * matched exactly in the database before this helper is used, so app-server
- * clock skew should not cause brand-new links to be rejected.
+ * @param array{id: mixed, email: mixed, display_name: mixed} $user
+ * @return array{id: int, email: string, display_name: string}
  */
-function isCurrentPasswordResetToken(string $token): bool {
+function buildValidatedPasswordResetUser(array $user): array
+{
+    return [
+        'id' => (int)$user['id'],
+        'email' => (string)$user['email'],
+        'display_name' => (string)$user['display_name'],
+    ];
+}
+
+function passwordResetTokenHasPrefix(string $token): bool
+{
+    return str_starts_with($token, PASSWORD_RESET_TOKEN_PREFIX);
+}
+
+function parsePasswordResetTokenIssuedAt(string $token): ?int
+{
     $pattern = '/^'
         . preg_quote(PASSWORD_RESET_TOKEN_PREFIX, '/')
         . '([0-9]{' . PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS . '})'
         . '([0-9a-f]{' . (PASSWORD_RESET_TOKEN_RANDOM_BYTES * 2) . '})$/';
     if (preg_match($pattern, $token, $matches) !== 1) {
+        return null;
+    }
+
+    return (int)$matches[1];
+}
+
+function isCurrentPasswordResetToken(string $token, ?int $now = null): bool
+{
+    $issuedAt = parsePasswordResetTokenIssuedAt($token);
+    if ($issuedAt === null) {
         return false;
     }
 
-    $issuedAt = (int)$matches[1];
-    $now = time();
-    return ($now - $issuedAt) <= PASSWORD_RESET_TOKEN_LIFETIME;
+    $now = $now ?? time();
+    return $issuedAt <= $now && ($issuedAt + PASSWORD_RESET_TOKEN_LIFETIME) > $now;
+}
+
+function isStoredPasswordResetExpiryValid(mixed $isValid): bool
+{
+    if (is_bool($isValid)) {
+        return $isValid;
+    }
+
+    return intValue($isValid) === 1;
+}
+
+/**
+ * @param array{id: int, email: string, display_name: string, reset_token_is_valid?: mixed} $user
+ * @return array{
+ *   user: array{id: int, email: string, display_name: string}|null,
+ *   reason: 'prefixed_expired'|'prefixed_malformed'|'db_expired'|null
+ * }
+ */
+function evaluatePasswordResetTokenRecord(array $user, string $token, ?int $now = null): array
+{
+    $validatedUser = buildValidatedPasswordResetUser($user);
+
+    if (isCurrentPasswordResetToken($token, $now)) {
+        return ['user' => $validatedUser, 'reason' => null];
+    }
+
+    if (passwordResetTokenHasPrefix($token)) {
+        $issuedAt = parsePasswordResetTokenIssuedAt($token);
+        if ($issuedAt !== null) {
+            return ['user' => null, 'reason' => 'prefixed_expired'];
+        }
+
+        if (!isStoredPasswordResetExpiryValid($user['reset_token_is_valid'] ?? null)) {
+            return ['user' => null, 'reason' => 'prefixed_malformed'];
+        }
+
+        return ['user' => $validatedUser, 'reason' => null];
+    }
+
+    if (!isStoredPasswordResetExpiryValid($user['reset_token_is_valid'] ?? null)) {
+        return ['user' => null, 'reason' => 'db_expired'];
+    }
+
+    return ['user' => $validatedUser, 'reason' => null];
+}
+
+function logPasswordResetTokenRejection(string $reason, string $token): void
+{
+    $host = serverString('HTTP_HOST');
+    if ($host === '') {
+        $host = serverString('SERVER_NAME', 'unknown');
+    }
+
+    $host = preg_replace('/[\r\n]+/', ' ', $host);
+    if (!is_string($host) || $host === '') {
+        $host = 'unknown';
+    }
+
+    error_log('Password reset token rejected: reason=' . $reason . '; host=' . $host . '; token_length=' . strlen($token));
 }
 
 /**
@@ -289,36 +372,23 @@ function validatePasswordResetToken(string $token): ?array {
     if (empty($token)) return null;
     $db = getDb();
     $stmt = $db->prepare(
-        'SELECT id, email, display_name, reset_token_expires FROM users WHERE reset_token = ?'
+        'SELECT id, email, display_name, (reset_token_expires > UTC_TIMESTAMP()) AS reset_token_is_valid FROM users WHERE reset_token = ?'
     );
     $stmt->execute([$token]);
-    /** @var array{id: int, email: string, display_name: string, reset_token_expires?: mixed}|false $user */
+    /** @var array{id: int, email: string, display_name: string, reset_token_is_valid?: mixed}|false $user */
     $user = $stmt->fetch();
     if (!$user) {
+        logPasswordResetTokenRejection('not_found', $token);
         return null;
     }
 
-    $validatedUser = [
-        'id' => $user['id'],
-        'email' => $user['email'],
-        'display_name' => $user['display_name'],
-    ];
-
-    if (isCurrentPasswordResetToken($token)) {
-        return $validatedUser;
-    }
-
-    $resetTokenExpiresValue = $user['reset_token_expires'] ?? null;
-    if ($resetTokenExpiresValue === null || !is_string($resetTokenExpiresValue)) {
+    $evaluation = evaluatePasswordResetTokenRecord($user, $token);
+    if ($evaluation['user'] === null && $evaluation['reason'] !== null) {
+        logPasswordResetTokenRejection($evaluation['reason'], $token);
         return null;
     }
 
-    $resetTokenExpiresTimestamp = strtotime($resetTokenExpiresValue);
-    if ($resetTokenExpiresTimestamp === false || $resetTokenExpiresTimestamp <= time()) {
-        return null;
-    }
-
-    return $validatedUser;
+    return $evaluation['user'];
 }
 
 /**

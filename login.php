@@ -16,31 +16,37 @@ if (isLoggedIn()) {
 }
 
 $error  = '';
-$next   = getString('next');
+$next   = normalizeInternalRedirectTarget(getString('next'));
 $turnstileResult = [
     'success' => true,
     'reason' => 'disabled',
     'message' => '',
 ];
-// Validate next URL to prevent open redirect
-if (!empty($next) && (!str_starts_with($next, '/') || str_starts_with($next, '//'))) {
-    $next = '';
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $email    = trim(postString('email'));
     $password = trim(postString('password'));
+    $remoteIp = loginRateLimitIdentifier(serverString('REMOTE_ADDR'));
     if ($email === '' || $password === '') {
         $error = 'Email address and password are required.';
     } else {
-        $turnstileResult = validateTurnstileSubmissionResult('login');
-        $error = $turnstileResult['message'];
+        $rateLimitStatus = getLoginRateLimitStatus($remoteIp, $email);
+        if (!$rateLimitStatus['allowed']) {
+            if ($rateLimitStatus['retry_after'] > 0) {
+                header('Retry-After: ' . $rateLimitStatus['retry_after']);
+            }
+            $error = $rateLimitStatus['message'];
+        } else {
+            $turnstileResult = validateTurnstileSubmissionResult('login');
+            $error = $turnstileResult['message'];
+        }
     }
 
     if ($error === '') {
         $result = loginUser($email, $password);
         if ($result['success']) {
+            clearLoginRateLimitFailures($remoteIp, $email);
             $user = currentUser();
             assert($user !== null);
             if (!empty($next)) {
@@ -48,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             redirect($user['role'] === 'admin' ? '/admin/' : '/member/');
         } else {
+            recordLoginRateLimitFailure($remoteIp, $email);
             $error = $result['error'];
         }
     } elseif (in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)) {
@@ -56,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($authResult['success']) {
             if (stringValue($authResult['user']['role'] ?? '') === 'admin') {
                 establishAuthenticatedSession($authResult['user']);
+                clearLoginRateLimitFailures($remoteIp, $email);
                 error_log('Admin login bypassed Cloudflare Turnstile due to unavailable verification. IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
                 flashMessage('warning', 'Cloudflare Turnstile is unavailable, so this admin sign-in skipped the human verification step. Review the Turnstile settings after signing in.');
                 if (!empty($next)) {
@@ -65,6 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $error = 'Human verification is temporarily unavailable right now. Please try again later.';
+        } else {
+            recordLoginRateLimitFailure($remoteIp, $email);
         }
     }
 }
@@ -78,7 +88,7 @@ include __DIR__ . '/includes/header.php';
   <div class="auth-page">
     <div class="auth-card">
       <div class="auth-logo">
-        <img src="/assets/images/logo.png" alt="RedWater Entertainment" onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+        <img src="/assets/images/logo.png" alt="RedWater Entertainment" data-img-error="hide-show-next">
         <div style="display:none;font-family:var(--font-head);font-size:1.4rem;text-align:center;">
           <span class="logo-red">Red</span><span class="logo-blue">Water</span>
         </div>
