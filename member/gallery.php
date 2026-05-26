@@ -259,8 +259,8 @@ include __DIR__ . '/../includes/header.php';
             <span id="memberUploadProgressLabel">Preparing upload…</span>
             <span id="memberUploadProgressPercent">0%</span>
           </div>
-          <div class="member-upload-progress-track" aria-hidden="true">
-            <div class="member-upload-progress-bar" id="memberUploadProgressBar"></div>
+          <div class="member-upload-progress-track">
+            <div class="member-upload-progress-bar" id="memberUploadProgressBar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Upload progress"></div>
           </div>
         </div>
       </div>
@@ -626,8 +626,14 @@ memberSyncUploadInputs();
   const completeMessage = document.getElementById('memberUploadCompleteMessage');
   const submitButton = document.querySelector('button[form="memberUploadForm"]');
   const uploadEndpoint = form.getAttribute('action') || window.location.pathname;
+  const progressMin = 0;
+  const progressMax = 100;
+  const uploadTimeoutMs = 180000;
   const uploadDbName = 'redwater-member-gallery';
   const uploadStoreName = 'uploadQueue';
+  const createUploadId = window.crypto && typeof window.crypto.randomUUID === 'function'
+    ? function () { return window.crypto.randomUUID(); }
+    : function () { return String(Date.now()) + '-' + Math.random().toString(16).slice(2) + '-' + Math.random().toString(16).slice(2); };
   let isSyncingQueue = false;
 
   function setStatus(message, tone) {
@@ -660,6 +666,7 @@ memberSyncUploadInputs();
     progressWrap.hidden = false;
     progressBar.style.width = percent + '%';
     progressPercent.textContent = percent + '%';
+    progressBar.setAttribute('aria-valuenow', String(percent));
     progressLabel.textContent = label;
   }
 
@@ -669,8 +676,9 @@ memberSyncUploadInputs();
     }
 
     progressWrap.hidden = true;
-    progressBar.style.width = '0%';
-    progressPercent.textContent = '0%';
+    progressBar.style.width = progressMin + '%';
+    progressBar.setAttribute('aria-valuenow', String(progressMin));
+    progressPercent.textContent = progressMin + '%';
     progressLabel.textContent = 'Preparing upload…';
   }
 
@@ -803,7 +811,7 @@ memberSyncUploadInputs();
     const activeFile = getActiveFile();
 
     return {
-      id: String(Date.now()) + '-' + Math.random().toString(16).slice(2),
+      id: createUploadId(),
       createdAt: new Date().toISOString(),
       fields: fields,
       file: activeFile,
@@ -828,18 +836,18 @@ memberSyncUploadInputs();
       xhr.open('POST', uploadEndpoint);
       xhr.responseType = 'json';
       xhr.setRequestHeader('Accept', 'application/json');
-      xhr.timeout = 180000;
+      xhr.timeout = uploadTimeoutMs;
       xhr.upload.onprogress = function (event) {
         if (!event.lengthComputable) {
           return;
         }
-        const percent = Math.max(1, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        const percent = Math.max(progressMin + 1, Math.min(progressMax, Math.round((event.loaded / event.total) * progressMax)));
         setProgress(percent, progressText);
       };
       xhr.onload = function () {
         const response = xhr.response && typeof xhr.response === 'object' ? xhr.response : null;
         if (xhr.status >= 200 && xhr.status < 300 && response && response.success) {
-          setProgress(100, 'Upload complete');
+          setProgress(progressMax, 'Upload complete');
           resolve(response);
           return;
         }
@@ -943,7 +951,7 @@ memberSyncUploadInputs();
       return;
     }
 
-    setProgress(0, 'Starting upload…');
+    setProgress(progressMin, 'Starting upload…');
 
     try {
       const response = await uploadEntry(entry, 'Uploading now…');
