@@ -115,8 +115,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
     const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
     let deferredInstallPrompt = null;
+    const iosInstallMessage = 'Open this site in Safari, tap Share, then choose "Add to Home Screen" to install the RedWater uploader.';
     const installFallbackMessage = isIos
-      ? 'Open this site in Safari, tap Share, then choose "Add to Home Screen" to install the RedWater uploader.'
+      ? iosInstallMessage
       : 'Use your browser menu and choose "Install app" or "Add to Home Screen" to install the RedWater uploader.';
 
     if (installButton) {
@@ -147,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function () {
       iosInstallButton.addEventListener('click', function (event) {
         event.preventDefault();
         event.stopPropagation();
-        showRuntimeFlash('info', 'Open this site in Safari, tap Share, then choose "Add to Home Screen" to install the RedWater uploader.');
+        showRuntimeFlash('info', iosInstallMessage);
       });
       iosInstallButton.hidden = !(isIos && !isStandalone);
     }
