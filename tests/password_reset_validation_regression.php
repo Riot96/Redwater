@@ -57,10 +57,64 @@ $baseRecord = [
     'display_name' => 'Tester',
     'reset_token_is_valid' => 1,
 ];
+$prefixedToken = buildPrefixedResetToken($fixedNow - 60, 'a');
+
+assertTrueValue(function_exists('passwordResetTokenStorageValue'), 'Password reset token storage helper should exist.');
+if (function_exists('passwordResetTokenStorageValue')) {
+    $storedTokenValue = passwordResetTokenStorageValue($prefixedToken);
+    assertSameValue(
+        $storedTokenValue,
+        hash('sha256', $prefixedToken),
+        'Password reset tokens should be stored as SHA-256 hashes.'
+    );
+    assertTrueValue(
+        $storedTokenValue !== $prefixedToken,
+        'Password reset tokens must not be stored in plaintext.'
+    );
+}
+
+assertTrueValue(function_exists('passwordResetTokenLookupCandidates'), 'Password reset token lookup helper should exist.');
+if (function_exists('passwordResetTokenLookupCandidates')) {
+    assertSameValue(
+        passwordResetTokenLookupCandidates($prefixedToken),
+        [hash('sha256', $prefixedToken), $prefixedToken],
+        'Password reset token lookup should try the hashed token first and retain a raw-token fallback for legacy compatibility.'
+    );
+}
+
+assertTrueValue(defined('PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS'), 'Password reset request rate limit window constant should exist.');
+assertTrueValue(defined('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_IP'), 'Password reset request per-IP limit constant should exist.');
+assertTrueValue(defined('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP'), 'Password reset request per-email+IP limit constant should exist.');
+assertTrueValue(function_exists('evaluatePasswordResetRateLimit'), 'Password reset request rate limit evaluator should exist.');
+if (
+    function_exists('evaluatePasswordResetRateLimit')
+    && defined('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_IP')
+    && defined('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP')
+) {
+    $allowedResetStatus = evaluatePasswordResetRateLimit($fixedNow, [$fixedNow - 60], [$fixedNow - 30]);
+    assertSameValue($allowedResetStatus['allowed'], true, 'Password reset requests below the threshold should be allowed.');
+    assertSameValue($allowedResetStatus['scope'], 'none', 'Password reset requests below the threshold should not report a blocking scope.');
+
+    $ipLimitedStatus = evaluatePasswordResetRateLimit(
+        $fixedNow,
+        array_fill(0, PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_IP, $fixedNow - 10),
+        []
+    );
+    assertSameValue($ipLimitedStatus['allowed'], false, 'Password reset requests should be throttled after too many requests from one IP.');
+    assertSameValue($ipLimitedStatus['scope'], 'ip', 'Password reset IP throttling should report the IP scope.');
+
+    $emailIpLimitedStatus = evaluatePasswordResetRateLimit(
+        $fixedNow,
+        [],
+        array_fill(0, PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP, $fixedNow - 10)
+    );
+    assertSameValue($emailIpLimitedStatus['allowed'], false, 'Password reset requests should be throttled after too many requests for one email+IP pair.');
+    assertSameValue($emailIpLimitedStatus['scope'], 'email_ip', 'Password reset email+IP throttling should report the email_ip scope.');
+}
 
 assertEvaluation(
     $baseRecord,
-    buildPrefixedResetToken($fixedNow - 60, 'a'),
+    $prefixedToken,
     $fixedNow,
     null,
     true,

@@ -15,14 +15,25 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
     $email = trim(postString('email'));
+    $remoteIp = loginRateLimitIdentifier(serverString('REMOTE_ADDR'));
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Please enter a valid email address.';
     } else {
         $error = validateTurnstileSubmission('forgot_password');
         if ($error === '') {
-            $token = generatePasswordResetToken($email);
-            if ($token) {
-                sendPasswordResetEmail($email, $token);
+            $rateLimitStatus = getPasswordResetRateLimitStatus($remoteIp, $email);
+            if ($rateLimitStatus['retry_after'] > 0) {
+                header('Retry-After: ' . $rateLimitStatus['retry_after']);
+            }
+
+            if ($rateLimitStatus['allowed']) {
+                recordPasswordResetRateLimitAttempt($remoteIp, $email);
+                $token = generatePasswordResetToken($email);
+                if ($token) {
+                    sendPasswordResetEmail($email, $token);
+                }
+            } else {
+                error_log('Password reset request throttled for scope ' . $rateLimitStatus['scope'] . '. IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
             }
             // Always show success to prevent email enumeration
             $sent = true;

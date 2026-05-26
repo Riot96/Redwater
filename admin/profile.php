@@ -57,6 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $user = currentUser(); // Refresh after possible update
+if ($user === null) {
+    redirect('/login.php');
+}
+
 $pageTitle = 'My Profile';
 include __DIR__ . '/../includes/header.php';
 ?>

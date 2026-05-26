@@ -61,4 +61,19 @@ assertContainsHardening("script-src 'self' 'nonce-nonce-test-value' https:", $cs
 assertContainsHardening("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", $cspHeader, 'CSP should permit the existing stylesheet sources.');
 assertContainsHardening("frame-ancestors 'self'", $cspHeader, 'CSP should prevent third-party framing.');
 
+$loginPageSource = file_get_contents(__DIR__ . '/../login.php');
+if (!is_string($loginPageSource)) {
+    throw new RuntimeException('Unable to read login.php for production hardening checks.');
+}
+assertSameHardening(
+    str_contains($loginPageSource, 'Cloudflare Turnstile is unavailable, so this admin sign-in skipped the human verification step.'),
+    false,
+    'Admin Turnstile fallback messaging should not remain in the login flow.'
+);
+assertSameHardening(
+    str_contains($loginPageSource, 'TURNSTILE_ADMIN_RECOVERY_DELAY_MICROSECONDS'),
+    false,
+    'The login flow should not retain the Turnstile recovery delay fallback path.'
+);
+
 echo "production hardening regression checks passed\n";

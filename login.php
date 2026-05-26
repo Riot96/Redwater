@@ -57,25 +57,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             recordLoginRateLimitFailure($remoteIp, $email);
             $error = $result['error'];
         }
-    } elseif (in_array($turnstileResult['reason'], ['unavailable', 'misconfigured'], true)) {
-        usleep(TURNSTILE_ADMIN_RECOVERY_DELAY_MICROSECONDS);
-        $authResult = authenticateUserCredentials($email, $password);
-        if ($authResult['success']) {
-            if (stringValue($authResult['user']['role'] ?? '') === 'admin') {
-                establishAuthenticatedSession($authResult['user']);
-                clearLoginRateLimitFailures($remoteIp, $email);
-                error_log('Admin login bypassed Cloudflare Turnstile due to unavailable verification. IP: ' . serverString('REMOTE_ADDR', 'unknown') . '; time: ' . gmdate('c') . '.');
-                flashMessage('warning', 'Cloudflare Turnstile is unavailable, so this admin sign-in skipped the human verification step. Review the Turnstile settings after signing in.');
-                if (!empty($next)) {
-                    redirect($next);
-                }
-                redirect('/admin/');
-            }
-
-            $error = 'Human verification is temporarily unavailable right now. Please try again later.';
-        } else {
-            recordLoginRateLimitFailure($remoteIp, $email);
-        }
     }
 }
 

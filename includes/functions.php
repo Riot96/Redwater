@@ -194,6 +194,9 @@ function renderFlashMessages(): string {
 defined('LOGIN_RATE_LIMIT_WINDOW_SECONDS') || define('LOGIN_RATE_LIMIT_WINDOW_SECONDS', 900);
 defined('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_IP') || define('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_IP', 15);
 defined('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP') || define('LOGIN_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP', 6);
+defined('PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS') || define('PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS', 3600);
+defined('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_IP') || define('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_IP', 5);
+defined('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP') || define('PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP', 3);
 
 function cspNonce(): string {
     static $nonce = null;
@@ -380,6 +383,82 @@ function clearLoginRateLimitFailures(string $ipAddress, string $email): void {
     if ($normalizedEmail !== '') {
         $normalizedEmailIp = loginRateLimitIdentifier($normalizedIp . '|' . $normalizedEmail);
         writeLoginRateLimitAttempts('email_ip', $normalizedEmailIp, []);
+    }
+}
+
+/**
+ * @param list<int> $ipAttempts
+ * @param list<int> $emailIpAttempts
+ * @return array{allowed: bool, retry_after: int, scope: 'none'|'ip'|'email_ip', message: string}
+ */
+function evaluatePasswordResetRateLimit(int $now, array $ipAttempts, array $emailIpAttempts): array {
+    $ipAttempts = pruneLoginRateLimitAttempts($ipAttempts, $now, PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS);
+    if (count($ipAttempts) >= PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_IP) {
+        $retryAfter = max(1, ($ipAttempts[0] + PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS) - $now);
+        return [
+            'allowed' => false,
+            'retry_after' => $retryAfter,
+            'scope' => 'ip',
+            'message' => 'Too many password reset requests. Please wait about ' . max(1, (int) ceil($retryAfter / 60)) . ' minute(s) and try again.',
+        ];
+    }
+
+    $emailIpAttempts = pruneLoginRateLimitAttempts($emailIpAttempts, $now, PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS);
+    if (count($emailIpAttempts) >= PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS_PER_EMAIL_IP) {
+        $retryAfter = max(1, ($emailIpAttempts[0] + PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS) - $now);
+        return [
+            'allowed' => false,
+            'retry_after' => $retryAfter,
+            'scope' => 'email_ip',
+            'message' => 'Too many password reset requests. Please wait about ' . max(1, (int) ceil($retryAfter / 60)) . ' minute(s) and try again.',
+        ];
+    }
+
+    return [
+        'allowed' => true,
+        'retry_after' => 0,
+        'scope' => 'none',
+        'message' => '',
+    ];
+}
+
+/**
+ * @return array{allowed: bool, retry_after: int, scope: 'none'|'ip'|'email_ip', message: string}
+ */
+function getPasswordResetRateLimitStatus(string $ipAddress, string $email, ?int $now = null): array {
+    $now = $now ?? time();
+    $normalizedIp = loginRateLimitIdentifier($ipAddress);
+    $normalizedEmailIp = loginRateLimitIdentifier($normalizedIp . '|' . strtolower(trim($email)));
+
+    return evaluatePasswordResetRateLimit(
+        $now,
+        readLoginRateLimitAttempts('password_reset_ip', $normalizedIp, $now),
+        readLoginRateLimitAttempts('password_reset_email_ip', $normalizedEmailIp, $now)
+    );
+}
+
+function recordPasswordResetRateLimitAttempt(string $ipAddress, string $email, ?int $now = null): void {
+    $now = $now ?? time();
+    $normalizedIp = loginRateLimitIdentifier($ipAddress);
+    $normalizedEmail = strtolower(trim($email));
+    $normalizedEmailIp = loginRateLimitIdentifier($normalizedIp . '|' . $normalizedEmail);
+
+    $ipAttempts = readLoginRateLimitAttempts('password_reset_ip', $normalizedIp, $now);
+    $ipAttempts[] = $now;
+    writeLoginRateLimitAttempts(
+        'password_reset_ip',
+        $normalizedIp,
+        pruneLoginRateLimitAttempts($ipAttempts, $now, PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS)
+    );
+
+    if ($normalizedEmail !== '') {
+        $emailIpAttempts = readLoginRateLimitAttempts('password_reset_email_ip', $normalizedEmailIp, $now);
+        $emailIpAttempts[] = $now;
+        writeLoginRateLimitAttempts(
+            'password_reset_email_ip',
+            $normalizedEmailIp,
+            pruneLoginRateLimitAttempts($emailIpAttempts, $now, PASSWORD_RESET_RATE_LIMIT_WINDOW_SECONDS)
+        );
     }
 }
 

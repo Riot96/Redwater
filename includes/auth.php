@@ -16,6 +16,19 @@ defined('PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS') || define('PASSWORD_RESET_TOKEN
 // Random suffix keeps the overall token at 64 characters while preserving strong entropy.
 defined('PASSWORD_RESET_TOKEN_RANDOM_BYTES') || define('PASSWORD_RESET_TOKEN_RANDOM_BYTES', 26);
 
+function passwordResetTokenStorageValue(string $token): string
+{
+    return hash('sha256', $token);
+}
+
+/**
+ * @return list<string>
+ */
+function passwordResetTokenLookupCandidates(string $token): array
+{
+    return [passwordResetTokenStorageValue($token), $token];
+}
+
 // ─── Session Init ─────────────────────────────────────────────────────────────
 function initSession(): void {
     if (session_status() === PHP_SESSION_NONE) {
@@ -255,11 +268,12 @@ function generatePasswordResetToken(string $email): ?string {
     $token = PASSWORD_RESET_TOKEN_PREFIX
         . sprintf('%0' . PASSWORD_RESET_TOKEN_TIMESTAMP_DIGITS . 'd', time())
         . bin2hex(random_bytes(PASSWORD_RESET_TOKEN_RANDOM_BYTES));
+    $storedToken = passwordResetTokenStorageValue($token);
 
     $stmt = $db->prepare(
         'UPDATE users SET reset_token = ?, reset_token_expires = FROM_UNIXTIME(UNIX_TIMESTAMP(UTC_TIMESTAMP()) + ?) WHERE email = ?'
     );
-    $stmt->execute([$token, PASSWORD_RESET_TOKEN_LIFETIME, $email]);
+    $stmt->execute([$storedToken, PASSWORD_RESET_TOKEN_LIFETIME, $email]);
 
     return $token;
 }
@@ -271,9 +285,9 @@ function generatePasswordResetToken(string $email): ?string {
 function buildValidatedPasswordResetUser(array $user): array
 {
     return [
-        'id' => (int)$user['id'],
-        'email' => (string)$user['email'],
-        'display_name' => (string)$user['display_name'],
+        'id' => intValue($user['id']),
+        'email' => stringValue($user['email']),
+        'display_name' => stringValue($user['display_name']),
     ];
 }
 
@@ -366,17 +380,49 @@ function logPasswordResetTokenRejection(string $reason, string $token): void
 }
 
 /**
+ * @return array{id: int, email: string, display_name: string, reset_token: string, reset_token_is_valid?: mixed}|false
+ */
+function findPasswordResetTokenRecord(string $token)
+{
+    $db = getDb();
+    $stmt = $db->prepare(
+        'SELECT id, email, display_name, reset_token, (reset_token_expires > UTC_TIMESTAMP()) AS reset_token_is_valid FROM users WHERE reset_token = ? LIMIT 1'
+    );
+
+    foreach (passwordResetTokenLookupCandidates($token) as $candidate) {
+        $stmt->execute([$candidate]);
+        /** @var array{id: int, email: string, display_name: string, reset_token: string, reset_token_is_valid?: mixed}|false $user */
+        $user = $stmt->fetch();
+        if ($user !== false) {
+            return $user;
+        }
+    }
+
+    return false;
+}
+
+function migrateLegacyPasswordResetTokenStorage(int $userId, string $storedToken, string $providedToken): void
+{
+    if ($storedToken !== $providedToken) {
+        return;
+    }
+
+    $hashedToken = passwordResetTokenStorageValue($providedToken);
+    if (hash_equals($storedToken, $hashedToken)) {
+        return;
+    }
+
+    $db = getDb();
+    $stmt = $db->prepare('UPDATE users SET reset_token = ? WHERE id = ? AND reset_token = ?');
+    $stmt->execute([$hashedToken, $userId, $storedToken]);
+}
+
+/**
  * @return array{id: int, email: string, display_name: string}|null
  */
 function validatePasswordResetToken(string $token): ?array {
     if (empty($token)) return null;
-    $db = getDb();
-    $stmt = $db->prepare(
-        'SELECT id, email, display_name, (reset_token_expires > UTC_TIMESTAMP()) AS reset_token_is_valid FROM users WHERE reset_token = ?'
-    );
-    $stmt->execute([$token]);
-    /** @var array{id: int, email: string, display_name: string, reset_token_is_valid?: mixed}|false $user */
-    $user = $stmt->fetch();
+    $user = findPasswordResetTokenRecord($token);
     if (!$user) {
         logPasswordResetTokenRejection('not_found', $token);
         return null;
@@ -387,6 +433,8 @@ function validatePasswordResetToken(string $token): ?array {
         logPasswordResetTokenRejection($evaluation['reason'], $token);
         return null;
     }
+
+    migrateLegacyPasswordResetTokenStorage($user['id'], stringValue($user['reset_token']), $token);
 
     return $evaluation['user'];
 }
