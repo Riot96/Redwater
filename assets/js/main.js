@@ -44,6 +44,56 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
+  // ── Logged-in PWA install/support ─────────────────────────────────────────
+  const pwaEnabled = document.querySelector('meta[name="redwater-pwa-enabled"]');
+  const installButton = document.getElementById('pwaInstallButton');
+  const iosInstallButton = document.getElementById('pwaIosInstallButton');
+  if (pwaEnabled) {
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/service-worker.js').catch(function () {});
+      }, { once: true });
+    }
+
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent || '');
+    let deferredInstallPrompt = null;
+
+    if (installButton) {
+      installButton.addEventListener('click', async function () {
+        if (!deferredInstallPrompt) return;
+        deferredInstallPrompt.prompt();
+        try {
+          await deferredInstallPrompt.userChoice;
+        } catch (error) {
+          void error;
+        }
+        deferredInstallPrompt = null;
+        installButton.hidden = true;
+      });
+    }
+
+    if (iosInstallButton) {
+      iosInstallButton.addEventListener('click', function () {
+        alert('On iPhone or iPad, tap Share in Safari and then choose "Add to Home Screen" to install the RedWater uploader.');
+      });
+      iosInstallButton.hidden = !(isIos && !isStandalone);
+    }
+
+    window.addEventListener('beforeinstallprompt', function (event) {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      if (installButton) installButton.hidden = false;
+      if (iosInstallButton) iosInstallButton.hidden = true;
+    });
+
+    window.addEventListener('appinstalled', function () {
+      if (installButton) installButton.hidden = true;
+      if (iosInstallButton) iosInstallButton.hidden = true;
+      deferredInstallPrompt = null;
+    });
+  }
+
   // ── Flash Message Close ───────────────────────────────────────────────────
   document.querySelectorAll('.alert-close').forEach(function (btn) {
     btn.addEventListener('click', function () {

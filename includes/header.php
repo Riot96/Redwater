@@ -11,12 +11,12 @@ require_once __DIR__ . '/functions.php';
 
 initSession();
 
+$user = currentUser();
 $siteName  = getSetting('site_name', 'RedWater Entertainment');
 $pageTitle = isset($pageTitle) && $pageTitle !== '' ? e($pageTitle) . ' | ' . e($siteName) : e($siteName);
 $bodyClass = $bodyClass ?? '';
 $pageMeta = stringValue($pageMeta ?? null);
-
-$user = currentUser();
+$pwaEnabled = $user !== null;
 $currentScript = basename(serverString('PHP_SELF'));
 ?>
 <!DOCTYPE html>
@@ -29,6 +29,15 @@ $currentScript = basename(serverString('PHP_SELF'));
     <meta name="description" content="<?= e($seoDescription) ?>">
     <?php endif; ?>
     <?php if ($pageMeta !== '') echo $pageMeta; ?>
+    <?php if ($pwaEnabled): ?>
+    <meta name="theme-color" content="#080808">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="<?= e($siteName) ?>">
+    <meta name="redwater-pwa-enabled" content="1">
+    <link rel="manifest" href="/pwa-manifest.php" crossorigin="use-credentials">
+    <link rel="apple-touch-icon" href="/assets/images/pwa-icon-192.png">
+    <?php endif; ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Raleway:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -73,6 +82,8 @@ $currentScript = basename(serverString('PHP_SELF'));
                     <li><a href="/member/">My Dashboard</a></li>
                     <li><a href="/member/gallery.php">My Gallery</a></li>
                     <?php endif; ?>
+                    <li><button type="button" class="nav-dropdown-action" id="pwaInstallButton" hidden>Install App</button></li>
+                    <li><button type="button" class="nav-dropdown-action" id="pwaIosInstallButton" hidden>Install on iPhone</button></li>
                     <li><a href="<?= $user['role'] === 'admin' ? '/admin/profile.php' : '/member/profile.php' ?>">My Profile</a></li>
                     <li class="dropdown-divider"></li>
                     <li><a href="/logout.php">Log Out</a></li>

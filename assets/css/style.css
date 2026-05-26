@@ -214,6 +214,20 @@ p:last-child { margin-bottom: 0; }
   transition: background var(--transition), color var(--transition);
 }
 .nav-dropdown-menu li a:hover { background: var(--blue-glow); color: var(--blue); }
+.nav-dropdown-action {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  color: var(--text);
+  font-size: 0.9rem;
+  background: transparent;
+  transition: background var(--transition), color var(--transition);
+}
+.nav-dropdown-action:hover {
+  background: var(--blue-glow);
+  color: var(--blue);
+}
 .dropdown-divider { border-top: 1px solid var(--border); margin: 0.25rem 0; }
 
 /* Hamburger */
@@ -1542,6 +1556,80 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
 }
 .member-tab.active { border-bottom-color: var(--bg-card); }
 .member-content { padding: 2rem 1.5rem; }
+.member-upload-status {
+  margin-bottom: 1.5rem;
+}
+.member-upload-status-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.member-upload-status-summary p {
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+.member-upload-progress {
+  margin-top: 1rem;
+}
+.member-upload-progress[hidden] {
+  display: none;
+}
+.member-upload-progress-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+.member-upload-progress-track {
+  width: 100%;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  overflow: hidden;
+}
+.member-upload-progress-bar {
+  width: 0;
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--blue));
+  transition: width 0.2s ease;
+}
+.member-gallery-sections {
+  display: grid;
+  gap: 1.5rem;
+}
+.member-gallery-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+.member-gallery-section-header p {
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+.member-gallery-empty {
+  padding: 2rem 0;
+  text-align: center;
+  color: var(--text-muted);
+}
+.member-upload-complete {
+  text-align: center;
+}
+.member-upload-complete-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+@media (min-width: 960px) {
+  .member-gallery-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
 
 /* Upload dropzone */
 .dropzone {
@@ -1966,6 +2054,11 @@ tbody td { padding: 0.75rem 1rem; color: var(--text); vertical-align: middle; }
   .sponsor-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); }
   .sponsor-card,
   .sponsor-tier-1 .sponsor-card { padding: 1.25rem; }
+  .member-upload-status-summary,
+  .member-gallery-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 480px) {

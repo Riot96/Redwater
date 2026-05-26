@@ -17,6 +17,24 @@ if ($user['role'] === 'admin') {
 $db     = getDb();
 $errors = [];
 
+function memberGalleryWantsJsonResponse(): bool {
+    $accept = strtolower(serverString('HTTP_ACCEPT'));
+    $requestedWith = strtolower(serverString('HTTP_X_REQUESTED_WITH'));
+
+    return str_contains($accept, 'application/json') || $requestedWith === 'xmlhttprequest';
+}
+
+/**
+ * @param array<string, mixed> $payload
+ */
+function memberGalleryRespondJson(int $status, array $payload): void {
+    http_response_code($status);
+    header('Content-Type: application/json; charset=UTF-8');
+    header('Cache-Control: no-store');
+    echo (string) json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 // ── Handle POST ───────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verifyCsrf();
@@ -24,6 +42,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Upload new item
     if ($act === 'upload') {
+        $wantsJson = memberGalleryWantsJsonResponse();
+        $respondUploadError = static function (string $message) use ($wantsJson): void {
+            if ($wantsJson) {
+                memberGalleryRespondJson(422, [
+                    'success' => false,
+                    'message' => $message,
+                ]);
+            }
+
+            flashMessage('error', $message);
+            redirect('/member/gallery.php');
+        };
+        $respondUploadSuccess = static function (string $message, bool $approved) use ($wantsJson): void {
+            if ($wantsJson) {
+                memberGalleryRespondJson(200, [
+                    'success' => true,
+                    'message' => $message,
+                    'status' => $approved ? 'uploaded' : 'pending',
+                    'redirect' => '/member/gallery.php',
+                ]);
+            }
+
+            flashMessage('success', $message);
+            redirect('/member/gallery.php');
+        };
         $type      = postString('type', 'photo');
         $photoSource = postString('photo_source', 'upload');
         $title     = trim(postString('title'));
@@ -37,16 +80,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $videoType = postString('video_type', 'embed');
         $selections = getValidatedGalleryUploadSelections($type, $photoSource, $videoType);
         if ($selections === null) {
-            flashMessage('error', 'Invalid gallery media selection.');
-            redirect('/member/gallery.php');
+            $respondUploadError('Invalid gallery media selection.');
         }
         $type = $selections['type'];
         $photoSource = $selections['photo_source'];
         $videoType = $selections['video_type'];
         $filePath  = null;
         $mediaFile = uploadedFile('media_file');
+        $requiresFile = ($type === 'photo' && $photoSource === 'upload') || ($type === 'video' && $videoType === 'upload');
+        $requiresEmbed = $type === 'video' && $videoType === 'embed';
+        $requiresLink = ($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link');
 
-        if (($type === 'photo' && $photoSource === 'upload') || ($type === 'video' && $videoType === 'upload')) {
+        if ($requiresFile) {
             $mimes = $type === 'photo'
                 ? (defined('ALLOWED_IMAGE_TYPES') ? ALLOWED_IMAGE_TYPES : ['image/jpeg','image/png','image/gif','image/webp'])
                 : (defined('ALLOWED_VIDEO_TYPES') ? ALLOWED_VIDEO_TYPES : ['video/mp4','video/webm','video/ogg']);
@@ -54,43 +99,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($mediaFile !== null && !empty($mediaFile['name'])) {
                 $upload = handleFileUpload($mediaFile, __DIR__ . '/../uploads/gallery', $mimes);
                 if (!$upload['success']) {
-                    flashMessage('error', 'Upload failed: ' . $upload['error']);
-                    redirect('/member/gallery.php');
+                    $respondUploadError('Upload failed: ' . $upload['error']);
                 }
                 if ($type === 'photo') {
                     $watermark = applyGalleryWatermark($upload['path']);
                     if (!$watermark['success']) {
                         deleteUploadedFile($upload['path']);
-                        flashMessage('error', 'Upload failed: ' . stringValue($watermark['error'] ?? 'Unable to apply the gallery watermark. Please check your watermark settings or try again.'));
-                        redirect('/member/gallery.php');
+                        $respondUploadError('Upload failed: ' . stringValue($watermark['error'] ?? 'Unable to apply the gallery watermark. Please check your watermark settings or try again.'));
                     }
                 }
                 $filePath = 'uploads/gallery/' . $upload['filename'];
             } else {
-                flashMessage('error', 'Please select a file to upload.');
-                redirect('/member/gallery.php');
+                $respondUploadError('Please select a file to upload.');
             }
         }
 
-        if ($type === 'video' && $videoType === 'embed') {
+        if ($requiresEmbed) {
             if ($videoUrl === '') {
-                flashMessage('error', 'Please provide a video URL for embedded videos.');
-                redirect('/member/gallery.php');
+                $respondUploadError('Please provide a video URL for embedded videos.');
             }
             if (!isSupportedVideoUrl($videoUrl)) {
-                flashMessage('error', 'Only YouTube and Vimeo URLs are supported for video embeds.');
-                redirect('/member/gallery.php');
+                $respondUploadError('Only YouTube and Vimeo URLs are supported for video embeds.');
             }
         }
 
-        if (($type === 'photo' && $photoSource === 'link') || ($type === 'video' && $videoType === 'link')) {
+        if ($requiresLink) {
             if ($linkUrl === '') {
-                flashMessage('error', 'Please provide a link for linked gallery items.');
-                redirect('/member/gallery.php');
+                $respondUploadError('Please provide a link for linked gallery items.');
             }
             if (!isSupportedGalleryLinkUrl($linkUrl)) {
-                flashMessage('error', 'Please provide a valid https link for linked gallery items.');
-                redirect('/member/gallery.php');
+                $respondUploadError('Please provide a valid https link for linked gallery items.');
             }
         }
 
@@ -122,8 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $msg = $autoApprove
             ? 'Upload successful! Your item is now live in the gallery.'
             : 'Upload successful! Your item is pending admin approval before it appears publicly.';
-        flashMessage('success', $msg);
-        redirect('/member/gallery.php');
+        $respondUploadSuccess($msg, $autoApprove === 1);
     }
 
     // Edit own item (only if belongs to user AND account active)
@@ -179,6 +216,14 @@ if ($editItemId) {
 }
 
 $myItems = getGalleryItems(false, $user['id']);
+$pendingItems = array_values(array_filter(
+    $myItems,
+    static fn (array $item): bool => !((bool) ($item['is_approved'] ?? false))
+));
+$uploadedItems = array_values(array_filter(
+    $myItems,
+    static fn (array $item): bool => (bool) ($item['is_approved'] ?? false)
+));
 
 $pageTitle = 'My Gallery';
 include __DIR__ . '/../includes/header.php';
@@ -200,6 +245,26 @@ include __DIR__ . '/../includes/header.php';
   </div>
 
   <div class="member-content">
+    <div class="card member-upload-status">
+      <div class="card-body">
+        <div class="member-upload-status-summary">
+          <div>
+            <h3 style="font-size:1rem;margin-bottom:0;">Upload status</h3>
+            <p id="memberUploadStatusText">Ready to upload photos and videos from this device.</p>
+          </div>
+          <span class="status-badge status-blue" id="memberUploadQueueBadge">0 queued</span>
+        </div>
+        <div class="member-upload-progress" id="memberUploadProgress" hidden>
+          <div class="member-upload-progress-label">
+            <span id="memberUploadProgressLabel">Preparing upload…</span>
+            <span id="memberUploadProgressPercent">0%</span>
+          </div>
+          <div class="member-upload-progress-track" aria-hidden="true">
+            <div class="member-upload-progress-bar" id="memberUploadProgressBar"></div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <?php if ($editItem): ?>
     <!-- Edit Form -->
@@ -247,62 +312,134 @@ include __DIR__ . '/../includes/header.php';
     </div>
     <?php endif; ?>
 
-    <!-- My Items -->
-    <?php if ($myItems): ?>
-      <div class="gallery-grid">
-        <?php foreach ($myItems as $item): ?>
-          <?php
-          $itemFilePath = stringValue($item['file_path'] ?? '');
-          $itemVideoUrl = stringValue($item['video_url'] ?? '');
-          $itemLinkUrl = stringValue($item['link_url'] ?? '');
-          $sourceType = getGalleryItemSourceType($item);
-          ?>
-          <div class="gallery-item" style="cursor:default;">
-            <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
-              <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
-            <?php elseif ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
-              <div class="gallery-linked-placeholder gallery-linked-placeholder-compact">
-                <div class="gallery-linked-placeholder-icon" aria-hidden="true">🔗</div>
-                <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
-              </div>
-            <?php else: ?>
-              <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:3rem;">▶️</div>
-            <?php endif; ?>
-
-            <div class="gallery-item-overlay" style="opacity:1;">
-              <div class="gallery-item-title"><?= e($item['title'] ?: '(untitled)') ?></div>
-              <div class="d-flex gap-1 mt-1">
-                <a href="/member/gallery.php?edit=<?= e($item['id']) ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
-                <?php if ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
-                  <a href="<?= e($itemLinkUrl) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Open Link</a>
-                <?php endif; ?>
-                <form method="POST" style="display:inline;">
-                  <?= csrfField() ?>
-                  <input type="hidden" name="action" value="delete">
-                  <input type="hidden" name="item_id" value="<?= e($item['id']) ?>">
-                  <button class="btn btn-danger btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;" data-confirm="Delete this item?">Delete</button>
-                </form>
-              </div>
+    <div class="member-gallery-sections">
+      <section class="card">
+        <div class="card-body">
+          <div class="member-gallery-section-header">
+            <div>
+              <h3 style="font-size:1rem;margin-bottom:0;">Pending</h3>
+              <p>Uploads waiting for approval will stay here until an admin reviews them.</p>
             </div>
-
-            <?php if ($item['type'] === 'video'): ?>
-              <div class="gallery-item-type-badge">Video</div>
-            <?php endif; ?>
-
-            <?php if (!$item['is_approved']): ?>
-              <div class="gallery-pending-badge">Pending</div>
-            <?php endif; ?>
+            <span class="status-badge status-pending"><?= count($pendingItems) ?></span>
           </div>
-        <?php endforeach; ?>
-      </div>
-    <?php else: ?>
-      <div class="text-center" style="padding:4rem 0;color:var(--text-muted);">
-        <div style="font-size:4rem;margin-bottom:1rem;">📷</div>
-        <h3>No uploads yet</h3>
-        <p>Click the upload button to add your first photo or video.</p>
-        <button class="btn btn-primary mt-2" data-modal-open="uploadModal">+ Upload Content</button>
-      </div>
-    <?php endif; ?>
+
+          <?php if ($pendingItems): ?>
+            <div class="gallery-grid">
+              <?php foreach ($pendingItems as $item): ?>
+                <?php
+                $itemFilePath = stringValue($item['file_path'] ?? '');
+                $itemLinkUrl = stringValue($item['link_url'] ?? '');
+                $sourceType = getGalleryItemSourceType($item);
+                ?>
+                <div class="gallery-item" style="cursor:default;">
+                  <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
+                    <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
+                  <?php elseif ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
+                    <div class="gallery-linked-placeholder gallery-linked-placeholder-compact">
+                      <div class="gallery-linked-placeholder-icon" aria-hidden="true">🔗</div>
+                      <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
+                    </div>
+                  <?php else: ?>
+                    <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:3rem;">▶️</div>
+                  <?php endif; ?>
+
+                  <div class="gallery-item-overlay" style="opacity:1;">
+                    <div class="gallery-item-title"><?= e($item['title'] ?: '(untitled)') ?></div>
+                    <div class="d-flex gap-1 mt-1">
+                      <a href="/member/gallery.php?edit=<?= e($item['id']) ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
+                      <?php if ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
+                        <a href="<?= e($itemLinkUrl) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Open Link</a>
+                      <?php endif; ?>
+                      <form method="POST" style="display:inline;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="item_id" value="<?= e($item['id']) ?>">
+                        <button class="btn btn-danger btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;" data-confirm="Delete this item?">Delete</button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <?php if ($item['type'] === 'video'): ?>
+                    <div class="gallery-item-type-badge">Video</div>
+                  <?php endif; ?>
+
+                  <div class="gallery-pending-badge">Pending</div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php else: ?>
+            <div class="member-gallery-empty">
+              <div style="font-size:2rem;margin-bottom:0.75rem;">🕒</div>
+              <p>No pending uploads right now.</p>
+            </div>
+          <?php endif; ?>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-body">
+          <div class="member-gallery-section-header">
+            <div>
+              <h3 style="font-size:1rem;margin-bottom:0;">Uploaded</h3>
+              <p>Approved uploads and auto-approved items appear here.</p>
+            </div>
+            <span class="status-badge status-approved"><?= count($uploadedItems) ?></span>
+          </div>
+
+          <?php if ($uploadedItems): ?>
+            <div class="gallery-grid">
+              <?php foreach ($uploadedItems as $item): ?>
+                <?php
+                $itemFilePath = stringValue($item['file_path'] ?? '');
+                $itemLinkUrl = stringValue($item['link_url'] ?? '');
+                $sourceType = getGalleryItemSourceType($item);
+                ?>
+                <div class="gallery-item" style="cursor:default;">
+                  <?php if ($item['type'] === 'photo' && $item['file_path']): ?>
+                    <img src="/<?= e(ltrim($itemFilePath, '/')) ?>" alt="<?= e($item['alt_text'] ?: '') ?>" loading="lazy">
+                  <?php elseif ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
+                    <div class="gallery-linked-placeholder gallery-linked-placeholder-compact">
+                      <div class="gallery-linked-placeholder-icon" aria-hidden="true">🔗</div>
+                      <div><?= e($item['type'] === 'photo' ? 'Linked Photo' : 'Linked Video') ?></div>
+                    </div>
+                  <?php else: ?>
+                    <div style="width:100%;height:100%;background:var(--bg-card2);display:flex;align-items:center;justify-content:center;font-size:3rem;">▶️</div>
+                  <?php endif; ?>
+
+                  <div class="gallery-item-overlay" style="opacity:1;">
+                    <div class="gallery-item-title"><?= e($item['title'] ?: '(untitled)') ?></div>
+                    <div class="d-flex gap-1 mt-1">
+                      <a href="/member/gallery.php?edit=<?= e($item['id']) ?>" class="btn btn-outline btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Edit</a>
+                      <?php if ($sourceType === 'link' && $itemLinkUrl !== ''): ?>
+                        <a href="<?= e($itemLinkUrl) ?>" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;">Open Link</a>
+                      <?php endif; ?>
+                      <form method="POST" style="display:inline;">
+                        <?= csrfField() ?>
+                        <input type="hidden" name="action" value="delete">
+                        <input type="hidden" name="item_id" value="<?= e($item['id']) ?>">
+                        <button class="btn btn-danger btn-sm" style="padding:0.2rem 0.6rem;font-size:0.7rem;" data-confirm="Delete this item?">Delete</button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <?php if ($item['type'] === 'video'): ?>
+                    <div class="gallery-item-type-badge">Video</div>
+                  <?php endif; ?>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php else: ?>
+            <div class="member-gallery-empty">
+              <div style="font-size:2rem;margin-bottom:0.75rem;">✅</div>
+              <p>Uploaded items will appear here as soon as they are approved.</p>
+              <?php if (!$myItems): ?>
+                <button class="btn btn-primary mt-2" data-modal-open="uploadModal">+ Upload Content</button>
+              <?php endif; ?>
+            </div>
+          <?php endif; ?>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -421,6 +558,23 @@ include __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
+<div id="memberUploadCompleteModal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title">Upload complete</h3>
+      <span class="modal-close" data-modal-close>&times;</span>
+    </div>
+    <div class="modal-body member-upload-complete">
+      <div class="member-upload-complete-icon" aria-hidden="true">✅</div>
+      <p id="memberUploadCompleteMessage">Your upload has been received.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline btn-sm" data-modal-close>Stay Here</button>
+      <button type="button" class="btn btn-primary btn-sm" id="memberUploadRefreshButton">Refresh Uploads</button>
+    </div>
+  </div>
+</div>
+
 <script>
 function memberSyncUploadInputs() {
   const mediaType = document.getElementById('memberMediaType')?.value;
@@ -453,6 +607,378 @@ function memberToggleVideoType(type) {
   memberSyncUploadInputs();
 }
 memberSyncUploadInputs();
+
+(function () {
+  const form = document.getElementById('memberUploadForm');
+  if (!form || !window.indexedDB) {
+    return;
+  }
+
+  const uploadModal = document.getElementById('uploadModal');
+  const completionModal = document.getElementById('memberUploadCompleteModal');
+  const refreshButton = document.getElementById('memberUploadRefreshButton');
+  const statusText = document.getElementById('memberUploadStatusText');
+  const queueBadge = document.getElementById('memberUploadQueueBadge');
+  const progressWrap = document.getElementById('memberUploadProgress');
+  const progressLabel = document.getElementById('memberUploadProgressLabel');
+  const progressPercent = document.getElementById('memberUploadProgressPercent');
+  const progressBar = document.getElementById('memberUploadProgressBar');
+  const completeMessage = document.getElementById('memberUploadCompleteMessage');
+  const submitButton = document.querySelector('button[form="memberUploadForm"]');
+  const uploadEndpoint = form.getAttribute('action') || window.location.pathname;
+  const uploadDbName = 'redwater-member-gallery';
+  const uploadStoreName = 'uploadQueue';
+  let isSyncingQueue = false;
+
+  function setStatus(message, tone) {
+    if (!statusText) {
+      return;
+    }
+
+    statusText.textContent = message;
+    statusText.style.color = tone === 'error'
+      ? '#fca5a5'
+      : tone === 'success'
+        ? '#86efac'
+        : tone === 'pending'
+          ? '#fde047'
+          : '';
+  }
+
+  function setBusy(isBusy) {
+    if (submitButton) {
+      submitButton.disabled = isBusy;
+      submitButton.textContent = isBusy ? 'Uploading…' : 'Upload';
+    }
+  }
+
+  function setProgress(percent, label) {
+    if (!progressWrap || !progressBar || !progressPercent || !progressLabel) {
+      return;
+    }
+
+    progressWrap.hidden = false;
+    progressBar.style.width = percent + '%';
+    progressPercent.textContent = percent + '%';
+    progressLabel.textContent = label;
+  }
+
+  function hideProgress() {
+    if (!progressWrap || !progressBar || !progressPercent || !progressLabel) {
+      return;
+    }
+
+    progressWrap.hidden = true;
+    progressBar.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressLabel.textContent = 'Preparing upload…';
+  }
+
+  function openModal(modal) {
+    if (modal) {
+      modal.classList.add('open');
+    }
+  }
+
+  function closeModal(modal) {
+    if (modal) {
+      modal.classList.remove('open');
+    }
+  }
+
+  function resetUploadForm() {
+    form.reset();
+    memberToggleType('photo');
+    memberTogglePhotoSource('upload');
+    memberToggleVideoType('embed');
+    document.querySelectorAll('#memberUploadForm .dropzone p').forEach(function (element, index) {
+      element.textContent = index === 0 ? 'Drop image here or click to select' : 'Drop video file here or click to select';
+    });
+  }
+
+  function openQueueDatabase() {
+    return new Promise(function (resolve, reject) {
+      const request = window.indexedDB.open(uploadDbName, 1);
+      request.onupgradeneeded = function () {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(uploadStoreName)) {
+          db.createObjectStore(uploadStoreName, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = function () {
+        resolve(request.result);
+      };
+      request.onerror = function () {
+        reject(request.error || new Error('Unable to open offline upload queue.'));
+      };
+    });
+  }
+
+  async function saveQueuedUpload(entry) {
+    const db = await openQueueDatabase();
+    return new Promise(function (resolve, reject) {
+      const tx = db.transaction(uploadStoreName, 'readwrite');
+      tx.oncomplete = function () {
+        db.close();
+        resolve();
+      };
+      tx.onerror = function () {
+        db.close();
+        reject(tx.error || new Error('Unable to save queued upload.'));
+      };
+      tx.objectStore(uploadStoreName).put(entry);
+    });
+  }
+
+  async function listQueuedUploads() {
+    const db = await openQueueDatabase();
+    return new Promise(function (resolve, reject) {
+      const tx = db.transaction(uploadStoreName, 'readonly');
+      const request = tx.objectStore(uploadStoreName).getAll();
+      request.onsuccess = function () {
+        db.close();
+        resolve(Array.isArray(request.result) ? request.result : []);
+      };
+      request.onerror = function () {
+        db.close();
+        reject(request.error || new Error('Unable to load queued uploads.'));
+      };
+    });
+  }
+
+  async function deleteQueuedUpload(id) {
+    const db = await openQueueDatabase();
+    return new Promise(function (resolve, reject) {
+      const tx = db.transaction(uploadStoreName, 'readwrite');
+      tx.oncomplete = function () {
+        db.close();
+        resolve();
+      };
+      tx.onerror = function () {
+        db.close();
+        reject(tx.error || new Error('Unable to remove queued upload.'));
+      };
+      tx.objectStore(uploadStoreName).delete(id);
+    });
+  }
+
+  async function updateQueueBadge() {
+    try {
+      const queuedUploads = await listQueuedUploads();
+      if (queueBadge) {
+        queueBadge.textContent = queuedUploads.length + ' queued';
+      }
+
+      if (queuedUploads.length > 0 && navigator.onLine) {
+        setStatus('Queued uploads will sync automatically while you stay online.', 'pending');
+      } else if (queuedUploads.length > 0) {
+        setStatus('You are offline. Your queued uploads will retry automatically when the connection returns.', 'pending');
+      } else if (navigator.onLine) {
+        setStatus('Ready to upload photos and videos from this device.', 'info');
+      } else {
+        setStatus('You are offline. New uploads will be queued and sent automatically later.', 'pending');
+      }
+    } catch (error) {
+      setStatus('Offline upload queue is unavailable on this device.', 'error');
+    }
+  }
+
+  function getActiveFile() {
+    const photoInput = document.getElementById('memberPhotoMediaFile');
+    const videoInput = document.getElementById('memberVideoMediaFile');
+    const activeInput = photoInput && !photoInput.disabled ? photoInput : videoInput && !videoInput.disabled ? videoInput : null;
+    return activeInput && activeInput.files && activeInput.files[0] ? activeInput.files[0] : null;
+  }
+
+  function buildQueueEntry() {
+    const formData = new FormData(form);
+    const fields = {};
+    formData.forEach(function (value, key) {
+      if (value instanceof File) {
+        return;
+      }
+      fields[key] = value;
+    });
+
+    const activeFile = getActiveFile();
+
+    return {
+      id: String(Date.now()) + '-' + Math.random().toString(16).slice(2),
+      createdAt: new Date().toISOString(),
+      fields: fields,
+      file: activeFile,
+      fileName: activeFile ? activeFile.name : '',
+    };
+  }
+
+  function buildFormData(entry) {
+    const formData = new FormData();
+    Object.entries(entry.fields || {}).forEach(function ([key, value]) {
+      formData.append(key, value);
+    });
+    if (entry.file) {
+      formData.append('media_file', entry.file, entry.fileName || 'upload');
+    }
+    return formData;
+  }
+
+  function uploadEntry(entry, progressText) {
+    return new Promise(function (resolve, reject) {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadEndpoint);
+      xhr.responseType = 'json';
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.timeout = 180000;
+      xhr.upload.onprogress = function (event) {
+        if (!event.lengthComputable) {
+          return;
+        }
+        const percent = Math.max(1, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        setProgress(percent, progressText);
+      };
+      xhr.onload = function () {
+        const response = xhr.response && typeof xhr.response === 'object' ? xhr.response : null;
+        if (xhr.status >= 200 && xhr.status < 300 && response && response.success) {
+          setProgress(100, 'Upload complete');
+          resolve(response);
+          return;
+        }
+
+        if (xhr.status === 0 || xhr.status >= 500) {
+          reject({ type: 'network', message: 'Upload connection failed.' });
+          return;
+        }
+
+        reject({
+          type: xhr.status === 403 ? 'auth' : 'server',
+          message: response && response.message ? response.message : 'Upload failed. Please review your form and try again.'
+        });
+      };
+      xhr.onerror = function () {
+        reject({ type: 'network', message: 'Upload connection failed.' });
+      };
+      xhr.ontimeout = function () {
+        reject({ type: 'network', message: 'Upload timed out before it could finish.' });
+      };
+      xhr.send(buildFormData(entry));
+    });
+  }
+
+  async function queueCurrentUpload(entry, message) {
+    await saveQueuedUpload(entry);
+    resetUploadForm();
+    closeModal(uploadModal);
+    hideProgress();
+    setBusy(false);
+    setStatus(message, 'pending');
+    await updateQueueBadge();
+  }
+
+  function showCompletion(message) {
+    if (completeMessage) {
+      completeMessage.textContent = message;
+    }
+    openModal(completionModal);
+  }
+
+  async function syncQueuedUploads() {
+    if (isSyncingQueue || !navigator.onLine) {
+      return;
+    }
+
+    isSyncingQueue = true;
+
+    try {
+      const queuedUploads = await listQueuedUploads();
+      if (!queuedUploads.length) {
+        hideProgress();
+        await updateQueueBadge();
+        return;
+      }
+
+      let lastSuccessMessage = '';
+      for (let index = 0; index < queuedUploads.length; index += 1) {
+        const entry = queuedUploads[index];
+        try {
+          const response = await uploadEntry(entry, 'Syncing queued upload ' + (index + 1) + ' of ' + queuedUploads.length);
+          await deleteQueuedUpload(entry.id);
+          lastSuccessMessage = response.message || 'Queued upload finished successfully.';
+          await updateQueueBadge();
+        } catch (error) {
+          hideProgress();
+          if (error && error.type === 'network') {
+            setStatus('Connection dropped again. Remaining uploads will retry automatically.', 'pending');
+          } else if (error && error.type === 'auth') {
+            setStatus('Queued upload is waiting for you to sign in again before it can finish.', 'error');
+          } else {
+            setStatus(error && error.message ? error.message : 'Queued upload needs your attention before it can continue.', 'error');
+          }
+          return;
+        }
+      }
+
+      hideProgress();
+      await updateQueueBadge();
+      if (lastSuccessMessage !== '') {
+        showCompletion(lastSuccessMessage);
+      }
+    } finally {
+      isSyncingQueue = false;
+    }
+  }
+
+  if (refreshButton) {
+    refreshButton.addEventListener('click', function () {
+      window.location.reload();
+    });
+  }
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const entry = buildQueueEntry();
+    setBusy(true);
+
+    if (!navigator.onLine) {
+      await queueCurrentUpload(entry, 'You are offline. This upload has been queued and will send itself automatically when you reconnect.');
+      return;
+    }
+
+    setProgress(0, 'Starting upload…');
+
+    try {
+      const response = await uploadEntry(entry, 'Uploading now…');
+      closeModal(uploadModal);
+      resetUploadForm();
+      if (queueBadge) {
+        queueBadge.textContent = '0 queued';
+      }
+      setStatus(response.message || 'Upload complete.', 'success');
+      showCompletion(response.message || 'Upload complete.');
+    } catch (error) {
+      if (error && error.type === 'network') {
+        await queueCurrentUpload(entry, 'The connection dropped during upload, so your file was queued and will retry automatically.');
+        return;
+      }
+
+      hideProgress();
+      setStatus(error && error.message ? error.message : 'Upload failed. Please try again.', 'error');
+    } finally {
+      setBusy(false);
+      hideProgress();
+    }
+  });
+
+  window.addEventListener('online', function () {
+    updateQueueBadge();
+    syncQueuedUploads();
+  });
+  window.addEventListener('offline', function () {
+    updateQueueBadge();
+  });
+
+  updateQueueBadge();
+  syncQueuedUploads();
+})();
 </script>
 
 <?php include __DIR__ . '/../includes/footer.php'; ?>
