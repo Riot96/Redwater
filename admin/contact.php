@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fields = ['contact_phone', 'contact_email', 'contact_address', 'contact_map_embed',
                    'social_facebook', 'social_instagram', 'social_tiktok', 'social_youtube', 'social_pinterest',
                    'site_name', 'site_tagline',
-                   'home_hero_heading', 'home_hero_subheading', 'home_about_text'];
+                   'home_hero_subheading', 'home_about_text'];
         $settingValues = [];
         foreach ($fields as $field) {
             $settingValues[$field] = trim(postString($field));
@@ -410,13 +410,10 @@ include __DIR__ . '/../includes/header.php';
           </div>
 
           <div class="form-group">
-            <label class="form-label">Hero Heading</label>
-            <input type="text" name="home_hero_heading" class="form-control" value="<?= e(getSetting('home_hero_heading')) ?>">
-          </div>
-          <div class="form-group">
             <label class="form-label">Hero Subheading</label>
             <textarea name="home_hero_subheading" class="form-control" rows="2"><?= e(getSetting('home_hero_subheading')) ?></textarea>
           </div>
+          <div class="form-hint" style="margin-top:-0.5rem;margin-bottom:1rem;">The homepage hero title now uses the built-in Hollyrom banner image.</div>
           <div class="form-group">
             <label class="form-label">About Section Text</label>
             <textarea name="home_about_text" class="form-control" rows="4"><?= e(getSetting('home_about_text')) ?></textarea>

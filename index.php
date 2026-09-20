@@ -19,8 +19,14 @@ include __DIR__ . '/includes/header.php';
     <div class="hero-bg"></div>
     <div class="hero-content">
       <span class="hero-eyebrow">Highlands County, FL &amp; Beyond</span>
-      <h1>
-        <span class="highlight-red"><?= e(getSetting('home_hero_heading', 'Experience the Fear')) ?></span>
+      <h1 class="hero-banner-heading">
+        <img
+          src="/assets/images/hollyrom-banner.svg"
+          alt="Hollyrom"
+          class="hero-banner-image"
+          width="1600"
+          height="320"
+        >
       </h1>
       <p class="hero-subtitle"><?= e(getSetting('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.')) ?></p>
       <div class="hero-cta">
