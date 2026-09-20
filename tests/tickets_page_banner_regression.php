@@ -21,8 +21,8 @@ if (str_contains($ticketsSource, 'Browse the live HauntPay event feed for curren
     throw new RuntimeException('Tickets page should no longer render the removed HauntPay feed description.');
 }
 
-if (substr_count($ticketsSource, '/assets/images/hollyrom-banner.svg') !== 2) {
-    throw new RuntimeException('Tickets page should render the homepage Hollyrom banner image in both replacement locations.');
+if (substr_count($ticketsSource, '/assets/images/hollyrom-banner.svg') !== 1) {
+    throw new RuntimeException('Tickets page should render the homepage Hollyrom banner image exactly once.');
 }
 
 if (!str_contains($ticketsSource, '<?= $embedCode /* Admin-controlled, stored securely in DB */ ?>')) {

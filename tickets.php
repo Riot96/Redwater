@@ -75,16 +75,6 @@ $manualEvents = getTicketManualEvents();
           <div class="divider"></div>
         <?php endif; ?>
 
-        <div class="text-center mb-2">
-          <img
-            src="/assets/images/hollyrom-banner.svg"
-            alt="Hollyrom"
-            class="hero-banner-image"
-            width="1600"
-            height="320"
-          >
-        </div>
-
         <div class="tickets-embed-wrap">
           <?= $embedCode /* Admin-controlled, stored securely in DB */ ?>
         </div>
