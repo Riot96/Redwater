@@ -21,7 +21,7 @@ include __DIR__ . '/includes/header.php';
       <span class="hero-eyebrow">Highlands County, FL &amp; Beyond</span>
       <h1 class="hero-banner-heading">
         <img
-          src="/assets/images/hollyrom-banner.svg"
+          src="/assets/images/hollyrom_banner.jpg"
           alt="Hollyrom"
           class="hero-banner-image"
           width="1600"
@@ -41,7 +41,7 @@ include __DIR__ . '/includes/header.php';
     <div class="container">
       <div class="about-grid">
         <div class="about-image-wrap">
-          <img src="/assets/images/Redwater_oldLogo_nobg.jpg" alt="RedWater Entertainment" class="about-image" data-img-error="hide-parent">
+          <img src="/assets/images/Hollyrom_calendarOnly.png" alt="RedWater Entertainment" class="about-image" data-img-error="hide-parent">
         </div>
         <div class="about-text">
           <h2>About <span>RedWater</span> Entertainment</h2>
