@@ -47,7 +47,7 @@ include __DIR__ . '/includes/header.php';
           <h2>About <span>RedWater</span> Entertainment</h2>
           <p><?= getSetting('home_about_text', 'RedWater Entertainment is Highlands County\'s premier entertainment organization. We are best known for our spine-chilling &ldquo;Hollyrom Haunt&rdquo; in October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.') ?></p>
           <div class="about-badges">
-            <span class="badge badge-red">🎃 Haunted Homestead</span>
+            <span class="badge badge-red">🎃 Hollyrom Haunt</span>
             <span class="badge badge-blue">📚 Educational Events</span>
             <span class="badge">🎭 Live Workshops</span>
             <span class="badge">🎉 Special Events</span>
