@@ -21,7 +21,7 @@ include __DIR__ . '/includes/header.php';
       <span class="hero-eyebrow">Highlands County, FL &amp; Beyond</span>
       <h1 class="hero-banner-heading">
         <img
-          src="/assets/images/hollyrom_banner.jpg"
+          src="/assets/images/hollyrom-banner.svg"
           alt="Hollyrom"
           class="hero-banner-image"
           width="1600"

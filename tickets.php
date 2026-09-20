@@ -19,7 +19,13 @@ $manualEvents = getTicketManualEvents();
   <div class="page-header">
     <div class="container">
       <h1>Get Your <span style="color:var(--red)">Tickets</span></h1>
-      <p>Secure your spot at the Red Water Haunted Homestead and all upcoming RedWater Entertainment events.</p>
+      <img
+        src="/assets/images/hollyrom-banner.svg"
+        alt="Hollyrom"
+        class="hero-banner-image"
+        width="1600"
+        height="320"
+      >
     </div>
   </div>
 
@@ -68,11 +74,6 @@ $manualEvents = getTicketManualEvents();
         <?php if ($manualEvents !== []): ?>
           <div class="divider"></div>
         <?php endif; ?>
-
-        <div class="text-center mb-2">
-          <h2>HauntPay Events</h2>
-          <p class="text-muted mt-1">Browse the live HauntPay event feed for current ticket availability.</p>
-        </div>
 
         <div class="tickets-embed-wrap">
           <?= $embedCode /* Admin-controlled, stored securely in DB */ ?>
