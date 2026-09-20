@@ -20,7 +20,7 @@ $manualEvents = getTicketManualEvents();
     <div class="container">
       <h1>Get Your <span style="color:var(--red)">Tickets</span></h1>
       <img
-        src="/assets/images/hollyrom-banner.svg"
+        src="/assets/images/hollyrom_banner.jpg"
         alt="Hollyrom"
         class="hero-banner-image"
         width="1600"
