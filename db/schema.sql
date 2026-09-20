@@ -144,7 +144,7 @@ INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES
 ('contact_email', ''),
 ('contact_address', ''),
 ('contact_map_embed', ''),
-('home_hero_heading', 'Experience the Fear'),
+('home_hero_heading', 'Hollyrom'),
 ('home_hero_subheading', 'RedWater Entertainment brings you unforgettable haunted experiences, educational events, and so much more.'),
 ('home_about_text', 'RedWater Entertainment is Highlands County&rsquo;s premier entertainment organization. We are best known for our spine-chilling &ldquo;Red Water Haunted Homestead&rdquo; each October, but we also offer educational events, workshops, and a variety of other live experiences throughout the year.'),
 ('gallery_watermark_settings', '{"enabled":false,"text":"","image_path":""}'),

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 320" role="img" aria-labelledby="title desc">
+  <title id="title">Hollyrom banner</title>
+  <desc id="desc">A long banner image with the word Hollyrom in large stylized text.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#050505"/>
+      <stop offset="50%" stop-color="#180406"/>
+      <stop offset="100%" stop-color="#050505"/>
+    </linearGradient>
+    <linearGradient id="text" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff7474"/>
+      <stop offset="45%" stop-color="#940405"/>
+      <stop offset="100%" stop-color="#430000"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-30%" width="120%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="320" rx="26" fill="url(#bg)"/>
+  <rect x="10" y="10" width="1580" height="300" rx="20" fill="none" stroke="#ffffff" stroke-opacity="0.08"/>
+  <text
+    x="800"
+    y="205"
+    text-anchor="middle"
+    font-family="'Cinzel Decorative', 'Times New Roman', serif"
+    font-size="170"
+    letter-spacing="10"
+    fill="url(#text)"
+    filter="url(#shadow)"
+  >Hollyrom</text>
+</svg>

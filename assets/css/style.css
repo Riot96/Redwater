@@ -483,6 +483,18 @@ select.form-control { appearance: none; background-image: url("data:image/svg+xm
   text-shadow: 0 2px 20px rgba(0,0,0,0.8);
 }
 
+.hero-banner-heading {
+  margin-bottom: 1.5rem;
+}
+
+.hero-banner-image {
+  display: block;
+  width: min(100%, 900px);
+  height: auto;
+  margin: 0 auto;
+  filter: drop-shadow(0 8px 30px rgba(0, 0, 0, 0.75));
+}
+
 .hero h1 .highlight-red  { color: var(--red); }
 .hero h1 .highlight-blue { color: var(--blue); }
 
